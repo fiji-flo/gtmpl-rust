@@ -57,7 +57,7 @@ impl fmt::Display for Item {
 
 struct Lexer {
     name:       String,    // the name of the input; used only for error reports
-    input:      String,    // the string being scanned
+    input:      Vec<char>, // the string being scanned
     leftDelim:  String,    // start of action
     rightDelim: String,    // end of action
     state:      State,     // the next lexing function to enter
@@ -66,8 +66,8 @@ struct Lexer {
     width:      Pos,       // width of last rune read from input
     lastPos:    Pos,       // position of most recent item returned by nextItem
     items:      Vec<Item>, // channel of scanned items
-    parenDepth: usize,       // nesting depth of ( ) exprs
-    line:       usize,       // 1+number of newlines seen
+    parenDepth: usize,     // nesting depth of ( ) exprs
+    line:       usize,     // 1+number of newlines seen
 
 }
 
@@ -89,6 +89,26 @@ enum State {
     LexRawQuote,
 }
 
-fn next(l: &mut Lexer) -> char {
-    'f'
+fn next(l: &mut Lexer) -> Option<char> {
+    match l.input.get(l.pos) {
+        Some(c) => {
+            l.width = c.len_utf8();
+            l.pos += 1;
+            if *c == '\n' {
+                l.line += 1;
+            }
+            Some(*c)
+        },
+        None => {
+            l.width = 0;
+            None
+        }
+    }
+}
+
+fn backup(l: &mut Lexer) {
+    l.pos -= 1;
+    if l.width == 1 && l.input.get(l.pos).and_then(|c| { if *c == '\n' { Some(()) } else { None }}).is_some() {
+        l.line -= 1;
+    }
 }
