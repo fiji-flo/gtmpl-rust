@@ -111,12 +111,12 @@ impl Lexer {
     fn backup(&mut self) {
         self.pos -= 1;
         if self.width == 1 &&
-            self.input
-            .get(self.pos)
-            .and_then(|c| if *c == '\n' { Some(()) } else { None })
-            .is_some() {
-                self.line -= 1;
-            }
+           self.input
+               .get(self.pos)
+               .and_then(|c| if *c == '\n' { Some(()) } else { None })
+               .is_some() {
+            self.line -= 1;
+        }
     }
 
     fn peek(&mut self) -> Option<char> {
