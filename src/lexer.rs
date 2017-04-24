@@ -4,6 +4,13 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 
 type Pos = usize;
 
+static LEFT_TRIM_MARKER: &'static str  = "- ";
+static RIGHT_TRIM_MARKER: &'static str  = " -";
+static LEFT_DELIM: &'static str = "{{";
+static RIGHT_DELIM: &'static str = "}}";
+static LEFT_COMMENT: &'static str = "/*";
+static RIGHT_COMMENT: &'static str = "*/";
+
 #[derive(Debug)]
 #[derive(PartialEq)]
 enum ItemType {
@@ -112,7 +119,7 @@ enum State {
 
 impl Lexer {
     pub fn new(name: &str, input: String, delimiters: Option<(&str, &str)>) -> Lexer {
-        let (left, right) = delimiters.unwrap_or(("{{", "}}"));
+        let (left, right) = delimiters.unwrap_or((LEFT_DELIM, RIGHT_DELIM));
         let (tx, rx) = channel();
         let mut l = LexerStateMachine {
             name: name.to_owned(),
@@ -145,7 +152,9 @@ impl Lexer {
         }
     }
 
-    pub fn drain(&mut self) {}
+    pub fn drain(&mut self) {
+        for _ in self.items_receiver.iter() {}
+    }
 }
 
 impl LexerStateMachine {
@@ -263,7 +272,7 @@ impl LexerStateMachine {
                 let ld = self.pos + self.left_delim.len();
                 self.pos += x;
                 let mut trim = 0;
-                if self.input[ld..].starts_with("- ") {
+                if self.input[ld..].starts_with(LEFT_TRIM_MARKER) {
                     trim = rtrim_len(&self.input[self.start..self.pos]);
                 }
                 self.pos -= trim;
@@ -284,12 +293,75 @@ impl LexerStateMachine {
             }
         }
     }
+
+    fn at_right_delim(&mut self) -> (bool, bool) {
+        if self.input[self.pos..].starts_with(&self.right_delim) {
+            return (true, false);
+        }
+        if self.input[self.pos..].starts_with(&format!("{}{}", RIGHT_TRIM_MARKER, self.right_delim)) {
+            return (true, true);
+        }
+        (false, false)
+    }
+
+    fn lex_left_delim(&mut self) -> State {
+        self.pos = self.left_delim.len();
+        let trim = self.input[self.pos..].starts_with(LEFT_TRIM_MARKER);
+        let after_marker = if trim { LEFT_TRIM_MARKER.len() } else { 0 };
+        if self.input[(self.pos + after_marker)..].starts_with(LEFT_COMMENT) {
+            self.pos += after_marker;
+            self.ignore();
+            State::LexComment
+        } else {
+            self.emit(ItemType::ItemLeftDelim);
+            self.pos += after_marker;
+            self.ignore();
+            self.paren_depth = 0;
+            State::LexInsideAction
+        }
+    }
+
+    fn lex_comment(&mut self) -> State {
+        self.pos = LEFT_COMMENT.len();
+        let i = match self.input[self.pos..].find(RIGHT_COMMENT) {
+            Some(i) => i,
+            None => {
+                return self.errorf("unclosed comment");
+            }
+        };
+
+        self.pos += i + RIGHT_COMMENT.len();
+        let (delim, trim) = self.at_right_delim();
+
+        if !delim {
+            return self.errorf("comment end before closing delimiter");
+        }
+
+        if trim {
+            self.pos += RIGHT_TRIM_MARKER.len();
+        }
+
+        self.pos += self.right_delim.len();
+
+        if trim {
+            self.pos = ltrim_len(&self.input[self.pos..]);
+        }
+
+        self.ignore();
+        State::LexText
+    }
 }
 
 fn rtrim_len(s: &str) -> usize {
     let l = s.len();
     l - s.rfind(|c: char| !c.is_whitespace()).unwrap_or(l)
 }
+
+fn ltrim_len(s: &str) -> usize {
+    let l = s.len();
+    l - s.find(|c: char| !c.is_whitespace()).unwrap_or(l)
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -300,5 +372,6 @@ mod tests {
         let i1 = l.next_item();
         assert_eq!(i1.typ, ItemType::ItemText);
         assert_eq!(&i1.val, "abc");
+        l.drain();
     }
 }
