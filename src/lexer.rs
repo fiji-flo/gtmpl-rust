@@ -350,6 +350,21 @@ impl LexerStateMachine {
         self.ignore();
         State::LexText
     }
+
+    fn lex_right_delim(&mut self) -> State {
+        let trim = self.input[self.pos..].starts_with(RIGHT_TRIM_MARKER);
+        if trim {
+            self.pos += RIGHT_TRIM_MARKER.len();
+            self.ignore();
+        }
+        self.pos += self.right_delim.len();
+        self.emit(ItemType::ItemLeftDelim);
+        if trim {
+            self.pos += ltrim_len(&self.input[self.pos..]);
+            self.ignore();
+        }
+        State::LexText
+    }
 }
 
 fn rtrim_len(s: &str) -> usize {
