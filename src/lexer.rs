@@ -1,3 +1,4 @@
+use std::ascii::AsciiExt;
 use std::fmt;
 use std::thread;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -364,6 +365,81 @@ impl LexerStateMachine {
             self.ignore();
         }
         State::LexText
+    }
+
+    fn lex_inside_action(&mut self) -> State {
+        let (delim, _) = self.at_right_delim();
+        if delim {
+            if self.paren_depth == 0 {
+                return State::LexRightDelim;
+            }
+            return self.errorf("unclosed left paren");
+        }
+
+        match self.next() {
+            None | Some('\r') | Some('\n') => {
+                return self.errorf("unclosed action");
+            },
+            Some(c) => match c {
+                '"' => State::LexQuote,
+                '`' => State::LexRawQuote,
+                '$' => State::LexVariable,
+                '\'' => State::LexChar,
+                '(' => {
+                    self.emit(ItemType::ItemLeftParen);
+                    self.paren_depth += 1;
+                    State::LexInsideAction
+                },
+                ')' => {
+                    self.emit(ItemType::ItemRightParen);
+                    if self.paren_depth == 0 {
+                        return self.errorf(&format!("unexpected right paren {}", c));
+                    }
+                    self.paren_depth -= 1;
+                    State::LexInsideAction
+                }
+                ':' => {
+                    match self.next() {
+                        Some('=') => {
+                            self.emit(ItemType::ItemColonEquals);
+                            State::LexInsideAction
+                        },
+                        _ => {
+                            return self.errorf("expected :=");
+                        }
+                    }
+                },
+                '|' => {
+                    self.emit(ItemType::ItemPipe);
+                    State::LexInsideAction
+                },
+                '.' => {
+                    match self.input[self.pos..].chars().next() {
+                        Some('0' ... '9') => {
+                            self.backup();
+                            State::LexNumber
+                        },
+                        _ => State::LexField,
+                    }
+                },
+                '+' | '-' | '0' ... '9' => {
+                    self.backup();
+                    State::LexNumber
+                },
+                _ if c.is_whitespace() => State::LexSpace,
+                _ if c.is_alphanumeric() => {
+                    self.backup();
+                    State::LexIdentifier
+                },
+                _ if c.is_ascii() => { // figure out a way to check for unicode.isPrint ?!
+                    self.emit(ItemType::ItemChar);
+                    State::LexInsideAction
+                }
+                _ => {
+                    return self.errorf(&format!("unrecognized character in action {}", c));
+                },
+            }
+        }
     }
 }
 
