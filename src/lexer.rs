@@ -1,18 +1,36 @@
 use std::ascii::AsciiExt;
+use std::collections::HashMap;
 use std::fmt;
 use std::thread;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 type Pos = usize;
 
-static LEFT_TRIM_MARKER: &'static str  = "- ";
-static RIGHT_TRIM_MARKER: &'static str  = " -";
-static LEFT_DELIM: &'static str = "{{";
-static RIGHT_DELIM: &'static str = "}}";
-static LEFT_COMMENT: &'static str = "/*";
-static RIGHT_COMMENT: &'static str = "*/";
+static LEFT_TRIM_MARKER: &str  = "- ";
+static RIGHT_TRIM_MARKER: &str  = " -";
+static LEFT_DELIM: &str = "{{";
+static RIGHT_DELIM: &str = "}}";
+static LEFT_COMMENT: &str = "/*";
+static RIGHT_COMMENT: &str = "*/";
+
+lazy_static! {
+    static ref KEY: HashMap<&'static str, ItemType> = {
+        let mut m = HashMap::new();
+        m.insert(".", ItemType::ItemDot);
+        m.insert("block", ItemType::ItemBlock);
+        m.insert("define", ItemType::ItemDefine);
+        m.insert("else", ItemType::ItemElse);
+        m.insert("if", ItemType::ItemIf);
+        m.insert("range", ItemType::ItemRange);
+        m.insert("nil", ItemType::ItemNil);
+        m.insert("template", ItemType::ItemTemplate);
+        m.insert("with", ItemType::ItemWith);
+        m
+    };
+}
 
 #[derive(Debug)]
+#[derive(Clone)]
 #[derive(PartialEq)]
 enum ItemType {
     ItemError, // error occurred; value is text of error
@@ -87,8 +105,6 @@ struct Lexer {
 struct LexerStateMachine {
     name: String, // the name of the input; used only for error reports
     input: String, // the string being scanned
-    left_delim: String, // start of action
-    right_delim: String, // end of action
     state: State, // the next lexing function to enter
     pos: Pos, // current position in the input
     start: Pos, // start position of this item
@@ -119,14 +135,11 @@ enum State {
 }
 
 impl Lexer {
-    pub fn new(name: &str, input: String, delimiters: Option<(&str, &str)>) -> Lexer {
-        let (left, right) = delimiters.unwrap_or((LEFT_DELIM, RIGHT_DELIM));
+    pub fn new(name: &str, input: String) -> Lexer {
         let (tx, rx) = channel();
         let mut l = LexerStateMachine {
             name: name.to_owned(),
             input: input,
-            left_delim: left.to_owned(),
-            right_delim: right.to_owned(),
             state: State::Start,
             pos: 0,
             start: 0,
@@ -155,6 +168,26 @@ impl Lexer {
 
     pub fn drain(&mut self) {
         for _ in self.items_receiver.iter() {}
+    }
+}
+
+impl Iterator for LexerStateMachine {
+    type Item = char;
+    fn next(&mut self) -> Option<char> {
+        match self.input[self.pos..].chars().next() {
+            Some(c) => {
+                self.width = c.len_utf8();
+                self.pos += self.width;
+                if c == '\n' {
+                    self.line += 1;
+                }
+                Some(c)
+            }
+            None => {
+                self.width = 0;
+                None
+            }
+        }
     }
 }
 
@@ -187,23 +220,6 @@ impl LexerStateMachine {
                 State::LexQuote,
                 State::LexRawQuote,
                  */
-            }
-        }
-    }
-
-    fn next(&mut self) -> Option<char> {
-        match self.input[self.pos..].chars().next() {
-            Some(c) => {
-                self.width = c.len_utf8();
-                self.pos += self.width;
-                if c == '\n' {
-                    self.line += 1;
-                }
-                Some(c)
-            }
-            None => {
-                self.width = 0;
-                None
             }
         }
     }
@@ -267,10 +283,10 @@ impl LexerStateMachine {
 
     fn lex_text(&mut self) -> State {
         self.width = 0;
-        let x = self.input[self.pos..].find(&self.left_delim);
+        let x = self.input[self.pos..].find(&LEFT_DELIM);
         match x {
             Some(x) => {
-                let ld = self.pos + self.left_delim.len();
+                let ld = self.pos + LEFT_DELIM.len();
                 self.pos += x;
                 let mut trim = 0;
                 if self.input[ld..].starts_with(LEFT_TRIM_MARKER) {
@@ -296,17 +312,17 @@ impl LexerStateMachine {
     }
 
     fn at_right_delim(&mut self) -> (bool, bool) {
-        if self.input[self.pos..].starts_with(&self.right_delim) {
+        if self.input[self.pos..].starts_with(&RIGHT_DELIM) {
             return (true, false);
         }
-        if self.input[self.pos..].starts_with(&format!("{}{}", RIGHT_TRIM_MARKER, self.right_delim)) {
+        if self.input[self.pos..].starts_with(&format!("{}{}", RIGHT_TRIM_MARKER, RIGHT_DELIM)) {
             return (true, true);
         }
         (false, false)
     }
 
     fn lex_left_delim(&mut self) -> State {
-        self.pos = self.left_delim.len();
+        self.pos = LEFT_DELIM.len();
         let trim = self.input[self.pos..].starts_with(LEFT_TRIM_MARKER);
         let after_marker = if trim { LEFT_TRIM_MARKER.len() } else { 0 };
         if self.input[(self.pos + after_marker)..].starts_with(LEFT_COMMENT) {
@@ -342,7 +358,7 @@ impl LexerStateMachine {
             self.pos += RIGHT_TRIM_MARKER.len();
         }
 
-        self.pos += self.right_delim.len();
+        self.pos += RIGHT_DELIM.len();
 
         if trim {
             self.pos = ltrim_len(&self.input[self.pos..]);
@@ -358,7 +374,7 @@ impl LexerStateMachine {
             self.pos += RIGHT_TRIM_MARKER.len();
             self.ignore();
         }
-        self.pos += self.right_delim.len();
+        self.pos += RIGHT_DELIM.len();
         self.emit(ItemType::ItemLeftDelim);
         if trim {
             self.pos += ltrim_len(&self.input[self.pos..]);
@@ -441,6 +457,38 @@ impl LexerStateMachine {
             }
         }
     }
+
+    fn lex_identifier(&mut self) -> State {
+        let c = self.skip_while(|c| c.is_alphanumeric()).next();
+        self.backup();
+        if self.at_terminator() {
+            return self.errorf(&format!("bad character {}", c.unwrap_or_default()));
+        }
+        let item_type = match &self.input[self.start..self.pos] {
+            "true" | "false" => ItemType::ItemBool,
+            word if KEY.contains_key(word) => (*KEY.get(word).unwrap()).clone(),
+            word if word.starts_with('.') => ItemType::ItemField,
+            _ => ItemType::ItemIdentifier,
+        };
+        self.emit(item_type);
+        State::LexInsideAction
+    }
+
+    fn at_terminator(&mut self) -> bool {
+        match self.peek() {
+            Some(c) => {
+                match c {
+                    '.' | ',' | '|' | ':' | ')' | '('  => true,
+                    ' ' | '\t' | '\r' | '\n' => true,
+                    // this is what golang does to detect a delimiter
+                    _  => {
+                        LEFT_DELIM.starts_with(c)
+                    }
+                }
+            },
+            None => false,
+        }
+    }
 }
 
 fn rtrim_len(s: &str) -> usize {
@@ -459,7 +507,7 @@ mod tests {
     use super::*;
     #[test]
     fn lexer_run() {
-        let mut l = Lexer::new("foo", "abc".to_owned(), None);
+        let mut l = Lexer::new("foo", "abc".to_owned());
         let i1 = l.next_item();
         assert_eq!(i1.typ, ItemType::ItemText);
         assert_eq!(&i1.val, "abc");
