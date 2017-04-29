@@ -6,8 +6,8 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 
 type Pos = usize;
 
-static LEFT_TRIM_MARKER: &str  = "- ";
-static RIGHT_TRIM_MARKER: &str  = " -";
+static LEFT_TRIM_MARKER: &str = "- ";
+static RIGHT_TRIM_MARKER: &str = " -";
 static LEFT_DELIM: &str = "{{";
 static RIGHT_DELIM: &str = "}}";
 static LEFT_COMMENT: &str = "/*";
@@ -67,6 +67,7 @@ enum ItemType {
     ItemWith, // with keyword
 }
 
+#[derive(Debug)]
 struct Item {
     pub typ: ItemType,
     pub pos: Pos,
@@ -100,6 +101,7 @@ struct Lexer {
     name: String, // the name of the input; used only for error reports
     last_pos: Pos, // position of most recent item returned by nextItem
     items_receiver: Receiver<Item>, // channel of scanned items
+    finished: bool, // flag if lexer is finished
 }
 
 struct LexerStateMachine {
@@ -116,7 +118,6 @@ struct LexerStateMachine {
 
 #[derive(Debug)]
 enum State {
-    Start,
     End,
     LexText,
     LexLeftDelim,
@@ -127,11 +128,34 @@ enum State {
     LexIdentifier,
     LexField,
     LexVariable,
-    LexFieldOrVariable,
     LexChar,
     LexNumber,
     LexQuote,
     LexRawQuote,
+}
+
+impl Iterator for Lexer {
+    type Item = Item;
+    fn next(&mut self) -> Option<Item> {
+        if self.finished {
+            return None;
+        }
+        let item = match self.items_receiver.recv() {
+            Ok(item) => {
+                self.last_pos = item.pos;
+                if item.typ == ItemType::ItemEnd || item.typ == ItemType::ItemError ||
+                   item.typ == ItemType::ItemEOF {
+                    self.finished = true;
+                }
+                item
+            }
+            Err(e) => {
+                self.finished = true;
+                Item::new(ItemType::ItemError, 0, &format!("{}", e), 0)
+            }
+        };
+        Some(item)
+    }
 }
 
 impl Lexer {
@@ -140,7 +164,7 @@ impl Lexer {
         let mut l = LexerStateMachine {
             name: name.to_owned(),
             input: input,
-            state: State::Start,
+            state: State::LexText,
             pos: 0,
             start: 0,
             width: 0,
@@ -153,16 +177,7 @@ impl Lexer {
             name: name.to_owned(),
             last_pos: 0,
             items_receiver: rx,
-        }
-    }
-
-    pub fn next_item(&mut self) -> Item {
-        match self.items_receiver.recv() {
-            Ok(item) => {
-                self.last_pos = item.pos;
-                item
-            }
-            Err(e) => Item::new(ItemType::ItemError, 0, &format!("{}", e), 0),
+            finished: false,
         }
     }
 
@@ -193,33 +208,24 @@ impl Iterator for LexerStateMachine {
 
 impl LexerStateMachine {
     fn run(&mut self) {
-        self.state = State::LexText;
         loop {
-            match self.state {
+            self.state = match self.state {
+                State::LexText => self.lex_text(),
+                State::LexComment => self.lex_comment(),
+                State::LexLeftDelim => self.lex_left_delim(),
+                State::LexRightDelim => self.lex_right_delim(),
+                State::LexInsideAction => self.lex_inside_action(),
+                State::LexSpace => self.lex_space(),
+                State::LexIdentifier => self.lex_identifier(),
+                State::LexField => self.lex_field(),
+                State::LexVariable => self.lex_variable(),
+                State::LexChar => self.lex_char(),
+                State::LexNumber => self.lex_number(),
+                State::LexQuote => self.lex_quote(),
+                State::LexRawQuote => self.lex_raw_quote(),
                 State::End => {
                     return;
                 }
-                State::LexText => {
-                    self.state = self.lex_text();
-                }
-                _ => {
-                    return;
-                }
-                /*
-                State::End,
-                State::LexComment,
-                State::LexRightDelim,
-                State::LexInsideAction,
-                State::LexSpace,
-                State::LexIdentifier,
-                State::LexField,
-                State::LexVariable,
-                State::LexFieldOrVariable,
-                State::LexChar,
-                State::LexNumber,
-                State::LexQuote,
-                State::LexRawQuote,
-                 */
             }
         }
     }
@@ -270,7 +276,7 @@ impl LexerStateMachine {
         false
     }
 
-    fn accpet_run(&mut self, valid: &str) {
+    fn accept_run(&mut self, valid: &str) {
         while self.accept(valid) {}
     }
 
@@ -322,7 +328,7 @@ impl LexerStateMachine {
     }
 
     fn lex_left_delim(&mut self) -> State {
-        self.pos = LEFT_DELIM.len();
+        self.pos += LEFT_DELIM.len();
         let trim = self.input[self.pos..].starts_with(LEFT_TRIM_MARKER);
         let after_marker = if trim { LEFT_TRIM_MARKER.len() } else { 0 };
         if self.input[(self.pos + after_marker)..].starts_with(LEFT_COMMENT) {
@@ -339,7 +345,7 @@ impl LexerStateMachine {
     }
 
     fn lex_comment(&mut self) -> State {
-        self.pos = LEFT_COMMENT.len();
+        self.pos += LEFT_COMMENT.len();
         let i = match self.input[self.pos..].find(RIGHT_COMMENT) {
             Some(i) => i,
             None => {
@@ -361,7 +367,7 @@ impl LexerStateMachine {
         self.pos += RIGHT_DELIM.len();
 
         if trim {
-            self.pos = ltrim_len(&self.input[self.pos..]);
+            self.pos += ltrim_len(&self.input[self.pos..]);
         }
 
         self.ignore();
@@ -395,73 +401,84 @@ impl LexerStateMachine {
         match self.next() {
             None | Some('\r') | Some('\n') => {
                 return self.errorf("unclosed action");
-            },
-            Some(c) => match c {
-                '"' => State::LexQuote,
-                '`' => State::LexRawQuote,
-                '$' => State::LexVariable,
-                '\'' => State::LexChar,
-                '(' => {
-                    self.emit(ItemType::ItemLeftParen);
-                    self.paren_depth += 1;
-                    State::LexInsideAction
-                },
-                ')' => {
-                    self.emit(ItemType::ItemRightParen);
-                    if self.paren_depth == 0 {
-                        return self.errorf(&format!("unexpected right paren {}", c));
+            }
+            Some(c) => {
+                match c {
+                    '"' => State::LexQuote,
+                    '`' => State::LexRawQuote,
+                    '$' => State::LexVariable,
+                    '\'' => State::LexChar,
+                    '(' => {
+                        self.emit(ItemType::ItemLeftParen);
+                        self.paren_depth += 1;
+                        State::LexInsideAction
                     }
-                    self.paren_depth -= 1;
-                    State::LexInsideAction
-                }
-                ':' => {
-                    match self.next() {
-                        Some('=') => {
-                            self.emit(ItemType::ItemColonEquals);
-                            State::LexInsideAction
-                        },
-                        _ => {
-                            return self.errorf("expected :=");
+                    ')' => {
+                        self.emit(ItemType::ItemRightParen);
+                        if self.paren_depth == 0 {
+                            return self.errorf(&format!("unexpected right paren {}", c));
+                        }
+                        self.paren_depth -= 1;
+                        State::LexInsideAction
+                    }
+                    ':' => {
+                        match self.next() {
+                            Some('=') => {
+                                self.emit(ItemType::ItemColonEquals);
+                                State::LexInsideAction
+                            }
+                            _ => {
+                                return self.errorf("expected :=");
+                            }
                         }
                     }
-                },
-                '|' => {
-                    self.emit(ItemType::ItemPipe);
-                    State::LexInsideAction
-                },
-                '.' => {
-                    match self.input[self.pos..].chars().next() {
-                        Some('0' ... '9') => {
-                            self.backup();
-                            State::LexNumber
-                        },
-                        _ => State::LexField,
+                    '|' => {
+                        self.emit(ItemType::ItemPipe);
+                        State::LexInsideAction
                     }
-                },
-                '+' | '-' | '0' ... '9' => {
-                    self.backup();
-                    State::LexNumber
-                },
-                _ if c.is_whitespace() => State::LexSpace,
-                _ if c.is_alphanumeric() => {
-                    self.backup();
-                    State::LexIdentifier
-                },
-                _ if c.is_ascii() => { // figure out a way to check for unicode.isPrint ?!
-                    self.emit(ItemType::ItemChar);
-                    State::LexInsideAction
+                    '.' => {
+                        match self.input[self.pos..].chars().next() {
+                            Some('0'...'9') => {
+                                self.backup();
+                                State::LexNumber
+                            }
+                            _ => State::LexField,
+                        }
+                    }
+                    '+' | '-' | '0'...'9' => {
+                        self.backup();
+                        State::LexNumber
+                    }
+                    _ if c.is_whitespace() => State::LexSpace,
+                    _ if c.is_alphanumeric() => {
+                        self.backup();
+                        State::LexIdentifier
+                    }
+                    _ if c.is_ascii() => {
+                        // figure out a way to check for unicode.isPrint ?!
+                        self.emit(ItemType::ItemChar);
+                        State::LexInsideAction
+                    }
+                    _ => {
+                        return self.errorf(&format!("unrecognized character in action {}", c));
+                    }
                 }
-                _ => {
-                    return self.errorf(&format!("unrecognized character in action {}", c));
-                },
             }
         }
+    }
+
+    fn lex_space(&mut self) -> State {
+        while self.peek()
+                  .and_then(|c| Some(c.is_whitespace()))
+                  .unwrap_or(false) {}
+        self.emit(ItemType::ItemSpace);
+        State::LexInsideAction
     }
 
     fn lex_identifier(&mut self) -> State {
         let c = self.skip_while(|c| c.is_alphanumeric()).next();
         self.backup();
-        if self.at_terminator() {
+        if !self.at_terminator() {
             return self.errorf(&format!("bad character {}", c.unwrap_or_default()));
         }
         let item_type = match &self.input[self.start..self.pos] {
@@ -474,20 +491,137 @@ impl LexerStateMachine {
         State::LexInsideAction
     }
 
+    fn lex_field(&mut self) -> State {
+        self.lex_field_or_variable(ItemType::ItemField)
+    }
+
+    fn lex_variable(&mut self) -> State {
+        self.lex_field_or_variable(ItemType::ItemVariable)
+    }
+
+    fn lex_field_or_variable(&mut self, typ: ItemType) -> State {
+        if self.at_terminator() {
+            self.emit(match typ {
+                          ItemType::ItemVariable => ItemType::ItemVariable,
+                          _ => ItemType::ItemDot,
+                      });
+            return State::LexInsideAction;
+        }
+        let c = self.skip_while(|c| c.is_alphanumeric()).next();
+        self.backup();
+
+        if !self.at_terminator() {
+            return self.errorf(&format!("bad character {}", c.unwrap_or_default()));
+        }
+        self.emit(typ);
+        State::LexInsideAction
+    }
+
     fn at_terminator(&mut self) -> bool {
         match self.peek() {
             Some(c) => {
                 match c {
-                    '.' | ',' | '|' | ':' | ')' | '('  => true,
+                    '.' | ',' | '|' | ':' | ')' | '(' => true,
                     ' ' | '\t' | '\r' | '\n' => true,
                     // this is what golang does to detect a delimiter
-                    _  => {
-                        LEFT_DELIM.starts_with(c)
-                    }
+                    _ => LEFT_DELIM.starts_with(c),
                 }
-            },
+            }
             None => false,
         }
+    }
+
+    fn lex_char(&mut self) -> State {
+        let mut escaped = false;
+        loop {
+            let c = self.next();
+            match c {
+                Some('\\') => {
+                    escaped = true;
+                    continue;
+                }
+                Some('\n') | None => {
+                    return self.errorf("unterminated character constant");
+                }
+                Some('\'') if !escaped => {
+                    break;
+                }
+                _ => {}
+            };
+            escaped = false;
+        }
+        self.emit(ItemType::ItemCharConstant);
+        State::LexInsideAction
+    }
+
+    fn lex_number(&mut self) -> State {
+        if self.scan_number() {
+            // Let's ingnore complex numbers here.
+            self.emit(ItemType::ItemNumber);
+            State::LexInsideAction
+        } else {
+            let msg = &format!("bad number syntax: {}", &self.input[self.start..self.pos]);
+            self.errorf(msg)
+        }
+    }
+
+    fn scan_number(&mut self) -> bool {
+        self.accept("+-");
+        if self.accept("0") && self.accept("xX") {
+            let digits = "0123456789abcdefABCDEF";
+            self.accept_run(digits);
+        } else {
+            let digits = "0123456789";
+            self.accept_run(digits);
+            if self.accept(".") {
+                self.accept_run(digits);
+            }
+            if self.accept("eE") {
+                self.accept("+-");
+                self.accept_run(digits);
+            }
+        }
+        // Let's ignore imaginary numbers for now.
+        if self.peek()
+               .and_then(|c| Some(c.is_alphanumeric()))
+               .unwrap_or(true) {
+            self.next();
+            return false;
+        }
+        true
+    }
+
+    fn lex_quote(&mut self) -> State {
+        let mut escaped = false;
+        loop {
+            let c = self.next();
+            match c {
+                Some('\\') => {
+                    escaped = true;
+                    continue;
+                }
+                Some('\n') | None => {
+                    return self.errorf("unterminated quoted string");
+                }
+                Some('"') if !escaped => {
+                    break;
+                }
+                _ => {}
+            };
+            escaped = false;
+        }
+        self.emit(ItemType::ItemString);
+        State::LexInsideAction
+    }
+
+    fn lex_raw_quote(&mut self) -> State {
+        let start_line = self.line;
+        if self.skip_while(|c| *c != '`').next().is_none() {
+            self.line = start_line;
+            return self.errorf("unterminated raw quoted string");
+        }
+        self.emit(ItemType::ItemRawString);
+        State::LexInsideAction
     }
 }
 
@@ -508,9 +642,17 @@ mod tests {
     #[test]
     fn lexer_run() {
         let mut l = Lexer::new("foo", "abc".to_owned());
-        let i1 = l.next_item();
+        let i1 = l.next().unwrap();
         assert_eq!(i1.typ, ItemType::ItemText);
         assert_eq!(&i1.val, "abc");
         l.drain();
+    }
+
+    #[test]
+    fn lex_simple() {
+        let s = r#"something {{ if eq "foo" "bar" }}"#;
+        let l = Lexer::new("foo", s.to_owned());
+        let items = l.collect::<Vec<_>>();
+        assert_eq!(items.len(), 13);
     }
 }
