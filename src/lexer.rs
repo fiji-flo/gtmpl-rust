@@ -292,8 +292,8 @@ impl LexerStateMachine {
         let x = self.input[self.pos..].find(&LEFT_DELIM);
         match x {
             Some(x) => {
-                let ld = self.pos + LEFT_DELIM.len();
                 self.pos += x;
+                let ld = self.pos + LEFT_DELIM.len();
                 let mut trim = 0;
                 if self.input[ld..].starts_with(LEFT_TRIM_MARKER) {
                     trim = rtrim_len(&self.input[self.start..self.pos]);
@@ -626,18 +626,20 @@ impl LexerStateMachine {
 }
 
 fn rtrim_len(s: &str) -> usize {
-    let l = s.len();
+    let l = s.len() - 1;
     l - s.rfind(|c: char| !c.is_whitespace()).unwrap_or(l)
 }
 
 fn ltrim_len(s: &str) -> usize {
     let l = s.len();
-    l - s.find(|c: char| !c.is_whitespace()).unwrap_or(l)
+    s.find(|c: char| !c.is_whitespace()).unwrap_or(l)
 }
 
 
 #[cfg(test)]
 mod tests {
+    extern crate itertools;
+    use self::itertools::Itertools;
     use super::*;
     #[test]
     fn lexer_run() {
@@ -654,5 +656,32 @@ mod tests {
         let l = Lexer::new("foo", s.to_owned());
         let items = l.collect::<Vec<_>>();
         assert_eq!(items.len(), 13);
+    }
+
+    #[test]
+    fn test_input() {
+        let s = r#"something {{ .foo }}"#;
+        let l = Lexer::new("foo", s.to_owned());
+        let items = l.collect::<Vec<_>>();
+        let s_ = items.into_iter().map(|i| i.val).join("");
+        assert_eq!(s_ , s);
+    }
+
+    #[test]
+    fn test_trim() {
+        let s = r#"something {{- .foo -}} 2000"#;
+        let l = Lexer::new("foo", s.to_owned());
+        let items = l.collect::<Vec<_>>();
+        let s_ = items.into_iter().map(|i| i.val).join("");
+        assert_eq!(s_ , r#"something{{.foo}}2000"#);
+    }
+
+    #[test]
+    fn test_comment() {
+        let s = r#"something {{- /* foo */ -}} 2000"#;
+        let l = Lexer::new("foo", s.to_owned());
+        let items = l.collect::<Vec<_>>();
+        let s_ = items.into_iter().map(|i| i.val).join("");
+        assert_eq!(s_ , r#"something2000"#);
     }
 }

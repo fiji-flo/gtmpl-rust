@@ -3,5 +3,8 @@ name = "gtmpl"
 version = "0.1.0"
 authors = ["Florian Merz <flomerz@gmail.com>"]
 
+[dev-dependencies]
+itertools = "0.6.0"
+
 [dependencies]
 lazy_static = "0.2"
