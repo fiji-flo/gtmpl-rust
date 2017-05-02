@@ -1,15 +1,30 @@
 use std::fmt::{Display, Error, Formatter};
 use itertools::Itertools;
+use lexer::ItemType;
 
-#[derive(Clone)]
-enum Num {
-    Int(i64),
-    Uint(u64),
-    Float(f64),
+macro_rules! nodes {
+    ($($node:ident),*) => {
+        #[derive(Clone)]
+        pub enum NodeType {
+           $($node,)*
+        }
+
+        #[derive(Clone)]
+        enum Nodes {
+            $($node($node),)*
+        }
+
+        impl Display for Nodes {
+            fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+                match self {
+                    $(&Nodes::$node(ref t) => t.fmt(f),)*
+                }
+            }
+        }
+    }
 }
 
-#[derive(Clone)]
-pub enum NodeType {
+nodes!(
     ListNode,
     TextNode,
     CommandNode,
@@ -20,36 +35,13 @@ pub enum NodeType {
     FieldNode,
     ChainNode,
     BoolNode,
-    NumberNode,
-}
+    NumberNode
+);
 
 type Pos = usize;
 
 type TreeId = usize;
 
-#[derive(Clone)]
-enum Nodes {
-    ListNode(ListNode),
-    TextNode(TextNode),
-    CommandNode(CommandNode),
-    IdentifierNode(IdentifierNode),
-    VariableNode(VariableNode),
-    DotNode(DotNode),
-    NilNode(NilNode),
-    FieldNode(FieldNode),
-    ChainNode(ChainNode),
-    BoolNode(BoolNode),
-    NumberNode(NumberNode),
-}
-
-impl Display for Nodes {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        match self {
-            &Nodes::TextNode(ref t) => t.fmt(f),
-            _=> Ok(())
-        }
-    }
-}
 
 pub trait Node: Display {
     fn typ(&self) -> &NodeType;
@@ -345,18 +337,34 @@ impl Display for BoolNode {
 
 node!(
     NumberNode {
-        num: Num,
+        is_i64: bool,
+        is_u64: bool,
+        is_f64: bool,
+        as_i64: i64,
+        as_u64: u64,
+        as_f64: f64,
         text: String
     }
 );
 
 impl NumberNode {
-    fn new(tr: TreeId, pos: Pos, text: String) -> NumberNode {
+    fn new(tr: TreeId, pos: Pos, text: String, item_typ: ItemType) -> NumberNode {
+        match item_typ {
+            ItemType::ItemCharConstant => {
+                // TBC
+            },
+            _ => {}
+        }
         NumberNode {
             typ: NodeType::NumberNode,
             tr,
             pos,
-            num: Num::Int(0),
+            is_i64: false,
+            is_u64: false,
+            is_f64: false,
+            as_i64: 0,
+            as_u64: 0,
+            as_f64: 0.0,
             text,
         }
     }

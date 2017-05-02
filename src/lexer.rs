@@ -32,7 +32,7 @@ lazy_static! {
 #[derive(Debug)]
 #[derive(Clone)]
 #[derive(PartialEq)]
-enum ItemType {
+pub enum ItemType {
     ItemError, // error occurred; value is text of error
     ItemBool, // boolean constant
     ItemChar, // printable ASCII character; grab bag for comma etc.
