@@ -294,10 +294,11 @@ impl LexerStateMachine {
             Some(x) => {
                 self.pos += x;
                 let ld = self.pos + LEFT_DELIM.len();
-                let mut trim = 0;
-                if self.input[ld..].starts_with(LEFT_TRIM_MARKER) {
-                    trim = rtrim_len(&self.input[self.start..self.pos]);
-                }
+                let trim = if self.input[ld..].starts_with(LEFT_TRIM_MARKER) {
+                    rtrim_len(&self.input[self.start..self.pos])
+                } else {
+                    0
+                };
                 self.pos -= trim;
                 if self.pos > self.start {
                     self.emit(ItemType::ItemText);
@@ -399,9 +400,7 @@ impl LexerStateMachine {
         }
 
         match self.next() {
-            None | Some('\r') | Some('\n') => {
-                return self.errorf("unclosed action");
-            }
+            None | Some('\r') | Some('\n') => self.errorf("unclosed action"),
             Some(c) => {
                 match c {
                     '"' => State::LexQuote,
@@ -427,9 +426,7 @@ impl LexerStateMachine {
                                 self.emit(ItemType::ItemColonEquals);
                                 State::LexInsideAction
                             }
-                            _ => {
-                                return self.errorf("expected :=");
-                            }
+                            _ => self.errorf("expected :="),
                         }
                     }
                     '|' => {
@@ -459,9 +456,7 @@ impl LexerStateMachine {
                         self.emit(ItemType::ItemChar);
                         State::LexInsideAction
                     }
-                    _ => {
-                        return self.errorf(&format!("unrecognized character in action {}", c));
-                    }
+                    _ => self.errorf(&format!("unrecognized character in action {}", c)),
                 }
             }
         }
@@ -521,8 +516,7 @@ impl LexerStateMachine {
         match self.peek() {
             Some(c) => {
                 match c {
-                    '.' | ',' | '|' | ':' | ')' | '(' => true,
-                    ' ' | '\t' | '\r' | '\n' => true,
+                    '.' | ',' | '|' | ':' | ')' | '(' | ' ' | '\t' | '\r' | '\n' => true,
                     // this is what golang does to detect a delimiter
                     _ => LEFT_DELIM.starts_with(c),
                 }

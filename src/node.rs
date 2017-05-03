@@ -4,38 +4,38 @@ use lexer::ItemType;
 use utils::unquote_char;
 
 macro_rules! nodes {
-    ($($node:ident),*) => {
+    ($($node:ident, $name:ident),*) => {
         #[derive(Clone)]
         pub enum NodeType {
-           $($node,)*
+           $($name,)*
         }
 
         #[derive(Clone)]
         enum Nodes {
-            $($node($node),)*
+            $($name($node),)*
         }
 
         impl Display for Nodes {
             fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-                match self {
-                    $(&Nodes::$node(ref t) => t.fmt(f),)*
+                match *self {
+                    $(Nodes::$name(ref t) => t.fmt(f),)*
                 }
             }
         }
     }
 }
 
-nodes!(ListNode,
-       TextNode,
-       CommandNode,
-       IdentifierNode,
-       VariableNode,
-       DotNode,
-       NilNode,
-       FieldNode,
-       ChainNode,
-       BoolNode,
-       NumberNode);
+nodes!(ListNode, List,
+       TextNode, Text,
+       CommandNode, Command,
+       IdentifierNode, Identifier,
+       VariableNode, Variable,
+       DotNode, Dot,
+       NilNode, Nil,
+       FieldNode, Field,
+       ChainNode, Chain,
+       BoolNode, Bool,
+       NumberNode, Number);
 
 type Pos = usize;
 
@@ -85,7 +85,7 @@ impl ListNode {
     }
     fn new(tr: TreeId, pos: Pos) -> ListNode {
         ListNode {
-            typ: NodeType::ListNode,
+            typ: NodeType::List,
             pos,
             tr,
             nodes: vec![],
@@ -113,7 +113,7 @@ node!(
 impl TextNode {
     fn new(tr: TreeId, pos: Pos, text: String) -> TextNode {
         TextNode {
-            typ: NodeType::ListNode,
+            typ: NodeType::List,
             pos,
             tr,
             text,
@@ -136,7 +136,7 @@ node!(
 impl CommandNode {
     fn new(tr: TreeId, pos: Pos) -> CommandNode {
         CommandNode {
-            typ: NodeType::CommandNode,
+            typ: NodeType::Command,
             pos,
             tr,
             args: vec![],
@@ -168,7 +168,7 @@ node!(
 impl IdentifierNode {
     fn new(ident: String) -> IdentifierNode {
         IdentifierNode {
-            typ: NodeType::IdentifierNode,
+            typ: NodeType::Identifier,
             tr: 0,
             pos: 0,
             ident,
@@ -201,10 +201,10 @@ node!(
 impl VariableNode {
     fn new(tr: TreeId, pos: Pos, ident: String) -> VariableNode {
         VariableNode {
-            typ: NodeType::VariableNode,
+            typ: NodeType::Variable,
             tr,
             pos,
-            ident: ident.split(".").map(|s| s.to_owned()).collect(),
+            ident: ident.split('.').map(|s| s.to_owned()).collect(),
         }
     }
 }
@@ -222,7 +222,7 @@ node!(
 impl DotNode {
     fn new(tr: TreeId, pos: Pos) -> DotNode {
         DotNode {
-            typ: NodeType::DotNode,
+            typ: NodeType::Dot,
             tr,
             pos,
         }
@@ -248,7 +248,7 @@ impl Display for NilNode {
 impl NilNode {
     fn new(tr: TreeId, pos: Pos) -> NilNode {
         NilNode {
-            typ: NodeType::NilNode,
+            typ: NodeType::Nil,
             tr,
             pos,
         }
@@ -264,10 +264,10 @@ node!(
 impl FieldNode {
     fn new(tr: TreeId, pos: Pos, ident: String) -> FieldNode {
         FieldNode {
-            typ: NodeType::FieldNode,
+            typ: NodeType::Field,
             tr,
             pos,
-            ident: ident[1..].split(".").map(|s| s.to_owned()).collect(),
+            ident: ident[1..].split('.').map(|s| s.to_owned()).collect(),
         }
     }
 }
@@ -288,7 +288,7 @@ node!(
 impl ChainNode {
     fn new(tr: TreeId, pos: Pos, node: Nodes) -> ChainNode {
         ChainNode {
-            typ: NodeType::ChainNode,
+            typ: NodeType::Chain,
             tr,
             pos,
             node: Box::new(node),
@@ -323,7 +323,7 @@ node!(
 impl BoolNode {
     fn new(tr: TreeId, pos: Pos, val: bool) -> BoolNode {
         BoolNode {
-            typ: NodeType::BoolNode,
+            typ: NodeType::Bool,
             tr,
             pos,
             val,
@@ -350,14 +350,14 @@ node!(
 );
 
 impl NumberNode {
+    #[cfg_attr(feature = "cargo-clippy", allow(float_cmp))]
     fn new(tr: TreeId, pos: Pos, text: String, item_typ: ItemType) -> Result<NumberNode, Error> {
         match item_typ {
             ItemType::ItemCharConstant => {
                 unquote_char(&text, '\'')
                     .and_then(|c| {
-                        let num = c as u32;
                         Some(NumberNode {
-                                 typ: NodeType::NumberNode,
+                                 typ: NodeType::Number,
                                  tr,
                                  pos,
                                  is_i64: true,
@@ -369,7 +369,7 @@ impl NumberNode {
                                  text,
                              })
                     })
-                    .ok_or(format!("malformed character constant: {}", &text))
+                    .ok_or(Error)
             }
             _ => {
                 // TODO: Deal with hex.
@@ -377,7 +377,7 @@ impl NumberNode {
                     .and_then(|i| Ok((i, true)))
                     .unwrap_or((0u64, false));
 
-                let (as_i64, is_i64) = text.parse::<i64>()
+                let (mut as_i64, mut is_i64) = text.parse::<i64>()
                     .and_then(|i| Ok((i, true)))
                     .unwrap_or((0i64, false));
 
@@ -392,10 +392,32 @@ impl NumberNode {
                 } else if is_i64 {
                     (as_i64 as f64, true)
                 } else {
-                    (0.0 as f64, false)
+                    match text.parse::<f64>() {
+                        Err(_) => (0.0 as f64, false),
+                        Ok(f) => {
+                            if !text.contains(|c| match c {
+                                                  '.' | 'e' | 'E' => true,
+                                                  _ => false,
+                                              }) {
+                                return Err(Error);
+                            }
+                            (f, true)
+                        }
+                    }
                 };
+                if !is_i64 && ((as_f64 as i64) as f64) == as_f64 {
+                    as_i64 = as_f64 as i64;
+                    is_i64 = true;
+                }
+                if !is_u64 && ((as_f64 as u64) as f64) == as_f64 {
+                    as_u64 = as_f64 as u64;
+                    is_u64 = true;
+                }
+                if !is_u64 && !is_i64 && !is_f64 {
+                    return Err(Error);
+                }
                 Ok(NumberNode {
-                       typ: NodeType::NumberNode,
+                       typ: NodeType::Number,
                        tr,
                        pos,
                        is_i64,

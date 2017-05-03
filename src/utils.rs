@@ -5,14 +5,14 @@ pub fn unquote_char(s: &str, quote: char) -> Option<char> {
         return None;
     }
     let raw = &s[1..(s.len() - 1)];
-    if raw.starts_with(r"\") {
+    if raw.starts_with('\\') {
         match &raw[..2] {
             r"\x" => {
                 extract_bytes_x(raw)
                     .and_then(|b| String::from_utf8(b).ok())
                     .and_then(|s| get_char(&s))
             }
-            r"\U" => extract_bytes_u32(&raw[2..]).and_then(|b| char::from_u32(b)),
+            r"\U" => extract_bytes_u32(&raw[2..]).and_then(char::from_u32),
             r"\u" => {
                 extract_bytes_u16(raw)
                     .and_then(|b| String::from_utf16(&b).ok())
