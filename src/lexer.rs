@@ -664,7 +664,7 @@ mod tests {
         let l = Lexer::new("foo", s.to_owned());
         let items = l.collect::<Vec<_>>();
         let s_ = items.into_iter().map(|i| i.val).join("");
-        assert_eq!(s_ , s);
+        assert_eq!(s_, s);
     }
 
     #[test]
@@ -673,7 +673,7 @@ mod tests {
         let l = Lexer::new("foo", s.to_owned());
         let items = l.collect::<Vec<_>>();
         let s_ = items.into_iter().map(|i| i.val).join("");
-        assert_eq!(s_ , r#"something{{.foo}}2000"#);
+        assert_eq!(s_, r#"something{{.foo}}2000"#);
     }
 
     #[test]
@@ -682,6 +682,6 @@ mod tests {
         let l = Lexer::new("foo", s.to_owned());
         let items = l.collect::<Vec<_>>();
         let s_ = items.into_iter().map(|i| i.val).join("");
-        assert_eq!(s_ , r#"something2000"#);
+        assert_eq!(s_, r#"something2000"#);
     }
 }

@@ -1,6 +1,7 @@
 use std::fmt::{Display, Error, Formatter};
 use itertools::Itertools;
 use lexer::ItemType;
+use utils::unquote_char;
 
 macro_rules! nodes {
     ($($node:ident),*) => {
@@ -24,19 +25,17 @@ macro_rules! nodes {
     }
 }
 
-nodes!(
-    ListNode,
-    TextNode,
-    CommandNode,
-    IdentifierNode,
-    VariableNode,
-    DotNode,
-    NilNode,
-    FieldNode,
-    ChainNode,
-    BoolNode,
-    NumberNode
-);
+nodes!(ListNode,
+       TextNode,
+       CommandNode,
+       IdentifierNode,
+       VariableNode,
+       DotNode,
+       NilNode,
+       FieldNode,
+       ChainNode,
+       BoolNode,
+       NumberNode);
 
 type Pos = usize;
 
@@ -98,7 +97,7 @@ impl Display for ListNode {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         for n in &self.nodes {
             if let Err(e) = n.fmt(f) {
-                return Err(e)
+                return Err(e);
             }
         }
         Ok(())
@@ -147,12 +146,15 @@ impl CommandNode {
 
 impl Display for CommandNode {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        let s = self.args.iter().map(|n| {
-            match n {
-                // Handle PipeNode.
-                _ => n.to_string()
-            }
-        }).join(" ");
+        let s = self.args
+            .iter()
+            .map(|n| {
+                     match n {
+                         // Handle PipeNode.
+                         _ => n.to_string(),
+                     }
+                 })
+            .join(" ");
         write!(f, "{}", s)
     }
 }
@@ -290,7 +292,7 @@ impl ChainNode {
             tr,
             pos,
             node: Box::new(node),
-            field: vec!(),
+            field: vec![],
         }
     }
 }
@@ -298,9 +300,9 @@ impl ChainNode {
 impl Display for ChainNode {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         if let Err(e) = match self.node {
-            // Handle PipeNode.
-            _ => write!(f, "{}", self.node)
-        } {
+               // Handle PipeNode.
+               _ => write!(f, "{}", self.node),
+           } {
             return Err(e);
         }
         for field in &self.field {
@@ -348,24 +350,63 @@ node!(
 );
 
 impl NumberNode {
-    fn new(tr: TreeId, pos: Pos, text: String, item_typ: ItemType) -> NumberNode {
+    fn new(tr: TreeId, pos: Pos, text: String, item_typ: ItemType) -> Result<NumberNode, Error> {
         match item_typ {
             ItemType::ItemCharConstant => {
-                // TBC
-            },
-            _ => {}
-        }
-        NumberNode {
-            typ: NodeType::NumberNode,
-            tr,
-            pos,
-            is_i64: false,
-            is_u64: false,
-            is_f64: false,
-            as_i64: 0,
-            as_u64: 0,
-            as_f64: 0.0,
-            text,
+                unquote_char(&text, '\'')
+                    .and_then(|c| {
+                        let num = c as u32;
+                        Some(NumberNode {
+                                 typ: NodeType::NumberNode,
+                                 tr,
+                                 pos,
+                                 is_i64: true,
+                                 is_u64: true,
+                                 is_f64: true,
+                                 as_i64: c as i64,
+                                 as_u64: c as u64,
+                                 as_f64: (c as i64) as f64,
+                                 text,
+                             })
+                    })
+                    .ok_or(format!("malformed character constant: {}", &text))
+            }
+            _ => {
+                // TODO: Deal with hex.
+                let (mut as_u64, mut is_u64) = text.parse::<u64>()
+                    .and_then(|i| Ok((i, true)))
+                    .unwrap_or((0u64, false));
+
+                let (as_i64, is_i64) = text.parse::<i64>()
+                    .and_then(|i| Ok((i, true)))
+                    .unwrap_or((0i64, false));
+
+                if as_i64 == 0 {
+                    // In case of -0.
+                    as_u64 = 0;
+                    is_u64 = true;
+                }
+
+                let (as_f64, is_f64) = if is_u64 {
+                    (as_u64 as f64, true)
+                } else if is_i64 {
+                    (as_i64 as f64, true)
+                } else {
+                    (0.0 as f64, false)
+                };
+                Ok(NumberNode {
+                       typ: NodeType::NumberNode,
+                       tr,
+                       pos,
+                       is_i64,
+                       is_u64,
+                       is_f64,
+                       as_i64,
+                       as_u64,
+                       as_f64,
+                       text,
+                   })
+            }
         }
     }
 }
