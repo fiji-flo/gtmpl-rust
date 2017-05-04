@@ -25,17 +25,37 @@ macro_rules! nodes {
     }
 }
 
-nodes!(ListNode, List,
-       TextNode, Text,
-       CommandNode, Command,
-       IdentifierNode, Identifier,
-       VariableNode, Variable,
-       DotNode, Dot,
-       NilNode, Nil,
-       FieldNode, Field,
-       ChainNode, Chain,
-       BoolNode, Bool,
-       NumberNode, Number);
+nodes!(ListNode,
+       List,
+       TextNode,
+       Text,
+       PipeNode,
+       Pipe,
+       ActionNode,
+       Action,
+       CommandNode,
+       Command,
+       IdentifierNode,
+       Identifier,
+       VariableNode,
+       Variable,
+       DotNode,
+       Dot,
+       NilNode,
+       Nil,
+       FieldNode,
+       Field,
+       ChainNode,
+       Chain,
+       BoolNode,
+       Bool,
+       NumberNode,
+       Number,
+       StringNode,
+       String,
+       EndNode,
+       End);
+
 
 type Pos = usize;
 
@@ -124,6 +144,61 @@ impl TextNode {
 impl Display for TextNode {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "{}", self.text)
+    }
+}
+
+node!(
+    PipeNode {
+        decl: Vec<VariableNode>,
+        cmds: Vec<CommandNode>
+    }
+);
+
+impl PipeNode {
+    fn new(tr: TreeId, pos: Pos, decl: Vec<VariableNode>) -> PipeNode {
+        PipeNode {
+            typ: NodeType::Pipe,
+            tr,
+            pos,
+            decl,
+            cmds: vec![],
+        }
+    }
+
+    fn append(&mut self, cmd: CommandNode) {
+        self.cmds.push(cmd);
+    }
+}
+
+impl Display for PipeNode {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "{} := ", self.decl.iter().join(", "))
+            .and_then(|_| {
+                write!(f, "{}", self.cmds.iter().join(" | "))
+            })
+    }
+}
+
+node!(
+    ActionNode {
+        pipe: PipeNode
+    }
+);
+
+impl ActionNode {
+    fn new(tr: TreeId, pos: Pos, pipe: PipeNode) -> ActionNode {
+        ActionNode {
+            typ: NodeType::Action,
+            tr,
+            pos,
+            pipe,
+        }
+    }
+}
+
+impl Display for ActionNode {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "{{{{{}}}}}", self.pipe)
     }
 }
 
@@ -439,9 +514,55 @@ impl Display for NumberNode {
     }
 }
 
+node!(
+    StringNode {
+        quoted: String,
+        text: String
+    }
+);
+
+impl StringNode {
+    fn new(tr: TreeId, pos: Pos, orig: String, text: String) -> StringNode {
+        StringNode {
+            typ: NodeType::String,
+            tr,
+            pos,
+            quoted: orig,
+            text,
+        }
+    }
+}
+
+impl Display for StringNode {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "{}", self.quoted)
+    }
+}
+
+node!(
+    EndNode {}
+);
+
+impl EndNode {
+    fn new(tr: TreeId, pos: Pos) -> EndNode {
+        EndNode {
+            typ: NodeType::End,
+            tr,
+            pos,
+        }
+    }
+}
+
+impl Display for EndNode {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "{{{{end}}}}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn test_clone() {
         let t1 = TextNode::new(1, 0, "foo".to_owned());
@@ -449,5 +570,11 @@ mod tests {
         t2.text = "bar".to_owned();
         assert_eq!(t1.to_string(), "foo");
         assert_eq!(t2.to_string(), "bar");
+    }
+
+    #[test]
+    fn test_end() {
+        let t1 = EndNode::new(1, 0);
+        assert_eq!(t1.to_string(), "{{end}}");
     }
 }
