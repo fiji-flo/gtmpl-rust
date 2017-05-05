@@ -54,7 +54,17 @@ nodes!(ListNode,
        StringNode,
        String,
        EndNode,
-       End);
+       End,
+       ElseNode,
+       Else,
+       IfNode,
+       If,
+       WithNode,
+       With,
+       RangeNode,
+       Range,
+       TemplateNode,
+       Template);
 
 
 type Pos = usize;
@@ -556,6 +566,134 @@ impl EndNode {
 impl Display for EndNode {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "{{{{end}}}}")
+    }
+}
+
+node!(
+    ElseNode {}
+);
+
+impl ElseNode {
+    fn new(tr: TreeId, pos: Pos) -> ElseNode {
+        ElseNode {
+            typ: NodeType::Else,
+            tr,
+            pos,
+        }
+    }
+}
+
+impl Display for ElseNode {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "{{{{else}}}}")
+    }
+}
+
+node!(
+    BranchNode {
+        pipe: PipeNode,
+        list: ListNode,
+        else_list: Option<ListNode>
+    }
+);
+
+type IfNode = BranchNode;
+type WithNode = BranchNode;
+type RangeNode = BranchNode;
+
+impl BranchNode {
+    fn new_if(tr: TreeId,
+              pos: Pos,
+              pipe: PipeNode,
+              list: ListNode,
+              else_list: Option<ListNode>)
+              -> IfNode {
+        IfNode {
+            typ: NodeType::If,
+            tr,
+            pos,
+            pipe,
+            list,
+            else_list,
+        }
+    }
+
+    fn new_with(tr: TreeId,
+                pos: Pos,
+                pipe: PipeNode,
+                list: ListNode,
+                else_list: Option<ListNode>)
+                -> WithNode {
+        WithNode {
+            typ: NodeType::With,
+            tr,
+            pos,
+            pipe,
+            list,
+            else_list,
+        }
+    }
+
+    fn new_range(tr: TreeId,
+                 pos: Pos,
+                 pipe: PipeNode,
+                 list: ListNode,
+                 else_list: Option<ListNode>)
+                 -> RangeNode {
+        RangeNode {
+            typ: NodeType::Range,
+            tr,
+            pos,
+            pipe,
+            list,
+            else_list,
+        }
+    }
+}
+
+impl Display for BranchNode {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        let name = match self.typ {
+            NodeType::If => "if",
+            NodeType::Range => "range",
+            NodeType::With => "with",
+            _ => {
+                return Err(Error);
+            }
+        };
+        if let Some(ref else_list) = self.else_list {
+            return write!(f, "{{{{{} {}}}}}{}{{{{else}}}}{}{{{{end}}}}",
+                          name, self.pipe, self.list, else_list);
+        }
+        write!(f, "{{{{{} {}}}}}{}{{{{end}}}}", name, self.pipe, self.list)
+    }
+}
+
+node!(
+    TemplateNode {
+        name: String,
+        pipe: Option<PipeNode>
+    }
+);
+
+impl TemplateNode {
+    fn new(tr: TreeId, pos: Pos, name: String, pipe: Option<PipeNode>) -> TemplateNode {
+        TemplateNode {
+            typ: NodeType::Template,
+            tr,
+            pos,
+            name,
+            pipe,
+        }
+    }
+}
+
+impl Display for TemplateNode {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match self.pipe {
+            Some(ref pipe) => write!(f, "{{{{template {} {}}}}}", self.name, pipe),
+            None => write!(f, "{{{{template {}}}}}", self.name),
+        }
     }
 }
 
