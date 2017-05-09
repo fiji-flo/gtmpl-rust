@@ -19,6 +19,7 @@ lazy_static! {
         m.insert(".", ItemType::ItemDot);
         m.insert("block", ItemType::ItemBlock);
         m.insert("define", ItemType::ItemDefine);
+        m.insert("end", ItemType::ItemEnd);
         m.insert("else", ItemType::ItemElse);
         m.insert("if", ItemType::ItemIf);
         m.insert("range", ItemType::ItemRange);
@@ -68,7 +69,7 @@ pub enum ItemType {
 }
 
 #[derive(Debug)]
-struct Item {
+pub struct Item {
     pub typ: ItemType,
     pub pos: Pos,
     pub val: String,
@@ -97,7 +98,7 @@ impl fmt::Display for Item {
     }
 }
 
-struct Lexer {
+pub struct Lexer {
     name: String, // the name of the input; used only for error reports
     last_pos: Pos, // position of most recent item returned by nextItem
     items_receiver: Receiver<Item>, // channel of scanned items

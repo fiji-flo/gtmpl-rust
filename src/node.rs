@@ -11,7 +11,7 @@ macro_rules! nodes {
         }
 
         #[derive(Clone)]
-        enum Nodes {
+        pub enum Nodes {
             $($name($node),)*
         }
 
@@ -67,9 +67,9 @@ nodes!(ListNode,
        Template);
 
 
-type Pos = usize;
+pub type Pos = usize;
 
-type TreeId = usize;
+pub type TreeId = usize;
 
 
 pub trait Node: Display {
@@ -83,7 +83,7 @@ macro_rules! node {
         $($field:ident : $typ:ty),*
     }) => {
         #[derive(Clone)]
-        struct $name {
+        pub struct $name {
             typ: NodeType,
             pos: Pos,
             tr: TreeId,
@@ -113,7 +113,7 @@ impl ListNode {
     fn append(&mut self, n: Nodes) {
         self.nodes.push(n);
     }
-    fn new(tr: TreeId, pos: Pos) -> ListNode {
+    pub fn new(tr: TreeId, pos: Pos) -> ListNode {
         ListNode {
             typ: NodeType::List,
             pos,
@@ -141,9 +141,9 @@ node!(
 );
 
 impl TextNode {
-    fn new(tr: TreeId, pos: Pos, text: String) -> TextNode {
+    pub fn new(tr: TreeId, pos: Pos, text: String) -> TextNode {
         TextNode {
-            typ: NodeType::List,
+            typ: NodeType::Text,
             pos,
             tr,
             text,
@@ -165,7 +165,7 @@ node!(
 );
 
 impl PipeNode {
-    fn new(tr: TreeId, pos: Pos, decl: Vec<VariableNode>) -> PipeNode {
+    pub fn new(tr: TreeId, pos: Pos, decl: Vec<VariableNode>) -> PipeNode {
         PipeNode {
             typ: NodeType::Pipe,
             tr,
@@ -196,7 +196,7 @@ node!(
 );
 
 impl ActionNode {
-    fn new(tr: TreeId, pos: Pos, pipe: PipeNode) -> ActionNode {
+    pub fn new(tr: TreeId, pos: Pos, pipe: PipeNode) -> ActionNode {
         ActionNode {
             typ: NodeType::Action,
             tr,
@@ -219,7 +219,7 @@ node!(
 );
 
 impl CommandNode {
-    fn new(tr: TreeId, pos: Pos) -> CommandNode {
+    pub fn new(tr: TreeId, pos: Pos) -> CommandNode {
         CommandNode {
             typ: NodeType::Command,
             pos,
@@ -251,7 +251,7 @@ node!(
 );
 
 impl IdentifierNode {
-    fn new(ident: String) -> IdentifierNode {
+    pub fn new(ident: String) -> IdentifierNode {
         IdentifierNode {
             typ: NodeType::Identifier,
             tr: 0,
@@ -284,7 +284,7 @@ node!(
 );
 
 impl VariableNode {
-    fn new(tr: TreeId, pos: Pos, ident: String) -> VariableNode {
+    pub fn new(tr: TreeId, pos: Pos, ident: String) -> VariableNode {
         VariableNode {
             typ: NodeType::Variable,
             tr,
@@ -305,7 +305,7 @@ node!(
 );
 
 impl DotNode {
-    fn new(tr: TreeId, pos: Pos) -> DotNode {
+    pub fn new(tr: TreeId, pos: Pos) -> DotNode {
         DotNode {
             typ: NodeType::Dot,
             tr,
@@ -331,7 +331,7 @@ impl Display for NilNode {
 }
 
 impl NilNode {
-    fn new(tr: TreeId, pos: Pos) -> NilNode {
+    pub fn new(tr: TreeId, pos: Pos) -> NilNode {
         NilNode {
             typ: NodeType::Nil,
             tr,
@@ -347,7 +347,7 @@ node!(
 );
 
 impl FieldNode {
-    fn new(tr: TreeId, pos: Pos, ident: String) -> FieldNode {
+    pub fn new(tr: TreeId, pos: Pos, ident: String) -> FieldNode {
         FieldNode {
             typ: NodeType::Field,
             tr,
@@ -371,7 +371,7 @@ node!(
 );
 
 impl ChainNode {
-    fn new(tr: TreeId, pos: Pos, node: Nodes) -> ChainNode {
+    pub fn new(tr: TreeId, pos: Pos, node: Nodes) -> ChainNode {
         ChainNode {
             typ: NodeType::Chain,
             tr,
@@ -406,7 +406,7 @@ node!(
 );
 
 impl BoolNode {
-    fn new(tr: TreeId, pos: Pos, val: bool) -> BoolNode {
+    pub fn new(tr: TreeId, pos: Pos, val: bool) -> BoolNode {
         BoolNode {
             typ: NodeType::Bool,
             tr,
@@ -436,7 +436,7 @@ node!(
 
 impl NumberNode {
     #[cfg_attr(feature = "cargo-clippy", allow(float_cmp))]
-    fn new(tr: TreeId, pos: Pos, text: String, item_typ: ItemType) -> Result<NumberNode, Error> {
+    pub fn new(tr: TreeId, pos: Pos, text: String, item_typ: ItemType) -> Result<NumberNode, Error> {
         match item_typ {
             ItemType::ItemCharConstant => {
                 unquote_char(&text, '\'')
@@ -532,7 +532,7 @@ node!(
 );
 
 impl StringNode {
-    fn new(tr: TreeId, pos: Pos, orig: String, text: String) -> StringNode {
+    pub fn new(tr: TreeId, pos: Pos, orig: String, text: String) -> StringNode {
         StringNode {
             typ: NodeType::String,
             tr,
@@ -554,7 +554,7 @@ node!(
 );
 
 impl EndNode {
-    fn new(tr: TreeId, pos: Pos) -> EndNode {
+    pub fn new(tr: TreeId, pos: Pos) -> EndNode {
         EndNode {
             typ: NodeType::End,
             tr,
@@ -574,7 +574,7 @@ node!(
 );
 
 impl ElseNode {
-    fn new(tr: TreeId, pos: Pos) -> ElseNode {
+    pub fn new(tr: TreeId, pos: Pos) -> ElseNode {
         ElseNode {
             typ: NodeType::Else,
             tr,
@@ -602,7 +602,7 @@ type WithNode = BranchNode;
 type RangeNode = BranchNode;
 
 impl BranchNode {
-    fn new_if(tr: TreeId,
+    pub fn new_if(tr: TreeId,
               pos: Pos,
               pipe: PipeNode,
               list: ListNode,
@@ -618,7 +618,7 @@ impl BranchNode {
         }
     }
 
-    fn new_with(tr: TreeId,
+    pub fn new_with(tr: TreeId,
                 pos: Pos,
                 pipe: PipeNode,
                 list: ListNode,
@@ -634,7 +634,7 @@ impl BranchNode {
         }
     }
 
-    fn new_range(tr: TreeId,
+    pub fn new_range(tr: TreeId,
                  pos: Pos,
                  pipe: PipeNode,
                  list: ListNode,
@@ -677,7 +677,7 @@ node!(
 );
 
 impl TemplateNode {
-    fn new(tr: TreeId, pos: Pos, name: String, pipe: Option<PipeNode>) -> TemplateNode {
+    pub fn new(tr: TreeId, pos: Pos, name: String, pipe: Option<PipeNode>) -> TemplateNode {
         TemplateNode {
             typ: NodeType::Template,
             tr,

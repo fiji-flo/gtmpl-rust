@@ -4,4 +4,5 @@ extern crate lazy_static;
 extern crate itertools;
 mod lexer;
 mod node;
+mod parse;
 mod utils;
