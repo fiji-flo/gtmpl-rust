@@ -383,7 +383,7 @@ impl LexerStateMachine {
             self.ignore();
         }
         self.pos += RIGHT_DELIM.len();
-        self.emit(ItemType::ItemLeftDelim);
+        self.emit(ItemType::ItemRightDelim);
         if trim {
             self.pos += ltrim_len(&self.input[self.pos..]);
             self.ignore();

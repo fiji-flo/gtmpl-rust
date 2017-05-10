@@ -1,7 +1,7 @@
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
-use lexer::{Item, Lexer};
+use lexer::{Item, ItemType, Lexer};
 use node::*;
 
 pub type Func<'a> = &'a Fn(Option<Box<Any>>) -> Option<Box<Any>>;
@@ -13,7 +13,7 @@ pub struct Tree<'a> {
     text: String,
     funcs: HashMap<String, Func<'a>>,
     lex: Option<Lexer>,
-    token: Vec<Item>,
+    token: VecDeque<Item>,
     peek_count: usize,
     vars: Vec<String>,
     tree_set: HashMap<String, TreeId>,
@@ -28,7 +28,7 @@ impl<'a, 'b> Tree<'a> {
             text: t.text.clone(),
             funcs: HashMap::new(),
             lex: None,
-            token: vec![],
+            token: VecDeque::new(),
             peek_count: 0,
             vars: vec![],
             tree_set: HashMap::new(),
@@ -53,21 +53,33 @@ impl<'a> Tree<'a> {
     }
 
     fn backup(&mut self, t: Item) {
-        self.token.push(t);
+        self.token.push_back(t);
         self.peek_count = 1;
     }
 
     fn backup2(&mut self, t0: Item, t1: Item) {
-        self.token.push(t0);
-        self.token.push(t1);
+        self.token.push_back(t0);
+        self.token.push_back(t1);
         self.peek_count = 2;
     }
 
     fn backup3(&mut self, t0: Item, t1: Item, t2: Item) {
-        self.token.push(t0);
-        self.token.push(t1);
-        self.token.push(t2);
+        self.token.push_back(t0);
+        self.token.push_back(t1);
+        self.token.push_back(t2);
         self.peek_count = 3;
+    }
+
+    fn next_non_space(&mut self) -> Option<Item> {
+        self.skip_while(|c| c.typ == ItemType::ItemSpace).next()
+    }
+
+    fn peek_non_space(&mut self) -> Option<&Item> {
+        if let Some(t) = self.next_non_space() {
+            self.backup(t);
+            return self.token.front();
+        }
+        None
     }
 }
 
@@ -76,7 +88,7 @@ impl<'a> Iterator for Tree<'a> {
     fn next(&mut self) -> Option<Item> {
         if self.peek_count > 0 {
             self.peek_count -= 1;
-            self.token.pop()
+            self.token.pop_front()
         } else {
             self.next_from_lex()
         }
@@ -88,6 +100,21 @@ mod tests_mocked {
     use super::*;
     use lexer::ItemType;
 
+    /*
+       ItemText
+       ItemLeftDelim
+       ItemSpace
+       ItemIf
+       ItemSpace
+       ItemIdentifier
+       ItemSpace
+       ItemString
+       ItemSpace
+       ItemString
+       ItemSpace
+       ItemRightDelim
+       ItemEOF
+    */
     fn make_tree<'a>() -> Tree<'a> {
         let s = r#"something {{ if eq "foo" "bar" }}"#;
         let lex = Lexer::new("foo", s.to_owned());
@@ -98,7 +125,7 @@ mod tests_mocked {
             text: "nope".to_owned(),
             funcs: HashMap::new(),
             lex: Some(lex),
-            token: vec![],
+            token: VecDeque::new(),
             peek_count: 0,
             vars: vec![],
             tree_set: HashMap::new(),
@@ -120,6 +147,49 @@ mod tests_mocked {
         let s = i.to_string();
         t.backup(i);
         assert_eq!(t.next().and_then(|n| Some(n.to_string())), Some(s));
+        assert_eq!(t.last().and_then(|n| Some(n.typ)), Some(ItemType::ItemEOF));
+    }
+    #[test]
+    fn test_backup3() {
+        let mut t = make_tree();
+        assert_eq!(t.next().and_then(|n| Some(n.typ)), Some(ItemType::ItemText));
+        let t0 = t.next().unwrap();
+        let t1 = t.next().unwrap();
+        let t2 = t.next().unwrap();
+        assert_eq!(t0.typ, ItemType::ItemLeftDelim);
+        assert_eq!(t1.typ, ItemType::ItemSpace);
+        assert_eq!(t2.typ, ItemType::ItemIf);
+        t.backup3(t0, t1, t2);
+        let t0 = t.next().unwrap();
+        let t1 = t.next().unwrap();
+        let t2 = t.next().unwrap();
+        assert_eq!(t0.typ, ItemType::ItemLeftDelim);
+        assert_eq!(t1.typ, ItemType::ItemSpace);
+        assert_eq!(t2.typ, ItemType::ItemIf);
+        assert_eq!(t.last().and_then(|n| Some(n.typ)), Some(ItemType::ItemEOF));
+    }
+
+
+    #[test]
+    fn test_next_non_space() {
+        let mut t = make_tree();
+        t.next();
+        let i = t.next().unwrap();
+        let typ = i.typ;
+        assert_eq!(typ, ItemType::ItemLeftDelim);
+        assert_eq!(t.next_non_space().and_then(|n| Some(n.typ)), Some(ItemType::ItemIf));
+        assert_eq!(t.last().and_then(|n| Some(n.typ)), Some(ItemType::ItemEOF));
+    }
+
+    #[test]
+    fn test_peek_non_space() {
+        let mut t = make_tree();
+        t.next();
+        let i = t.next().unwrap();
+        let typ = i.typ;
+        assert_eq!(typ, ItemType::ItemLeftDelim);
+        assert_eq!(t.peek_non_space().and_then(|n| Some(&n.typ)), Some(&ItemType::ItemIf));
+        assert_eq!(t.next().and_then(|n| Some(n.typ)), Some(ItemType::ItemIf));
         assert_eq!(t.last().and_then(|n| Some(n.typ)), Some(ItemType::ItemEOF));
     }
 }
