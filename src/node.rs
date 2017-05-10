@@ -436,7 +436,11 @@ node!(
 
 impl NumberNode {
     #[cfg_attr(feature = "cargo-clippy", allow(float_cmp))]
-    pub fn new(tr: TreeId, pos: Pos, text: String, item_typ: ItemType) -> Result<NumberNode, Error> {
+    pub fn new(tr: TreeId,
+               pos: Pos,
+               text: String,
+               item_typ: ItemType)
+               -> Result<NumberNode, Error> {
         match item_typ {
             ItemType::ItemCharConstant => {
                 unquote_char(&text, '\'')
@@ -603,11 +607,11 @@ type RangeNode = BranchNode;
 
 impl BranchNode {
     pub fn new_if(tr: TreeId,
-              pos: Pos,
-              pipe: PipeNode,
-              list: ListNode,
-              else_list: Option<ListNode>)
-              -> IfNode {
+                  pos: Pos,
+                  pipe: PipeNode,
+                  list: ListNode,
+                  else_list: Option<ListNode>)
+                  -> IfNode {
         IfNode {
             typ: NodeType::If,
             tr,
@@ -619,11 +623,11 @@ impl BranchNode {
     }
 
     pub fn new_with(tr: TreeId,
-                pos: Pos,
-                pipe: PipeNode,
-                list: ListNode,
-                else_list: Option<ListNode>)
-                -> WithNode {
+                    pos: Pos,
+                    pipe: PipeNode,
+                    list: ListNode,
+                    else_list: Option<ListNode>)
+                    -> WithNode {
         WithNode {
             typ: NodeType::With,
             tr,
@@ -635,11 +639,11 @@ impl BranchNode {
     }
 
     pub fn new_range(tr: TreeId,
-                 pos: Pos,
-                 pipe: PipeNode,
-                 list: ListNode,
-                 else_list: Option<ListNode>)
-                 -> RangeNode {
+                     pos: Pos,
+                     pipe: PipeNode,
+                     list: ListNode,
+                     else_list: Option<ListNode>)
+                     -> RangeNode {
         RangeNode {
             typ: NodeType::Range,
             tr,

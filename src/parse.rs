@@ -177,7 +177,8 @@ mod tests_mocked {
         let i = t.next().unwrap();
         let typ = i.typ;
         assert_eq!(typ, ItemType::ItemLeftDelim);
-        assert_eq!(t.next_non_space().and_then(|n| Some(n.typ)), Some(ItemType::ItemIf));
+        assert_eq!(t.next_non_space().and_then(|n| Some(n.typ)),
+                   Some(ItemType::ItemIf));
         assert_eq!(t.last().and_then(|n| Some(n.typ)), Some(ItemType::ItemEOF));
     }
 
@@ -188,7 +189,8 @@ mod tests_mocked {
         let i = t.next().unwrap();
         let typ = i.typ;
         assert_eq!(typ, ItemType::ItemLeftDelim);
-        assert_eq!(t.peek_non_space().and_then(|n| Some(&n.typ)), Some(&ItemType::ItemIf));
+        assert_eq!(t.peek_non_space().and_then(|n| Some(&n.typ)),
+                   Some(&ItemType::ItemIf));
         assert_eq!(t.next().and_then(|n| Some(n.typ)), Some(ItemType::ItemIf));
         assert_eq!(t.last().and_then(|n| Some(n.typ)), Some(ItemType::ItemEOF));
     }
