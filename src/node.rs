@@ -22,6 +22,24 @@ macro_rules! nodes {
                 }
             }
         }
+
+        impl Nodes {
+            pub fn typ(&self) -> &NodeType {
+                match *self {
+                    $(Nodes::$name(ref t) => t.typ(),)*
+                }
+            }
+            pub fn pos(&self) -> Pos {
+                match *self {
+                    $(Nodes::$name(ref t) => t.pos(),)*
+                }
+            }
+            pub fn tree(&self) -> TreeId {
+                match *self {
+                    $(Nodes::$name(ref t) => t.tree(),)*
+                }
+            }
+        }
     }
 }
 

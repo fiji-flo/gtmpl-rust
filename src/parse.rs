@@ -9,17 +9,33 @@ pub type Func<'a> = &'a Fn(Option<Box<Any>>) -> Option<Box<Any>>;
 pub struct Tree<'a> {
     name: String,
     parse_name: String,
-    root: ListNode,
+    root: Option<ListNode>,
     text: String,
     funcs: HashMap<String, Func<'a>>,
     lex: Option<Lexer>,
     token: VecDeque<Item>,
     peek_count: usize,
     vars: Vec<String>,
-    tree_set: HashMap<String, TreeId>,
+    tree_ids: HashMap<String, TreeId>,
+    tree_set: HashMap<TreeId, Tree<'a>>,
 }
 
 impl<'a, 'b> Tree<'a> {
+    fn new(name: String, funcs: HashMap<String, Func<'a>>) -> Tree<'a> {
+        Tree {
+            name,
+            parse_name: String::default(),
+            root: None,
+            text: String::default(),
+            funcs,
+            lex: None,
+            token: VecDeque::new(),
+            peek_count: 0,
+            vars: vec![],
+            tree_ids: HashMap::new(),
+            tree_set: HashMap::new(),
+        }
+    }
     fn clone_new(t: &Tree) -> Tree<'b> {
         Tree {
             name: t.name.clone(),
@@ -31,6 +47,7 @@ impl<'a, 'b> Tree<'a> {
             token: VecDeque::new(),
             peek_count: 0,
             vars: vec![],
+            tree_ids: HashMap::new(),
             tree_set: HashMap::new(),
         }
     }
@@ -40,8 +57,8 @@ pub fn parse<'a>(name: String,
                  text: String,
                  funcs: HashMap<String, Func<'a>>)
                  -> HashMap<String, Tree<'a>> {
-    let tree_set = HashMap::new();
-    tree_set
+    let tree_ids = HashMap::new();
+    tree_ids
 }
 
 impl<'a> Tree<'a> {
@@ -80,6 +97,17 @@ impl<'a> Tree<'a> {
             return self.token.front();
         }
         None
+    }
+
+    fn error_context(&mut self, n: Nodes) -> (String, String) {
+        let pos = n.pos();
+        let tree_id = n.tree();
+        let tree = if tree_id == 0 && self.tree_set.contains_key(tree_id) {
+            self.tree_set.get(&tree_id).unwrap()
+        } else {
+            self
+        };
+        (String::default(), String::default())
     }
 }
 
@@ -121,13 +149,14 @@ mod tests_mocked {
         Tree {
             name: "foo".to_owned(),
             parse_name: "bar".to_owned(),
-            root: ListNode::new(0, 0),
+            root: None,
             text: "nope".to_owned(),
             funcs: HashMap::new(),
             lex: Some(lex),
             token: VecDeque::new(),
             peek_count: 0,
             vars: vec![],
+            tree_ids: HashMap::new(),
             tree_set: HashMap::new(),
         }
     }
