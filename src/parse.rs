@@ -102,12 +102,19 @@ impl<'a> Tree<'a> {
     fn error_context(&mut self, n: Nodes) -> (String, String) {
         let pos = n.pos();
         let tree_id = n.tree();
-        let tree = if tree_id == 0 && self.tree_set.contains_key(tree_id) {
+        let tree = if tree_id == 0 && self.tree_set.contains_key(&tree_id) {
             self.tree_set.get(&tree_id).unwrap()
         } else {
             self
         };
-        (String::default(), String::default())
+        let text = &tree.text[0..pos];
+        let byte_num = match text.rfind('\n') {
+            Some(i) => pos - (i + 1),
+            None => pos,
+        };
+        let line_num = text.chars().filter(|c| *c == '\n').count();
+        let context = n.to_string();
+        (format!("{}:{}:{}", tree.parse_name, line_num, byte_num), context)
     }
 }
 

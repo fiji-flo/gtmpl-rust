@@ -187,6 +187,12 @@ impl Lexer {
     }
 }
 
+impl Drop for Lexer {
+    fn drop(&mut self) {
+        self.drain();
+    }
+}
+
 impl Iterator for LexerStateMachine {
     type Item = char;
     fn next(&mut self) -> Option<char> {
@@ -642,7 +648,6 @@ mod tests {
         let i1 = l.next().unwrap();
         assert_eq!(i1.typ, ItemType::ItemText);
         assert_eq!(&i1.val, "abc");
-        l.drain();
     }
 
     #[test]
