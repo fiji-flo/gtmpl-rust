@@ -116,6 +116,42 @@ impl<'a> Tree<'a> {
         let context = n.to_string();
         (format!("{}:{}:{}", tree.parse_name, line_num, byte_num), context)
     }
+
+    fn start_parse(&mut self,
+                   funcs: HashMap<String, Func<'a>>,
+                   lex: Lexer,
+                   tree_ids: HashMap<String, TreeId>,
+                   tree_set: HashMap<TreeId, Tree<'a>>) {
+        self.root = None;
+        self.lex = Some(lex);
+        self.vars = vec!["$".to_owned()];
+        self.funcs = funcs;
+        self.tree_ids = tree_ids;
+        self.tree_set = tree_set;
+    }
+
+    fn stop_parse(&mut self) {
+        self.lex = None;
+        self.vars = vec![];
+        self.funcs = HashMap::new();
+        self.tree_ids = HashMap::new();
+        self.tree_set = HashMap::new();
+    }
+
+    fn parse(&mut self,
+             text: String,
+             tree_ids: HashMap<String, TreeId>,
+             tree_set: HashMap<TreeId, Tree<'a>>,
+             funcs: HashMap<String, Func<'a>>)
+             -> Result<(), String> {
+        self.parse_name = self.name.clone();
+        let lex_name = self.name.clone();
+        self.start_parse(funcs, Lexer::new(&lex_name, text.clone()), tree_ids, tree_set);
+        self.text = text;
+        //self.do_parse();
+        self.stop_parse();
+        Ok(())
+    }
 }
 
 impl<'a> Iterator for Tree<'a> {
