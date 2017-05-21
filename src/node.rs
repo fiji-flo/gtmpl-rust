@@ -121,6 +121,22 @@ macro_rules! node {
     }
 }
 
+impl Nodes {
+    pub fn is_empty_tree(&self) -> Result<bool, String> {
+        match self {
+            &Nodes::List(ref n) => return n.is_empty_tree(),
+            &Nodes::Text(ref n) => Ok(n.text.is_empty()),
+            &Nodes::Action(_) |
+            &Nodes::If(_) |
+            &Nodes::Range(_) |
+            &Nodes::Template(_) |
+            &Nodes::With(_) => Ok(false),
+            _ => Err(format!("unknown node: {}", self)),
+
+        }
+    }
+}
+
 node!(
     ListNode {
         nodes: Vec<Nodes>
@@ -138,6 +154,16 @@ impl ListNode {
             tr,
             nodes: vec![],
         }
+    }
+    pub fn is_empty_tree(&self) -> Result<bool, String> {
+        for n in &self.nodes {
+            match n.is_empty_tree() {
+                Ok(true) => {}
+                Ok(false) => return Ok(false),
+                Err(s) => return Err(s),
+            }
+        }
+        Ok(true)
     }
 }
 

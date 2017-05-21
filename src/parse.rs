@@ -8,6 +8,7 @@ pub type Func<'a> = &'a Fn(Option<Box<Any>>) -> Option<Box<Any>>;
 
 pub struct Tree<'a> {
     name: String,
+    id: TreeId,
     parse_name: String,
     root: Option<ListNode>,
     text: String,
@@ -16,14 +17,16 @@ pub struct Tree<'a> {
     token: VecDeque<Item>,
     peek_count: usize,
     vars: Vec<String>,
-    tree_ids: HashMap<String, TreeId>,
-    tree_set: HashMap<TreeId, Tree<'a>>,
+    tree_ids: HashMap<TreeId, String>,
+    tree_set: HashMap<String, Tree<'a>>,
+    line: usize,
 }
 
 impl<'a, 'b> Tree<'a> {
-    fn new(name: String, funcs: HashMap<String, Func<'a>>) -> Tree<'a> {
+    fn new(name: String, id: TreeId, funcs: HashMap<String, Func<'a>>) -> Tree<'a> {
         Tree {
             name,
+            id,
             parse_name: String::default(),
             root: None,
             text: String::default(),
@@ -34,11 +37,13 @@ impl<'a, 'b> Tree<'a> {
             vars: vec![],
             tree_ids: HashMap::new(),
             tree_set: HashMap::new(),
+            line: 0,
         }
     }
     fn clone_new(t: &Tree) -> Tree<'b> {
         Tree {
             name: t.name.clone(),
+            id: t.id.clone(),
             parse_name: t.parse_name.clone(),
             root: t.root.clone(),
             text: t.text.clone(),
@@ -49,6 +54,7 @@ impl<'a, 'b> Tree<'a> {
             vars: vec![],
             tree_ids: HashMap::new(),
             tree_set: HashMap::new(),
+            line: 0,
         }
     }
 }
@@ -102,8 +108,8 @@ impl<'a> Tree<'a> {
     fn error_context(&mut self, n: Nodes) -> (String, String) {
         let pos = n.pos();
         let tree_id = n.tree();
-        let tree = if tree_id == 0 && self.tree_set.contains_key(&tree_id) {
-            self.tree_set.get(&tree_id).unwrap()
+        let tree = if tree_id == 0 && self.tree_ids.contains_key(&tree_id) {
+            self.tree_by_id(tree_id).unwrap()
         } else {
             self
         };
@@ -120,8 +126,8 @@ impl<'a> Tree<'a> {
     fn start_parse(&mut self,
                    funcs: HashMap<String, Func<'a>>,
                    lex: Lexer,
-                   tree_ids: HashMap<String, TreeId>,
-                   tree_set: HashMap<TreeId, Tree<'a>>) {
+                   tree_ids: HashMap<TreeId, String>,
+                   tree_set: HashMap<String, Tree<'a>>) {
         self.root = None;
         self.lex = Some(lex);
         self.vars = vec!["$".to_owned()];
@@ -140,16 +146,54 @@ impl<'a> Tree<'a> {
 
     fn parse(&mut self,
              text: String,
-             tree_ids: HashMap<String, TreeId>,
-             tree_set: HashMap<TreeId, Tree<'a>>,
+             tree_ids: HashMap<TreeId, String>,
+             tree_set: HashMap<String, Tree<'a>>,
              funcs: HashMap<String, Func<'a>>)
              -> Result<(), String> {
         self.parse_name = self.name.clone();
         let lex_name = self.name.clone();
-        self.start_parse(funcs, Lexer::new(&lex_name, text.clone()), tree_ids, tree_set);
+        self.start_parse(funcs,
+                         Lexer::new(&lex_name, text.clone()),
+                         tree_ids,
+                         tree_set);
         self.text = text;
         //self.do_parse();
         self.stop_parse();
+        Ok(())
+    }
+
+    fn tree_by_id(&self, id: TreeId) -> Option<&Tree<'a>> {
+        self.tree_ids
+            .get(&id)
+            .and_then(|name| self.tree_set.get(name))
+    }
+    fn add_tree(&mut self, name: &str, t: Tree<'a>) {
+        self.tree_ids.insert(t.id, name.to_owned());
+        self.tree_set.insert(name.to_owned(), t);
+    }
+
+    fn error(&mut self, msg: String) -> Result<(), String> {
+        self.root = None;
+        Err(format!("template: {}:{}:{}", self.parse_name, self.line, msg))
+    }
+
+    fn add_to_tree_set(mut tree: Tree<'a>,
+                       mut tree_set: HashMap<String, Tree<'a>>)
+                       -> Result<(), String> {
+        if let Some(t) = tree_set.get(&tree.name) {
+            if let Some(ref r) = t.root {
+                match r.is_empty_tree() {
+                    Err(e) => return Err(e),
+                    Ok(false) => {
+                        let err = format!("template multiple definitions of template {}",
+                                          &tree.name);
+                        return tree.error(err);
+                    }
+                    Ok(true) => {}
+                }
+            }
+        }
+        tree_set.insert(tree.name.clone(), tree);
         Ok(())
     }
 }
@@ -157,11 +201,18 @@ impl<'a> Tree<'a> {
 impl<'a> Iterator for Tree<'a> {
     type Item = Item;
     fn next(&mut self) -> Option<Item> {
-        if self.peek_count > 0 {
+        let item = if self.peek_count > 0 {
             self.peek_count -= 1;
             self.token.pop_front()
         } else {
             self.next_from_lex()
+        };
+        match item {
+            Some(item) => {
+                self.line = item.line;
+                Some(item)
+            },
+            _ => None
         }
     }
 }
@@ -191,6 +242,7 @@ mod tests_mocked {
         let lex = Lexer::new("foo", s.to_owned());
         Tree {
             name: "foo".to_owned(),
+            id: 1,
             parse_name: "bar".to_owned(),
             root: None,
             text: "nope".to_owned(),
@@ -201,6 +253,7 @@ mod tests_mocked {
             vars: vec![],
             tree_ids: HashMap::new(),
             tree_set: HashMap::new(),
+            line: 0,
         }
     }
 
