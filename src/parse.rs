@@ -105,6 +105,14 @@ impl<'a> Tree<'a> {
         None
     }
 
+    fn peek(&mut self) -> Option<&Item> {
+        if let Some(t) = self.next() {
+            self.backup(t);
+            return self.token.front();
+        }
+        None
+    }
+
     fn error_context(&mut self, n: Nodes) -> (String, String) {
         let pos = n.pos();
         let tree_id = n.tree();
@@ -144,21 +152,21 @@ impl<'a> Tree<'a> {
         self.tree_set = HashMap::new();
     }
 
-    fn parse(&mut self,
+    fn parse_tree(tree: &mut Tree<'a>,
              text: String,
              tree_ids: HashMap<TreeId, String>,
              tree_set: HashMap<String, Tree<'a>>,
              funcs: HashMap<String, Func<'a>>)
              -> Result<(), String> {
-        self.parse_name = self.name.clone();
-        let lex_name = self.name.clone();
-        self.start_parse(funcs,
+        tree.parse_name = tree.name.clone();
+        let lex_name = tree.name.clone();
+        tree.start_parse(funcs,
                          Lexer::new(&lex_name, text.clone()),
                          tree_ids,
                          tree_set);
-        self.text = text;
-        //self.do_parse();
-        self.stop_parse();
+        tree.text = text;
+        tree.parse();
+        tree.stop_parse();
         Ok(())
     }
 
@@ -194,6 +202,24 @@ impl<'a> Tree<'a> {
             }
         }
         tree_set.insert(tree.name.clone(), tree);
+        Ok(())
+    }
+
+    fn parse(&mut self) -> Result<(), String> {
+        let id = self.id;
+        let n = self.next();
+        if n.is_none() {
+            return self.error(format!("unable to peek for tree {}", id));
+        }
+        let t = n.unwrap();
+        self.root = Some(ListNode::new(id, t.pos));
+        let mut typ = t.typ;
+        while typ == ItemType::ItemEOF {
+            if typ == ItemType::ItemLeftDelim  {
+                let nos = self.next_non_space();
+                // lots missing
+            }
+        }
         Ok(())
     }
 }
