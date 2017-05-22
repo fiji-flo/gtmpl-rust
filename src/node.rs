@@ -144,7 +144,7 @@ node!(
 );
 
 impl ListNode {
-    fn append(&mut self, n: Nodes) {
+    pub fn append(&mut self, n: Nodes) {
         self.nodes.push(n);
     }
     pub fn new(tr: TreeId, pos: Pos) -> ListNode {

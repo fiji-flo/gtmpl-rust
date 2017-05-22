@@ -180,9 +180,13 @@ impl<'a> Tree<'a> {
         self.tree_set.insert(name.to_owned(), t);
     }
 
-    fn error(&mut self, msg: String) -> Result<(), String> {
+    fn error<T>(&mut self, msg: String) -> Result<T, String> {
         self.root = None;
         Err(format!("template: {}:{}:{}", self.parse_name, self.line, msg))
+    }
+
+    fn unexpected<T>(&mut self, token: &Item, context: &str) -> Result<T, String> {
+        self.error(format!("unexpected {} in {}", token, context))
     }
 
     fn add_to_tree_set(mut tree: Tree<'a>,
@@ -207,20 +211,57 @@ impl<'a> Tree<'a> {
 
     fn parse(&mut self) -> Result<(), String> {
         let id = self.id;
-        let n = self.next();
-        if n.is_none() {
-            return self.error(format!("unable to peek for tree {}", id));
-        }
-        let t = n.unwrap();
+        let mut t = match self.next() {
+            None => return self.error(format!("unable to peek for tree {}", id)),
+            Some(t) => t,
+        };
         self.root = Some(ListNode::new(id, t.pos));
-        let mut typ = t.typ;
-        while typ == ItemType::ItemEOF {
-            if typ == ItemType::ItemLeftDelim  {
-                let nos = self.next_non_space();
-                // lots missing
+        while t.typ == ItemType::ItemEOF {
+            if t.typ == ItemType::ItemLeftDelim  {
+                let nns = self.next_non_space();
+                match nns {
+                    Some(ref item) if item.typ == ItemType::ItemDefine => {
+                        // lots missing
+                        continue
+                    },
+                    _ => {},
+                };
+                if let Some(t2) = nns {
+                    self.backup2(t, t2);
+                } else {
+                    self.backup(t);
+                }
+            } else {
+                self.backup(t);
             }
+            let node = match self.text_or_action() {
+                Ok(Nodes::Else(node)) => return self.error(format!("unexpected {}", node)),
+                Ok(Nodes::End(node)) => return self.error(format!("unexpected {}", node)),
+                Ok(node) => node,
+                Err(e) => return Err(e),
+            };
+            self.root.as_mut().map(|mut r| {r.append(node)});
+
+            t = match self.next() {
+                None => return self.error(format!("unable to peek for tree {}", id)),
+                Some(t) => t,
+            };
         }
+        self.backup(t);
         Ok(())
+    }
+
+    fn text_or_action(&mut self) -> Result<Nodes, String> {
+        match self.next_non_space() {
+            Some(ref item) if item.typ == ItemType::ItemText => Ok(Nodes::Text(TextNode::new(self.id, item.pos, item.val.clone()))),
+            Some(ref item) if item.typ == ItemType::ItemLeftDelim => self.action(),
+            Some(ref item) => self.unexpected(item, "input"),
+            _ => self.error(format!("unexpected end of input")),
+        }
+    }
+
+    fn action(&mut self) -> Result<Nodes, String> {
+        Err("doom".to_owned())
     }
 }
 
