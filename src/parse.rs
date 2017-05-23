@@ -153,11 +153,11 @@ impl<'a> Tree<'a> {
     }
 
     fn parse_tree(tree: &mut Tree<'a>,
-             text: String,
-             tree_ids: HashMap<TreeId, String>,
-             tree_set: HashMap<String, Tree<'a>>,
-             funcs: HashMap<String, Func<'a>>)
-             -> Result<(), String> {
+                  text: String,
+                  tree_ids: HashMap<TreeId, String>,
+                  tree_set: HashMap<String, Tree<'a>>,
+                  funcs: HashMap<String, Func<'a>>)
+                  -> Result<(), String> {
         tree.parse_name = tree.name.clone();
         let lex_name = tree.name.clone();
         tree.start_parse(funcs,
@@ -217,14 +217,14 @@ impl<'a> Tree<'a> {
         };
         self.root = Some(ListNode::new(id, t.pos));
         while t.typ == ItemType::ItemEOF {
-            if t.typ == ItemType::ItemLeftDelim  {
+            if t.typ == ItemType::ItemLeftDelim {
                 let nns = self.next_non_space();
                 match nns {
                     Some(ref item) if item.typ == ItemType::ItemDefine => {
                         // lots missing
-                        continue
-                    },
-                    _ => {},
+                        continue;
+                    }
+                    _ => {}
                 };
                 if let Some(t2) = nns {
                     self.backup2(t, t2);
@@ -240,7 +240,7 @@ impl<'a> Tree<'a> {
                 Ok(node) => node,
                 Err(e) => return Err(e),
             };
-            self.root.as_mut().map(|mut r| {r.append(node)});
+            self.root.as_mut().map(|mut r| r.append(node));
 
             t = match self.next() {
                 None => return self.error(format!("unable to peek for tree {}", id)),
@@ -253,7 +253,9 @@ impl<'a> Tree<'a> {
 
     fn text_or_action(&mut self) -> Result<Nodes, String> {
         match self.next_non_space() {
-            Some(ref item) if item.typ == ItemType::ItemText => Ok(Nodes::Text(TextNode::new(self.id, item.pos, item.val.clone()))),
+            Some(ref item) if item.typ == ItemType::ItemText => {
+                Ok(Nodes::Text(TextNode::new(self.id, item.pos, item.val.clone())))
+            }
             Some(ref item) if item.typ == ItemType::ItemLeftDelim => self.action(),
             Some(ref item) => self.unexpected(item, "input"),
             _ => self.error(format!("unexpected end of input")),
@@ -278,8 +280,8 @@ impl<'a> Iterator for Tree<'a> {
             Some(item) => {
                 self.line = item.line;
                 Some(item)
-            },
-            _ => None
+            }
+            _ => None,
         }
     }
 }
