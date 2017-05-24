@@ -6,6 +6,17 @@ use node::*;
 
 pub type Func<'a> = &'a Fn(Option<Box<Any>>) -> Option<Box<Any>>;
 
+pub struct Parser<'a> {
+    name: String,
+    text: String,
+    funcs: HashMap<String, Func<'a>>,
+    lex: Option<Lexer>,
+    token: VecDeque<Item>,
+    peek_count: usize,
+    tree_ids: HashMap<TreeId, String>,
+    tree_set: HashMap<String, Tree<'a>>,
+}
+
 pub struct Tree<'a> {
     name: String,
     id: TreeId,
@@ -22,31 +33,14 @@ pub struct Tree<'a> {
     line: usize,
 }
 
-impl<'a, 'b> Tree<'a> {
-    fn new(name: String, id: TreeId, funcs: HashMap<String, Func<'a>>) -> Tree<'a> {
+impl<'a> Tree<'a> {
+    fn new(name: String, id: TreeId) -> Tree<'a> {
         Tree {
             name,
             id,
             parse_name: String::default(),
             root: None,
             text: String::default(),
-            funcs,
-            lex: None,
-            token: VecDeque::new(),
-            peek_count: 0,
-            vars: vec![],
-            tree_ids: HashMap::new(),
-            tree_set: HashMap::new(),
-            line: 0,
-        }
-    }
-    fn clone_new(t: &Tree) -> Tree<'b> {
-        Tree {
-            name: t.name.clone(),
-            id: t.id.clone(),
-            parse_name: t.parse_name.clone(),
-            root: t.root.clone(),
-            text: t.text.clone(),
             funcs: HashMap::new(),
             lex: None,
             token: VecDeque::new(),
@@ -221,6 +215,10 @@ impl<'a> Tree<'a> {
                 let nns = self.next_non_space();
                 match nns {
                     Some(ref item) if item.typ == ItemType::ItemDefine => {
+                        let mut def = Tree::new("definition".to_owned(), self.id + 1);
+                        def.text = self.text.clone();
+                        def.parse_name = self.parse_name.clone();
+                        //def.start_parse(self.funcs, self.lex.unwrap(), self.tree_ids, self.tree_set);
                         // lots missing
                         continue;
                     }
