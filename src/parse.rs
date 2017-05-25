@@ -15,6 +15,7 @@ pub struct Parser<'a> {
     peek_count: usize,
     tree_ids: HashMap<TreeId, String>,
     tree_set: HashMap<String, Tree<'a>>,
+    tree: Option<Tree<'a>>,
 }
 
 pub struct Tree<'a> {
@@ -31,6 +32,22 @@ pub struct Tree<'a> {
     tree_ids: HashMap<TreeId, String>,
     tree_set: HashMap<String, Tree<'a>>,
     line: usize,
+}
+
+impl<'a> Parser<'a> {
+    pub fn new(name: String) -> Parser<'a> {
+        Parser {
+            name,
+            text: String::default(),
+            funcs: HashMap::new(),
+            lex: None,
+            token: VecDeque::new(),
+            peek_count: 0,
+            tree_ids: HashMap::new(),
+            tree_set: HashMap::new(),
+            tree: None,
+        }
+    }
 }
 
 impl<'a> Tree<'a> {
