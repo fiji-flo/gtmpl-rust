@@ -11,27 +11,22 @@ pub struct Parser<'a> {
     text: String,
     funcs: HashMap<String, Func<'a>>,
     lex: Option<Lexer>,
+    line: usize,
     token: VecDeque<Item>,
     peek_count: usize,
     tree_ids: HashMap<TreeId, String>,
-    tree_set: HashMap<String, Tree<'a>>,
-    tree: Option<Tree<'a>>,
+    tree_set: HashMap<String, Tree>,
+    tree_id: TreeId,
+    tree: Option<Tree>,
+    tree_stack: VecDeque<Tree>,
 }
 
-pub struct Tree<'a> {
+pub struct Tree {
     name: String,
     id: TreeId,
     parse_name: String,
     root: Option<ListNode>,
-    text: String,
-    funcs: HashMap<String, Func<'a>>,
-    lex: Option<Lexer>,
-    token: VecDeque<Item>,
-    peek_count: usize,
     vars: Vec<String>,
-    tree_ids: HashMap<TreeId, String>,
-    tree_set: HashMap<String, Tree<'a>>,
-    line: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -41,31 +36,26 @@ impl<'a> Parser<'a> {
             text: String::default(),
             funcs: HashMap::new(),
             lex: None,
+            line: 0,
             token: VecDeque::new(),
             peek_count: 0,
             tree_ids: HashMap::new(),
             tree_set: HashMap::new(),
+            tree_id: 0,
             tree: None,
+            tree_stack: VecDeque::new(),
         }
     }
 }
 
-impl<'a> Tree<'a> {
-    fn new(name: String, id: TreeId) -> Tree<'a> {
+impl Tree {
+    fn new(name: String, id: TreeId) -> Tree {
         Tree {
             name,
             id,
             parse_name: String::default(),
             root: None,
-            text: String::default(),
-            funcs: HashMap::new(),
-            lex: None,
-            token: VecDeque::new(),
-            peek_count: 0,
             vars: vec![],
-            tree_ids: HashMap::new(),
-            tree_set: HashMap::new(),
-            line: 0,
         }
     }
 }
@@ -73,12 +63,12 @@ impl<'a> Tree<'a> {
 pub fn parse<'a>(name: String,
                  text: String,
                  funcs: HashMap<String, Func<'a>>)
-                 -> HashMap<String, Tree<'a>> {
+                 -> HashMap<String, Tree> {
     let tree_ids = HashMap::new();
     tree_ids
 }
 
-impl<'a> Tree<'a> {
+impl<'a> Parser<'a> {
     fn next_from_lex(&mut self) -> Option<Item> {
         match &mut self.lex {
             &mut Some(ref mut l) => l.next(),
@@ -127,116 +117,114 @@ impl<'a> Tree<'a> {
     fn error_context(&mut self, n: Nodes) -> (String, String) {
         let pos = n.pos();
         let tree_id = n.tree();
-        let tree = if tree_id == 0 && self.tree_ids.contains_key(&tree_id) {
-            self.tree_by_id(tree_id).unwrap()
+        let parse_name = if tree_id == 0 && self.tree_ids.contains_key(&tree_id) {
+            self.tree_by_id(tree_id).map(|t| { &t.parse_name })
         } else {
-            self
+            self.tree.as_ref().map(|t| { &t.parse_name })
         };
-        let text = &tree.text[0..pos];
+        let text = &self.text[0..pos];
         let byte_num = match text.rfind('\n') {
             Some(i) => pos - (i + 1),
             None => pos,
         };
         let line_num = text.chars().filter(|c| *c == '\n').count();
         let context = n.to_string();
-        (format!("{}:{}:{}", tree.parse_name, line_num, byte_num), context)
+        (format!("{:?}:{}:{}", parse_name, line_num, byte_num), context)
     }
 
-    fn start_parse(&mut self,
-                   funcs: HashMap<String, Func<'a>>,
-                   lex: Lexer,
-                   tree_ids: HashMap<TreeId, String>,
-                   tree_set: HashMap<String, Tree<'a>>) {
-        self.root = None;
-        self.lex = Some(lex);
-        self.vars = vec!["$".to_owned()];
-        self.funcs = funcs;
-        self.tree_ids = tree_ids;
-        self.tree_set = tree_set;
+    fn start_parse(&mut self, name: String, id: TreeId, parse_name: String) {
+        if let Some(t) = self.tree.take() {
+            self.tree_stack.push_back(t);
+        }
+        self.tree_id = id;
+        let mut t = Tree::new(name, id);
+        t.parse_name = parse_name;
+        self.tree = Some(t);
     }
 
     fn stop_parse(&mut self) {
-        self.lex = None;
-        self.vars = vec![];
-        self.funcs = HashMap::new();
-        self.tree_ids = HashMap::new();
-        self.tree_set = HashMap::new();
+        if let Some(t) = self.tree.take() {
+            self.tree_ids.insert(t.id, t.name.clone());
+            self.tree_set.insert(t.name.clone(), t);
+        }
+        self.tree = self.tree_stack.pop_back();
+        self.tree_id = self.tree.as_ref().map(|t| {t.id}).unwrap_or(0);
     }
-
-    fn parse_tree(tree: &mut Tree<'a>,
-                  text: String,
-                  tree_ids: HashMap<TreeId, String>,
-                  tree_set: HashMap<String, Tree<'a>>,
-                  funcs: HashMap<String, Func<'a>>)
-                  -> Result<(), String> {
-        tree.parse_name = tree.name.clone();
-        let lex_name = tree.name.clone();
-        tree.start_parse(funcs,
-                         Lexer::new(&lex_name, text.clone()),
-                         tree_ids,
-                         tree_set);
-        tree.text = text;
-        tree.parse();
-        tree.stop_parse();
+    // top level parser
+    fn parse_tree(&mut self) -> Result<(), String> {
+        let name = self.name.clone();
+        let parse_name = self.name.clone();
+        self.start_parse(name, 1, parse_name);
+        self.parse()?;
+        self.stop_parse();
         Ok(())
     }
 
-    fn tree_by_id(&self, id: TreeId) -> Option<&Tree<'a>> {
+    fn tree_by_id(&self, id: TreeId) -> Option<&Tree> {
         self.tree_ids
             .get(&id)
             .and_then(|name| self.tree_set.get(name))
     }
-    fn add_tree(&mut self, name: &str, t: Tree<'a>) {
+    fn add_tree(&mut self, name: &str, t: Tree) {
         self.tree_ids.insert(t.id, name.to_owned());
         self.tree_set.insert(name.to_owned(), t);
     }
 
-    fn error<T>(&mut self, msg: String) -> Result<T, String> {
-        self.root = None;
-        Err(format!("template: {}:{}:{}", self.parse_name, self.line, msg))
+    fn error<T>(&self, msg: String) -> Result<T, String> {
+        Err(self.error_msg(msg))
+    }
+
+    fn error_msg(&self, msg: String) -> String {
+        let name = if let Some(t) = self.tree.as_ref() {
+            t.parse_name.clone()
+        } else {
+            self.name.clone()
+        };
+        format!("template: {}:{}:{}", name, self.line, msg)
     }
 
     fn unexpected<T>(&mut self, token: &Item, context: &str) -> Result<T, String> {
         self.error(format!("unexpected {} in {}", token, context))
     }
 
-    fn add_to_tree_set(mut tree: Tree<'a>,
-                       mut tree_set: HashMap<String, Tree<'a>>)
-                       -> Result<(), String> {
-        if let Some(t) = tree_set.get(&tree.name) {
+    fn add_to_tree_set(&mut self) -> Result<(), String> {
+        let tree = self.tree.take().ok_or_else(|| {self.error_msg("no tree".to_owned())})?;
+        if let Some(t) = self.tree_set.get(&tree.name) {
             if let Some(ref r) = t.root {
                 match r.is_empty_tree() {
                     Err(e) => return Err(e),
                     Ok(false) => {
                         let err = format!("template multiple definitions of template {}",
                                           &tree.name);
-                        return tree.error(err);
+                        return self.error(err);
                     }
                     Ok(true) => {}
                 }
             }
         }
-        tree_set.insert(tree.name.clone(), tree);
+        self.tree_set.insert(tree.name.clone(), tree);
         Ok(())
     }
 
     fn parse(&mut self) -> Result<(), String> {
-        let id = self.id;
+        if self.tree.is_none() {
+            return self.error("no tree".to_owned());
+        }
+        let mut tree = self.tree.take().unwrap();
+        let id = self.tree_id;
         let mut t = match self.next() {
             None => return self.error(format!("unable to peek for tree {}", id)),
             Some(t) => t,
         };
-        self.root = Some(ListNode::new(id, t.pos));
-        while t.typ == ItemType::ItemEOF {
+        tree.root = Some(ListNode::new(id, t.pos));
+        while t.typ != ItemType::ItemEOF {
             if t.typ == ItemType::ItemLeftDelim {
                 let nns = self.next_non_space();
                 match nns {
                     Some(ref item) if item.typ == ItemType::ItemDefine => {
-                        let mut def = Tree::new("definition".to_owned(), self.id + 1);
-                        def.text = self.text.clone();
-                        def.parse_name = self.parse_name.clone();
-                        //def.start_parse(self.funcs, self.lex.unwrap(), self.tree_ids, self.tree_set);
-                        // lots missing
+                        self.start_parse("definition".to_owned(), id + 1, tree.parse_name.clone());
+                        self.parse()?;
+                        self.stop_parse();
                         continue;
                     }
                     _ => {}
@@ -255,7 +243,7 @@ impl<'a> Tree<'a> {
                 Ok(node) => node,
                 Err(e) => return Err(e),
             };
-            self.root.as_mut().map(|mut r| r.append(node));
+            tree.root.as_mut().map(|mut r| r.append(node));
 
             t = match self.next() {
                 None => return self.error(format!("unable to peek for tree {}", id)),
@@ -269,7 +257,7 @@ impl<'a> Tree<'a> {
     fn text_or_action(&mut self) -> Result<Nodes, String> {
         match self.next_non_space() {
             Some(ref item) if item.typ == ItemType::ItemText => {
-                Ok(Nodes::Text(TextNode::new(self.id, item.pos, item.val.clone())))
+                Ok(Nodes::Text(TextNode::new(self.tree_id, item.pos, item.val.clone())))
             }
             Some(ref item) if item.typ == ItemType::ItemLeftDelim => self.action(),
             Some(ref item) => self.unexpected(item, "input"),
@@ -280,9 +268,23 @@ impl<'a> Tree<'a> {
     fn action(&mut self) -> Result<Nodes, String> {
         Err("doom".to_owned())
     }
+
+    fn block_control(&mut self) -> Result<(), String> {
+
+        Err("doom".to_owned())
+    }
+
+//    fn template_control(&mut self, token: Item, context: String) -> Result<String, String> {
+//        match token.typ {
+//            ItemType::ItemString | ItemType::ItemRawString => {
+//
+//            }
+//
+//        }
+//    }
 }
 
-impl<'a> Iterator for Tree<'a> {
+impl<'a> Iterator for Parser<'a> {
     type Item = Item;
     fn next(&mut self) -> Option<Item> {
         let item = if self.peek_count > 0 {
@@ -321,36 +323,35 @@ mod tests_mocked {
        ItemRightDelim
        ItemEOF
     */
-    fn make_tree<'a>() -> Tree<'a> {
+    fn make_parser<'a>() -> Parser<'a> {
         let s = r#"something {{ if eq "foo" "bar" }}"#;
         let lex = Lexer::new("foo", s.to_owned());
-        Tree {
+        Parser {
             name: "foo".to_owned(),
-            id: 1,
-            parse_name: "bar".to_owned(),
-            root: None,
             text: "nope".to_owned(),
             funcs: HashMap::new(),
             lex: Some(lex),
+            line: 0,
             token: VecDeque::new(),
             peek_count: 0,
-            vars: vec![],
             tree_ids: HashMap::new(),
             tree_set: HashMap::new(),
-            line: 0,
+            tree_id: 0,
+            tree: None,
+            tree_stack: VecDeque::new(),
         }
     }
 
     #[test]
     fn test_iter() {
-        let mut t = make_tree();
-        assert_eq!(t.next().and_then(|n| Some(n.typ)), Some(ItemType::ItemText));
-        assert_eq!(t.collect::<Vec<_>>().len(), 12);
+        let mut p = make_parser();
+        assert_eq!(p.next().and_then(|n| Some(n.typ)), Some(ItemType::ItemText));
+        assert_eq!(p.collect::<Vec<_>>().len(), 12);
     }
 
     #[test]
     fn test_backup() {
-        let mut t = make_tree();
+        let mut t = make_parser();
         assert_eq!(t.next().and_then(|n| Some(n.typ)), Some(ItemType::ItemText));
         let i = t.next().unwrap();
         let s = i.to_string();
@@ -360,7 +361,7 @@ mod tests_mocked {
     }
     #[test]
     fn test_backup3() {
-        let mut t = make_tree();
+        let mut t = make_parser();
         assert_eq!(t.next().and_then(|n| Some(n.typ)), Some(ItemType::ItemText));
         let t0 = t.next().unwrap();
         let t1 = t.next().unwrap();
@@ -381,7 +382,7 @@ mod tests_mocked {
 
     #[test]
     fn test_next_non_space() {
-        let mut t = make_tree();
+        let mut t = make_parser();
         t.next();
         let i = t.next().unwrap();
         let typ = i.typ;
@@ -393,7 +394,7 @@ mod tests_mocked {
 
     #[test]
     fn test_peek_non_space() {
-        let mut t = make_tree();
+        let mut t = make_parser();
         t.next();
         let i = t.next().unwrap();
         let typ = i.typ;
@@ -402,5 +403,14 @@ mod tests_mocked {
                    Some(&ItemType::ItemIf));
         assert_eq!(t.next().and_then(|n| Some(n.typ)), Some(ItemType::ItemIf));
         assert_eq!(t.last().and_then(|n| Some(n.typ)), Some(ItemType::ItemEOF));
+    }
+
+    #[test]
+    fn parse_basic_tree() {
+        let mut p = make_parser();
+        let r = p.parse_tree();
+
+        assert!(r.is_err());
+        assert_eq!(&r.err().unwrap(), "doom")
     }
 }

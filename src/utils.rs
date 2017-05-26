@@ -4,20 +4,55 @@ pub fn unquote_char(s: &str, quote: char) -> Option<char> {
     if s.len() < 2 || !s.starts_with(quote) || !s.ends_with(quote) {
         return None;
     }
-    let raw = &s[1..(s.len() - 1)];
+    let raw = &s[1..s.len() - 1];
+    match unqote(raw) {
+        Some((c, l)) =>
+            if l == raw.len() {
+                c.chars().next()
+            } else {
+                None
+            },
+        _ => None,
+    }
+}
+
+pub fn unquote_str(s: &str) -> Option<String> {
+    if s.len() < 2 {
+        return None;
+    }
+    let quote = &s[0..1];
+    if !s.ends_with(quote) {
+        return None;
+    }
+    let mut r = String::new();
+    let raw = &s[1..s.len() -1];
+    let mut i = 0;
+    while i < raw.len() {
+        match unqote(&raw[i..]) {
+            Some((c, l)) => {
+                r += &c;
+                i += l;
+            },
+            None => return None,
+        }
+    }
+    Some(r)
+}
+
+fn unqote(raw: &str) -> Option<(String, usize)> {
     if raw.starts_with('\\') {
         match &raw[..2] {
-            r"\x" => {
-                extract_bytes_x(raw)
-                    .and_then(|b| String::from_utf8(b).ok())
-                    .and_then(|s| get_char(&s))
-            }
-            r"\U" => extract_bytes_u32(&raw[2..]).and_then(char::from_u32),
-            r"\u" => {
-                extract_bytes_u16(raw)
-                    .and_then(|b| String::from_utf16(&b).ok())
-                    .and_then(|s| get_char(&s))
-            }
+            r"\x" => extract_bytes_x(raw),
+            r"\U" => extract_bytes_u32(raw),
+            r"\u" => extract_bytes_u16(raw),
+            r"\b" => Some(('\u{0008}'.to_string(), 2)),
+            r"\f" => Some(('\u{000C}'.to_string(), 2)),
+            r"\n" => Some(('\n'.to_string(), 2)),
+            r"\r" => Some(('\r'.to_string(), 2)),
+            r"\t" => Some(('\t'.to_string(), 2)),
+            r"\'" => Some(('\''.to_string(), 2)),
+            r#"\""# => Some(('\"'.to_string(), 2)),
+            r#"\\"# => Some(('\\'.to_string(), 2)),
             _ => None,
         }
     } else {
@@ -25,60 +60,45 @@ pub fn unquote_char(s: &str, quote: char) -> Option<char> {
     }
 }
 
-fn get_char(s: &str) -> Option<char> {
-    if s.chars().count() != 1 {
-        return None;
-    }
-    s.chars().next()
+fn get_char(s: &str) -> Option<(String, usize)> {
+    s.char_indices().next().map(|(i, c)| (c.to_string(), i + c.len_utf8()))
 }
 
-fn extract_bytes_u32(s: &str) -> Option<u32> {
-    if s.len() != 8 {
+fn extract_bytes_u32(s: &str) -> Option<(String, usize)> {
+    if s.len() != 10 {
         return None;
     }
-    u32::from_str_radix(s, 16).ok()
+    u32::from_str_radix(&s[2..10], 16).ok().and_then(char::from_u32).map(|c| (c.to_string(), 10))
 }
 
-fn extract_bytes_u16(s: &str) -> Option<Vec<u16>> {
-    let by6 = s.len() / 6;
-    if s.len() % 6 != 0 {
-        return None;
-    }
+fn extract_bytes_u16(s: &str) -> Option<(String, usize)> {
     let mut bytes = vec![];
-    for i in 0..by6 {
-        let j = i * 6;
-        if &s[j..(j + 2)] != r"\u" {
-            return None;
-        }
-        match u16::from_str_radix(&s[(j + 2)..(j + 6)], 16) {
+    let mut i = 0;
+    while s.len() > i && s.starts_with(r"\u") && s[i..].len() >= 6 {
+        match u16::from_str_radix(&s[(i + 2)..(i + 6)], 16) {
             Ok(x) => bytes.push(x),
             _ => {
                 return None;
             }
-        }
+        };
+        i += 6;
     }
-    Some(bytes)
+    String::from_utf16(&bytes).ok().map(|s| (s, i))
 }
 
-fn extract_bytes_x(s: &str) -> Option<Vec<u8>> {
-    let by4 = s.len() / 4;
-    if s.len() % 4 != 0 {
-        return None;
-    }
+fn extract_bytes_x(s: &str) -> Option<(String, usize)> {
     let mut bytes = vec![];
-    for i in 0..by4 {
-        let j = i * 4;
-        if &s[j..(j + 2)] != r"\x" {
-            return None;
-        }
-        match u8::from_str_radix(&s[(j + 2)..(j + 4)], 16) {
+    let mut i = 0;
+    while s.len() > i && s.starts_with(r"\x") && s[i..].len() >= 4 {
+        match u8::from_str_radix(&s[(i + 2)..(i + 4)], 16) {
             Ok(x) => bytes.push(x),
             _ => {
                 return None;
             }
-        }
+        };
+        i += 4;
     }
-    Some(bytes)
+    String::from_utf8(bytes).ok().map(|s| (s, i))
 }
 
 #[cfg(test)]
@@ -86,40 +106,52 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_extract_raw_bytes() {
-        let s = r"\xab\x12";
-        let e = extract_bytes_x(s);
-        assert_eq!(e, Some(vec![0xab, 0x12]));
-        let s = r"\xde\xad\xbe\xef";
-        let e = extract_bytes_x(s);
-        assert_eq!(e, Some(vec![0xde, 0xad, 0xbe, 0xef]));
-    }
-
-    fn test_extract_raw_bytes_fails() {
-        let s = r"\xab\x123";
-        let e = extract_bytes_x(s);
-        assert!(e.is_none());
-        let s = r"\xab\x1h";
-        let e = extract_bytes_x(s);
-        assert!(e.is_none());
-        let s = r"\xab\a1b";
-        let e = extract_bytes_x(s);
-        assert!(e.is_none());
-    }
-
-    #[test]
     fn test_unquote_char() {
         let s = "'→'";
         let c = unquote_char(s, '\'');
         assert_eq!(c, Some('→'));
+        let s = "'→←'";
+        let c = unquote_char(s, '\'');
+        assert_eq!(c, None);
         let s = r"'\xf0\x9f\x92\xa9'";
         let c = unquote_char(s, '\'');
         assert_eq!(c, Some('💩'));
+        let s = r"'\xf0\x9f\x92\xa'";
+        let c = unquote_char(s, '\'');
+        assert_eq!(c, None);
+        let s = r"'\xf0\x9f\x92\xa99'";
+        let c = unquote_char(s, '\'');
+        assert_eq!(c, None);
+        let s = r"'\u263a'";
+        let c = unquote_char(s, '\'');
+        assert_eq!(c, Some('☺'));
         let s = r"'\uD83D\uDCA9'";
         let c = unquote_char(s, '\'');
         assert_eq!(c, Some('💩'));
+        let s = r"'\uD83\uDCA9'";
+        let c = unquote_char(s, '\'');
+        assert_eq!(c, None);
+        let s = r"'\uD83D\uDCA9B'";
+        let c = unquote_char(s, '\'');
+        assert_eq!(c, None);
         let s = r"'\U0001F4A9'";
         let c = unquote_char(s, '\'');
         assert_eq!(c, Some('💩'));
+        let s = r"'\U0001F4A'";
+        let c = unquote_char(s, '\'');
+        assert_eq!(c, None);
+        let s = r"'\U0001F4A99'";
+        let c = unquote_char(s, '\'');
+        assert_eq!(c, None);
+    }
+
+    #[test]
+    fn test_unquote_str() {
+        let s = r#""Fran & Freddie's Diner""#;
+        let u = unquote_str(s);
+        assert_eq!(u, Some("Fran & Freddie's Diner".to_owned()));
+        let s = r#""Fran & Freddie's Diner\t\u263a""#;
+        let u = unquote_str(s);
+        assert_eq!(u, Some("Fran & Freddie's Diner\t☺".to_owned()));
     }
 }
