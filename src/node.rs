@@ -653,9 +653,9 @@ node!(
     }
 );
 
-type IfNode = BranchNode;
-type WithNode = BranchNode;
-type RangeNode = BranchNode;
+pub type IfNode = BranchNode;
+pub type WithNode = BranchNode;
+pub type RangeNode = BranchNode;
 
 impl BranchNode {
     pub fn new_if(tr: TreeId,
@@ -727,16 +727,18 @@ impl Display for BranchNode {
 
 node!(
     TemplateNode {
+        line: usize,
         name: String,
         pipe: Option<PipeNode>
     }
 );
 
 impl TemplateNode {
-    pub fn new(tr: TreeId, pos: Pos, name: String, pipe: Option<PipeNode>) -> TemplateNode {
+    pub fn new(tr: TreeId, pos: Pos, line: usize, name: String, pipe: Option<PipeNode>) -> TemplateNode {
         TemplateNode {
             typ: NodeType::Template,
             tr,
+            line,
             pos,
             name,
             pipe,

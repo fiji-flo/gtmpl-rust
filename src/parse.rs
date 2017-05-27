@@ -20,6 +20,7 @@ pub struct Parser<'a> {
     tree_id: TreeId,
     tree: Option<Tree>,
     tree_stack: VecDeque<Tree>,
+    max_tree_id: TreeId,
 }
 
 pub struct Tree {
@@ -45,6 +46,7 @@ impl<'a> Parser<'a> {
             tree_id: 0,
             tree: None,
             tree_stack: VecDeque::new(),
+            max_tree_id: 0,
         }
     }
 }
@@ -120,7 +122,7 @@ impl<'a> Parser<'a> {
     fn peek_non_space_must(&mut self, context: &str) -> Result<&Item, String> {
         if let Some(t) = self.next_non_space() {
             self.backup(t);
-            return Ok(self.token.front().unwrap())
+            return Ok(self.token.front().unwrap());
         }
         self.error(format!("unexpected end in {}", context))
     }
@@ -161,13 +163,11 @@ impl<'a> Parser<'a> {
         self.tree = Some(t);
     }
 
-    fn stop_parse(&mut self) {
-        if let Some(t) = self.tree.take() {
-            self.tree_ids.insert(t.id, t.name.clone());
-            self.tree_set.insert(t.name.clone(), t);
-        }
+    fn stop_parse(&mut self) -> Result<(), String> {
+        self.add_to_tree_set()?;
         self.tree = self.tree_stack.pop_back();
         self.tree_id = self.tree.as_ref().map(|t| t.id).unwrap_or(0);
+        Ok(())
     }
     // top level parser
     fn parse_tree(&mut self) -> Result<(), String> {
@@ -175,7 +175,7 @@ impl<'a> Parser<'a> {
         let parse_name = self.name.clone();
         self.start_parse(name, 1, parse_name);
         self.parse()?;
-        self.stop_parse();
+        self.stop_parse()?;
         Ok(())
     }
 
@@ -258,7 +258,7 @@ impl<'a> Parser<'a> {
                     Some(ref item) if item.typ == ItemType::ItemDefine => {
                         self.start_parse("definition".to_owned(), id + 1, tree.parse_name.clone());
                         self.parse()?;
-                        self.stop_parse();
+                        self.stop_parse()?;
                         continue;
                     }
                     _ => {}
@@ -288,6 +288,19 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    fn item_list(&mut self) -> Result<(ListNode, Nodes), String> {
+        let pos = self.peek_non_space_must("item list")?.pos;
+        let mut list = ListNode::new(self.tree_id, pos);
+        while self.peek_non_space_must("item list")?.typ != ItemType::ItemEOF {
+            let node = self.text_or_action()?;
+            match *node.typ() {
+                NodeType::End | NodeType::Else => return Ok((list, node)),
+                _ => list.append(node),
+            }
+        }
+        self.error("unexpected EOF".to_owned())
+    }
+
     fn text_or_action(&mut self) -> Result<Nodes, String> {
         match self.next_non_space() {
             Some(ref item) if item.typ == ItemType::ItemText => {
@@ -303,9 +316,35 @@ impl<'a> Parser<'a> {
         Err("doom".to_owned())
     }
 
-    fn block_control(&mut self) -> Result<(), String> {
-
+    fn parse_control(&mut self,
+                     allow_else_if: bool,
+                     context: &str)
+                     -> Result<(Pos, usize, PipeNode, Option<ListNode>), String> {
         Err("doom".to_owned())
+    }
+
+    fn if_control(&mut self) -> Result<IfNode, String> {
+        //IfNode::new(self.tree_id, self.parse_control(true, "if"))
+        Err("doom".to_owned())
+    }
+
+    fn block_control(&mut self) -> Result<TemplateNode, String> {
+        let context = "block clause";
+        let token = self.next_non_space_must(context)?;
+        let name = self.parse_template_name(&token, context)?;
+        let pipe = self.pipeline(context)?;
+
+        self.max_tree_id += 1;
+        let tree_id = self.max_tree_id;
+        let parse_name = self.name.clone();
+        self.start_parse(name.clone(), tree_id, parse_name);
+        let (root, end) = self.item_list()?;
+        self.tree.as_mut().map(|t| t.root = Some(root));
+        if end.typ() != &NodeType::End {
+            return self.error(format!("unexpected {} in {}", end, context));
+        }
+        self.stop_parse()?;
+        Ok(TemplateNode::new(self.tree_id, token.pos, token.line, name, Some(pipe)))
     }
 
     fn template_control(&mut self) -> Result<Nodes, String> {
@@ -319,7 +358,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(Nodes::Template(TemplateNode::new(self.tree_id, token.pos, name, pipe)))
+        Ok(Nodes::Template(TemplateNode::new(self.tree_id, token.line, token.pos, name, pipe)))
     }
 
     fn pipeline(&mut self, context: &str) -> Result<PipeNode, String> {
@@ -424,10 +463,10 @@ impl<'a> Parser<'a> {
                 ItemType::ItemSpace => continue,
                 ItemType::ItemError => return self.error(format!("{}", token.val)),
                 ItemType::ItemRightDelim | ItemType::ItemRightParen => self.backup(token),
-                ItemType::ItemPipe => {},
-                _ => return self.error(format!("unexpected {} in operand", token))
+                ItemType::ItemPipe => {}
+                _ => return self.error(format!("unexpected {} in operand", token)),
             };
-            break
+            break;
         }
         if cmd.args.is_empty() {
             return self.error("empty command".to_owned());
@@ -448,13 +487,23 @@ impl<'a> Parser<'a> {
                     }
                     let mut chain = ChainNode::new(self.tree_id, next.pos, n);
                     chain.add(next.val);
-                    while self.peek().map(|p| p.typ == ItemType::ItemField).unwrap_or(false) {
+                    while self.peek()
+                              .map(|p| p.typ == ItemType::ItemField)
+                              .unwrap_or(false) {
                         let field = self.next().unwrap();
                         chain.add(field.val);
                     }
                     let n = match typ {
-                        NodeType::Field => Nodes::Field(FieldNode::new(self.tree_id, chain.pos(), chain.to_string())),
-                        NodeType::Variable => Nodes::Variable(VariableNode::new(self.tree_id, chain.pos(), chain.to_string())),
+                        NodeType::Field => {
+                            Nodes::Field(FieldNode::new(self.tree_id,
+                                                        chain.pos(),
+                                                        chain.to_string()))
+                        }
+                        NodeType::Variable => {
+                            Nodes::Variable(VariableNode::new(self.tree_id,
+                                                              chain.pos(),
+                                                              chain.to_string()))
+                        }
                         _ => Nodes::Chain(chain),
                     };
                     Ok(Some(n))
@@ -478,12 +527,16 @@ impl<'a> Parser<'a> {
                 node.set_pos(token.pos);
                 node.set_tree(self.tree_id);
                 Nodes::Identifier(node)
-            },
+            }
             ItemType::ItemDot => Nodes::Dot(DotNode::new(self.tree_id, token.pos)),
             ItemType::ItemNil => Nodes::Nil(NilNode::new(self.tree_id, token.pos)),
-            ItemType::ItemVariable => Nodes::Variable(self.use_var(self.tree_id, token.pos, token.val)?),
+            ItemType::ItemVariable => {
+                Nodes::Variable(self.use_var(self.tree_id, token.pos, token.val)?)
+            }
             ItemType::ItemField => Nodes::Field(FieldNode::new(self.tree_id, token.pos, token.val)),
-            ItemType::ItemBool => Nodes::Bool(BoolNode::new(self.tree_id, token.pos, token.val == "true")),
+            ItemType::ItemBool => {
+                Nodes::Bool(BoolNode::new(self.tree_id, token.pos, token.val == "true"))
+            }
             ItemType::ItemCharConstant => {
                 match NumberNode::new(self.tree_id, token.pos, token.val, token.typ) {
                     Ok(n) => Nodes::Number(n),
@@ -498,11 +551,15 @@ impl<'a> Parser<'a> {
         Ok(Some(node))
     }
 
-    fn use_var(&self, tree_id: TreeId, pos: Pos, name: String) -> Result<VariableNode,String> {
-        self.tree.as_ref()
-            .and_then(|t| t.vars.iter()
-                      .find(|&v| v == &name)
-                      .map(|_| VariableNode::new(tree_id, pos, name.clone())))
+    fn use_var(&self, tree_id: TreeId, pos: Pos, name: String) -> Result<VariableNode, String> {
+        self.tree
+            .as_ref()
+            .and_then(|t| {
+                          t.vars
+                              .iter()
+                              .find(|&v| v == &name)
+                              .map(|_| VariableNode::new(tree_id, pos, name.clone()))
+                      })
             .ok_or_else(|| self.error_msg(format!("undefined variable {}", name)))
     }
 
@@ -576,6 +633,7 @@ mod tests_mocked {
             tree_id: 0,
             tree: None,
             tree_stack: VecDeque::new(),
+            max_tree_id: 0,
         }
     }
 
