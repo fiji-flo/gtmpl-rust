@@ -5,7 +5,9 @@ use utils::unquote_char;
 
 macro_rules! nodes {
     ($($node:ident, $name:ident),*) => {
+        #[derive(Debug)]
         #[derive(Clone)]
+        #[derive(PartialEq)]
         pub enum NodeType {
            $($name,)*
         }
@@ -302,12 +304,12 @@ impl IdentifierNode {
         }
     }
 
-    fn set_pos(&mut self, pos: Pos) -> &IdentifierNode {
+    pub fn set_pos(&mut self, pos: Pos) -> &IdentifierNode {
         self.pos = pos;
         self
     }
 
-    fn set_tree(&mut self, tr: TreeId) -> &IdentifierNode {
+    pub fn set_tree(&mut self, tr: TreeId) -> &IdentifierNode {
         self.tr = tr;
         self
     }

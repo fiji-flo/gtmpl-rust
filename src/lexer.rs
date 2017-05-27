@@ -523,7 +523,7 @@ impl LexerStateMachine {
                 match c {
                     '.' | ',' | '|' | ':' | ')' | '(' | ' ' | '\t' | '\r' | '\n' => true,
                     // this is what golang does to detect a delimiter
-                    _ => LEFT_DELIM.starts_with(c),
+                    _ => RIGHT_DELIM.starts_with(c),
                 }
             }
             None => false,

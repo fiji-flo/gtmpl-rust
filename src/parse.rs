@@ -10,7 +10,7 @@ pub type Func<'a> = &'a Fn(Option<Box<Any>>) -> Option<Box<Any>>;
 pub struct Parser<'a> {
     name: String,
     text: String,
-    funcs: HashMap<String, Func<'a>>,
+    funcs: Vec<HashMap<String, Func<'a>>>,
     lex: Option<Lexer>,
     line: usize,
     token: VecDeque<Item>,
@@ -35,7 +35,7 @@ impl<'a> Parser<'a> {
         Parser {
             name,
             text: String::default(),
-            funcs: HashMap::new(),
+            funcs: Vec::new(),
             lex: None,
             line: 0,
             token: VecDeque::new(),
@@ -228,6 +228,10 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    fn has_func(&self, name: &str) -> bool {
+        self.funcs.iter().any(|map| map.contains_key(name))
+    }
+
     fn parse(&mut self) -> Result<(), String> {
         if self.tree.is_none() {
             return self.error("no tree".to_owned());
@@ -400,6 +404,54 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    fn command(&mut self) -> Result<CommandNode, String> {
+        Err("doom".to_owned())
+    }
+
+    fn operand(&mut self) -> Result<Nodes, String> {
+        Err("doom".to_owned())
+    }
+
+    fn term(&mut self) -> Result<Option<Nodes>, String> {
+        let token = self.next_non_space_must("token")?;
+        let node = match token.typ {
+            ItemType::ItemError => return self.error(format!("{}", token.val)),
+            ItemType::ItemIdentifier => {
+                if !self.has_func(&token.val) {
+                    return self.error(format!("function {} not defined", token.val));
+                }
+                let mut node = IdentifierNode::new(token.val);
+                node.set_pos(token.pos);
+                node.set_tree(self.tree_id);
+                Nodes::Identifier(node)
+            },
+            ItemType::ItemDot => Nodes::Dot(DotNode::new(self.tree_id, token.pos)),
+            ItemType::ItemNil => Nodes::Nil(NilNode::new(self.tree_id, token.pos)),
+            ItemType::ItemVariable => Nodes::Variable(self.use_var(self.tree_id, token.pos, token.val)?),
+            ItemType::ItemField => Nodes::Field(FieldNode::new(self.tree_id, token.pos, token.val)),
+            ItemType::ItemBool => Nodes::Bool(BoolNode::new(self.tree_id, token.pos, token.val == "true")),
+            ItemType::ItemCharConstant => {
+                match NumberNode::new(self.tree_id, token.pos, token.val, token.typ) {
+                    Ok(n) => Nodes::Number(n),
+                    Err(e) => return self.error(e.to_string()),
+                }
+            }
+            _ => {
+                self.backup(token);
+                return Ok(None);
+            }
+        };
+        Ok(Some(node))
+    }
+
+    fn use_var(&self, tree_id: TreeId, pos: Pos, name: String) -> Result<VariableNode,String> {
+        self.tree.as_ref()
+            .and_then(|t| t.vars.iter()
+                      .find(|&v| v == &name)
+                      .map(|_| VariableNode::new(tree_id, pos, name.clone())))
+            .ok_or_else(|| self.error_msg(format!("undefined variable {}", name)))
+    }
+
     fn parse_template_name(&self, token: &Item, context: &str) -> Result<String, String> {
         match token.typ {
             ItemType::ItemString | ItemType::ItemRawString => {
@@ -460,7 +512,7 @@ mod tests_mocked {
         Parser {
             name: "foo".to_owned(),
             text: "nope".to_owned(),
-            funcs: HashMap::new(),
+            funcs: Vec::new(),
             lex: Some(lex),
             line: 0,
             token: VecDeque::new(),
@@ -551,5 +603,39 @@ mod tests_mocked {
         let pipe = p.pipeline("range");
         // broken for now
         assert!(pipe.is_err());
+    }
+
+    #[test]
+    fn test_term() {
+        let mut p = make_parser_with(r#"{{true}}"#);
+        p.next();
+        let t = p.term();
+        // broken for now
+        assert!(t.is_ok());
+        let t = t.unwrap();
+        assert!(t.is_some());
+        let t = t.unwrap();
+        assert_eq!(t.typ(), &NodeType::Bool);
+        if let Nodes::Bool(n) = t {
+            assert_eq!(n.val, true);
+        } else {
+            assert!(false);
+        }
+
+        let mut p = make_parser_with(r#"{{ false }}"#);
+        p.next();
+        let t = p.term();
+        // broken for now
+        assert!(t.is_ok());
+        let t = t.unwrap();
+        assert!(t.is_some());
+        let t = t.unwrap();
+        assert_eq!(t.typ(), &NodeType::Bool);
+        assert_eq!(t.typ(), &NodeType::Bool);
+        if let Nodes::Bool(n) = t {
+            assert_eq!(n.val, false);
+        } else {
+            assert!(false);
+        }
     }
 }
