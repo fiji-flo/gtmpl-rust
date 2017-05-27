@@ -3,6 +3,7 @@ use std::collections::{HashMap, VecDeque};
 
 use lexer::{Item, ItemType, Lexer};
 use node::*;
+use utils::*;
 
 pub type Func<'a> = &'a Fn(Option<Box<Any>>) -> Option<Box<Any>>;
 
@@ -77,25 +78,35 @@ impl<'a> Parser<'a> {
     }
 
     fn backup(&mut self, t: Item) {
-        self.token.push_back(t);
-        self.peek_count = 1;
+        self.token.push_front(t);
+        self.peek_count += 1;
     }
 
     fn backup2(&mut self, t0: Item, t1: Item) {
-        self.token.push_back(t0);
-        self.token.push_back(t1);
-        self.peek_count = 2;
+        self.token.push_front(t1);
+        self.token.push_front(t0);
+        self.peek_count += 2;
     }
 
     fn backup3(&mut self, t0: Item, t1: Item, t2: Item) {
-        self.token.push_back(t0);
-        self.token.push_back(t1);
-        self.token.push_back(t2);
-        self.peek_count = 3;
+        self.token.push_front(t2);
+        self.token.push_front(t1);
+        self.token.push_front(t0);
+        self.peek_count += 3;
+    }
+
+    fn next_must(&mut self, context: &str) -> Result<Item, String> {
+        self.next()
+            .ok_or_else(|| self.error_msg(format!("unexpected end in {}", context)))
     }
 
     fn next_non_space(&mut self) -> Option<Item> {
         self.skip_while(|c| c.typ == ItemType::ItemSpace).next()
+    }
+
+    fn next_non_space_must(&mut self, context: &str) -> Result<Item, String> {
+        self.next_non_space()
+            .ok_or_else(|| self.error_msg(format!("unexpected end in {}", context)))
     }
 
     fn peek_non_space(&mut self) -> Option<&Item> {
@@ -118,9 +129,9 @@ impl<'a> Parser<'a> {
         let pos = n.pos();
         let tree_id = n.tree();
         let parse_name = if tree_id == 0 && self.tree_ids.contains_key(&tree_id) {
-            self.tree_by_id(tree_id).map(|t| { &t.parse_name })
+            self.tree_by_id(tree_id).map(|t| &t.parse_name)
         } else {
-            self.tree.as_ref().map(|t| { &t.parse_name })
+            self.tree.as_ref().map(|t| &t.parse_name)
         };
         let text = &self.text[0..pos];
         let byte_num = match text.rfind('\n') {
@@ -148,7 +159,7 @@ impl<'a> Parser<'a> {
             self.tree_set.insert(t.name.clone(), t);
         }
         self.tree = self.tree_stack.pop_back();
-        self.tree_id = self.tree.as_ref().map(|t| {t.id}).unwrap_or(0);
+        self.tree_id = self.tree.as_ref().map(|t| t.id).unwrap_or(0);
     }
     // top level parser
     fn parse_tree(&mut self) -> Result<(), String> {
@@ -183,12 +194,23 @@ impl<'a> Parser<'a> {
         format!("template: {}:{}:{}", name, self.line, msg)
     }
 
-    fn unexpected<T>(&mut self, token: &Item, context: &str) -> Result<T, String> {
+    fn unexpected<T>(&self, token: &Item, context: &str) -> Result<T, String> {
         self.error(format!("unexpected {} in {}", token, context))
     }
 
+    fn add_var(&mut self, name: String) -> Result<(), String> {
+        let mut tree = self.tree
+            .take()
+            .ok_or_else(|| self.error_msg("no tree".to_owned()))?;
+        tree.vars.push(name);
+        self.tree = Some(tree);
+        Ok(())
+    }
+
     fn add_to_tree_set(&mut self) -> Result<(), String> {
-        let tree = self.tree.take().ok_or_else(|| {self.error_msg("no tree".to_owned())})?;
+        let tree = self.tree
+            .take()
+            .ok_or_else(|| self.error_msg("no tree".to_owned()))?;
         if let Some(t) = self.tree_set.get(&tree.name) {
             if let Some(ref r) = t.root {
                 match r.is_empty_tree() {
@@ -274,14 +296,118 @@ impl<'a> Parser<'a> {
         Err("doom".to_owned())
     }
 
-//    fn template_control(&mut self, token: Item, context: String) -> Result<String, String> {
-//        match token.typ {
-//            ItemType::ItemString | ItemType::ItemRawString => {
-//
-//            }
-//
-//        }
-//    }
+    fn template_control(&mut self) -> Result<Nodes, String> {
+        let context = "template clause";
+        let token = self.next_non_space_must(context)?;
+        let name = self.parse_template_name(&token, context)?;
+        let next = self.next_non_space().ok_or(format!("unexpected end"))?;
+        let pipe = if next.typ != ItemType::ItemRightDelim {
+            self.backup(next);
+            Some(self.pipeline(context)?)
+        } else {
+            None
+        };
+        Ok(Nodes::Template(TemplateNode::new(self.tree_id, token.pos, name, pipe)))
+    }
+
+    fn pipeline(&mut self, context: &str) -> Result<PipeNode, String> {
+        let mut decl = vec![];
+        let mut token = self.next_non_space_must("pipeline")?;
+        let pos = token.pos;
+        // TODO: test this hard!
+        while token.typ == ItemType::ItemVariable {
+            let token_after_var = self.next_must("variable")?;
+            let next = if token_after_var.typ == ItemType::ItemSpace {
+                let next = self.next_non_space_must("variable")?;
+                if next.typ != ItemType::ItemColonEquals &&
+                   !(next.typ == ItemType::ItemChar && next.val == ",") {
+                    self.backup3(token, token_after_var, next);
+                    break;
+                }
+                next
+            } else {
+                token_after_var
+            };
+            if next.typ == ItemType::ItemColonEquals ||
+               (next.typ == ItemType::ItemChar && next.val == ",") {
+                self.add_var(next.val.clone())?;
+                let variable = VariableNode::new(self.tree_id, next.pos, next.val.clone());
+                decl.push(variable);
+                if next.typ == ItemType::ItemChar && next.val == "," {
+                    if context == "range" && decl.len() < 2 {
+                        token = self.next_non_space_must("variable")?;
+                        continue;
+                    }
+                    return self.error(format!("to many decalarations in {}", context));
+                }
+            } else {
+                self.backup2(token, next);
+            }
+            break;
+        }
+        let mut pipe = PipeNode::new(self.tree_id, pos, decl);
+        let mut token = self.next_non_space_must("pipeline")?;
+        loop {
+            match token.typ {
+                ItemType::ItemRightDelim | ItemType::ItemRightParen => {
+                    self.check_pipeline(&mut pipe, context)?;
+                    if token.typ == ItemType::ItemRightParen {
+                        self.backup(token);
+                    }
+                    return Ok(pipe);
+                }
+                ItemType::ItemBool |
+                ItemType::ItemCharConstant |
+                ItemType::ItemDot |
+                ItemType::ItemField |
+                ItemType::ItemIdentifier |
+                ItemType::ItemNumber |
+                ItemType::ItemNil |
+                ItemType::ItemRawString |
+                ItemType::ItemString |
+                ItemType::ItemVariable |
+                ItemType::ItemLeftParen => {
+                    self.backup(token);
+                    //pipe.push(self.command()?);
+                }
+                _ => return self.unexpected(&token, context),
+            }
+            token = self.next_non_space_must("pipeline")?;
+        }
+    }
+
+    fn check_pipeline(&mut self, pipe: &mut PipeNode, context: &str) -> Result<(), String> {
+        if pipe.cmds.is_empty() {
+            return self.error(format!("missing vlaue for {}", context));
+        }
+        for (i, c) in pipe.cmds.iter().enumerate().skip(1) {
+            match c.args.first() {
+                Some(n) => {
+                    match *n.typ() {
+                        NodeType::Bool | NodeType::Dot | NodeType::Nil | NodeType::Number |
+                        NodeType::String => {
+                            return self.error(format!("non executable command in pipeline stage {}",
+                                                      i + 2))
+                        }
+                        _ => {}
+                    }
+                }
+                None => {
+                    return self.error(format!("non executable command in pipeline stage {}", i + 2))
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn parse_template_name(&self, token: &Item, context: &str) -> Result<String, String> {
+        match token.typ {
+            ItemType::ItemString | ItemType::ItemRawString => {
+                unquote_str(&token.val).ok_or(format!("unable to parse string: {}", token.val))
+            }
+            _ => self.unexpected(token, context),
+        }
+    }
 }
 
 impl<'a> Iterator for Parser<'a> {
@@ -323,8 +449,13 @@ mod tests_mocked {
        ItemRightDelim
        ItemEOF
     */
+
     fn make_parser<'a>() -> Parser<'a> {
         let s = r#"something {{ if eq "foo" "bar" }}"#;
+        make_parser_with(s)
+    }
+
+    fn make_parser_with<'a>(s: &str) -> Parser<'a> {
         let lex = Lexer::new("foo", s.to_owned());
         Parser {
             name: "foo".to_owned(),
@@ -412,5 +543,13 @@ mod tests_mocked {
 
         assert!(r.is_err());
         assert_eq!(&r.err().unwrap(), "doom")
+    }
+
+    #[test]
+    fn test_pipeline_simple() {
+        let mut p = make_parser_with(r#" $foo, $bar := yay | blub "2000" }}"#);
+        let pipe = p.pipeline("range");
+        // broken for now
+        assert!(pipe.is_err());
     }
 }

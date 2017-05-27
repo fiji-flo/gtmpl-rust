@@ -105,7 +105,7 @@ macro_rules! node {
             typ: NodeType,
             pos: Pos,
             tr: TreeId,
-            $($field: $typ,)*
+            $(pub $field: $typ,)*
         }
         impl Node for $name {
             fn typ(&self) -> &NodeType {
@@ -227,9 +227,7 @@ impl PipeNode {
 impl Display for PipeNode {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "{} := ", self.decl.iter().join(", "))
-            .and_then(|_| {
-                write!(f, "{}", self.cmds.iter().join(" | "))
-            })
+            .and_then(|_| write!(f, "{}", self.cmds.iter().join(" | ")))
     }
 }
 

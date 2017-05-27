@@ -6,12 +6,13 @@ pub fn unquote_char(s: &str, quote: char) -> Option<char> {
     }
     let raw = &s[1..s.len() - 1];
     match unqote(raw) {
-        Some((c, l)) =>
+        Some((c, l)) => {
             if l == raw.len() {
                 c.chars().next()
             } else {
                 None
-            },
+            }
+        }
         _ => None,
     }
 }
@@ -25,14 +26,14 @@ pub fn unquote_str(s: &str) -> Option<String> {
         return None;
     }
     let mut r = String::new();
-    let raw = &s[1..s.len() -1];
+    let raw = &s[1..s.len() - 1];
     let mut i = 0;
     while i < raw.len() {
         match unqote(&raw[i..]) {
             Some((c, l)) => {
                 r += &c;
                 i += l;
-            },
+            }
             None => return None,
         }
     }
@@ -61,14 +62,19 @@ fn unqote(raw: &str) -> Option<(String, usize)> {
 }
 
 fn get_char(s: &str) -> Option<(String, usize)> {
-    s.char_indices().next().map(|(i, c)| (c.to_string(), i + c.len_utf8()))
+    s.char_indices()
+        .next()
+        .map(|(i, c)| (c.to_string(), i + c.len_utf8()))
 }
 
 fn extract_bytes_u32(s: &str) -> Option<(String, usize)> {
     if s.len() != 10 {
         return None;
     }
-    u32::from_str_radix(&s[2..10], 16).ok().and_then(char::from_u32).map(|c| (c.to_string(), 10))
+    u32::from_str_radix(&s[2..10], 16)
+        .ok()
+        .and_then(char::from_u32)
+        .map(|c| (c.to_string(), 10))
 }
 
 fn extract_bytes_u16(s: &str) -> Option<(String, usize)> {
