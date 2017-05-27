@@ -117,6 +117,14 @@ impl<'a> Parser<'a> {
         None
     }
 
+    fn peek_non_space_must(&mut self, context: &str) -> Result<&Item, String> {
+        if let Some(t) = self.next_non_space() {
+            self.backup(t);
+            return Ok(self.token.front().unwrap())
+        }
+        self.error(format!("unexpected end in {}", context))
+    }
+
     fn peek(&mut self) -> Option<&Item> {
         if let Some(t) = self.next() {
             self.backup(t);
@@ -372,7 +380,7 @@ impl<'a> Parser<'a> {
                 ItemType::ItemVariable |
                 ItemType::ItemLeftParen => {
                     self.backup(token);
-                    //pipe.push(self.command()?);
+                    pipe.append(self.command()?);
                 }
                 _ => return self.unexpected(&token, context),
             }
@@ -405,11 +413,57 @@ impl<'a> Parser<'a> {
     }
 
     fn command(&mut self) -> Result<CommandNode, String> {
-        Err("doom".to_owned())
+        let mut cmd = CommandNode::new(self.tree_id, self.peek_non_space_must("command")?.pos);
+        loop {
+            self.peek_non_space_must("operand")?;
+            if let Some(operand) = self.operand()? {
+                cmd.append(operand);
+            }
+            let token = self.next_must("command")?;
+            match token.typ {
+                ItemType::ItemSpace => continue,
+                ItemType::ItemError => return self.error(format!("{}", token.val)),
+                ItemType::ItemRightDelim | ItemType::ItemRightParen => self.backup(token),
+                ItemType::ItemPipe => {},
+                _ => return self.error(format!("unexpected {} in operand", token))
+            };
+            break
+        }
+        if cmd.args.is_empty() {
+            return self.error("empty command".to_owned());
+        }
+        Ok(cmd)
     }
 
-    fn operand(&mut self) -> Result<Nodes, String> {
-        Err("doom".to_owned())
+    fn operand(&mut self) -> Result<Option<Nodes>, String> {
+        let node = self.term()?;
+        match node {
+            None => Ok(None),
+            Some(n) => {
+                let next = self.next_must("operand")?;
+                if next.typ == ItemType::ItemField {
+                    let typ = n.typ().clone();
+                    if typ == NodeType::Bool {
+                        return self.error(format!("unexpected . after term {}", n.to_string()));
+                    }
+                    let mut chain = ChainNode::new(self.tree_id, next.pos, n);
+                    chain.add(next.val);
+                    while self.peek().map(|p| p.typ == ItemType::ItemField).unwrap_or(false) {
+                        let field = self.next().unwrap();
+                        chain.add(field.val);
+                    }
+                    let n = match typ {
+                        NodeType::Field => Nodes::Field(FieldNode::new(self.tree_id, chain.pos(), chain.to_string())),
+                        NodeType::Variable => Nodes::Variable(VariableNode::new(self.tree_id, chain.pos(), chain.to_string())),
+                        _ => Nodes::Chain(chain),
+                    };
+                    Ok(Some(n))
+                } else {
+                    self.backup(next);
+                    Ok(Some(n))
+                }
+            }
+        }
     }
 
     fn term(&mut self) -> Result<Option<Nodes>, String> {

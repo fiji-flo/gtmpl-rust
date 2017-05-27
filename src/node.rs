@@ -221,7 +221,7 @@ impl PipeNode {
         }
     }
 
-    fn append(&mut self, cmd: CommandNode) {
+    pub fn append(&mut self, cmd: CommandNode) {
         self.cmds.push(cmd);
     }
 }
@@ -270,6 +270,10 @@ impl CommandNode {
             tr,
             args: vec![],
         }
+    }
+
+    pub fn append(&mut self, node: Nodes) {
+        self.args.push(node);
     }
 }
 
@@ -423,6 +427,10 @@ impl ChainNode {
             node: Box::new(node),
             field: vec![],
         }
+    }
+
+    pub fn add(&mut self, val: String) {
+        self.field.push(val);
     }
 }
 
