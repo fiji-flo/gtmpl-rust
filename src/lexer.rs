@@ -144,7 +144,7 @@ impl Iterator for Lexer {
         let item = match self.items_receiver.recv() {
             Ok(item) => {
                 self.last_pos = item.pos;
-                if item.typ == ItemType::ItemEnd || item.typ == ItemType::ItemError ||
+                if item.typ == ItemType::ItemError ||
                    item.typ == ItemType::ItemEOF {
                     self.finished = true;
                 }

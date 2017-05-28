@@ -135,6 +135,14 @@ impl<'a> Parser<'a> {
         None
     }
 
+    fn peek_must(&mut self, context: &str) -> Result<&Item, String> {
+        if let Some(t) = self.next_non_space() {
+            self.backup(t);
+            return Ok(self.token.front().unwrap());
+        }
+        self.error(format!("unexpected end in {}", context))
+    }
+
     fn error_context(&mut self, n: Nodes) -> (String, String) {
         let pos = n.pos();
         let tree_id = n.tree();
@@ -169,6 +177,7 @@ impl<'a> Parser<'a> {
         self.tree_id = self.tree.as_ref().map(|t| t.id).unwrap_or(0);
         Ok(())
     }
+
     // top level parser
     fn parse_tree(&mut self) -> Result<(), String> {
         let name = self.name.clone();
@@ -200,6 +209,14 @@ impl<'a> Parser<'a> {
             self.name.clone()
         };
         format!("template: {}:{}:{}", name, self.line, msg)
+    }
+
+    fn expect(&mut self, expected: ItemType, context: &str) -> Result<Item, String> {
+        let token = self.next_non_space_must(context)?;
+        if token.typ != expected {
+            return self.unexpected(&token, context);
+        }
+        Ok(token)
     }
 
     fn unexpected<T>(&self, token: &Item, context: &str) -> Result<T, String> {
@@ -244,19 +261,25 @@ impl<'a> Parser<'a> {
         if self.tree.is_none() {
             return self.error("no tree".to_owned());
         }
-        let mut tree = self.tree.take().unwrap();
         let id = self.tree_id;
         let mut t = match self.next() {
             None => return self.error(format!("unable to peek for tree {}", id)),
             Some(t) => t,
         };
-        tree.root = Some(ListNode::new(id, t.pos));
+        self.tree
+            .as_mut()
+            .map(|tree| tree.root = Some(ListNode::new(id, t.pos)));
         while t.typ != ItemType::ItemEOF {
             if t.typ == ItemType::ItemLeftDelim {
                 let nns = self.next_non_space();
                 match nns {
                     Some(ref item) if item.typ == ItemType::ItemDefine => {
-                        self.start_parse("definition".to_owned(), id + 1, tree.parse_name.clone());
+                        let parse_name =
+                            self.tree
+                                .as_ref()
+                                .map(|t| t.parse_name.clone())
+                                .ok_or_else(|| self.error_msg(format!("no tree in definition")))?;
+                        self.start_parse("definition".to_owned(), id + 1, parse_name);
                         self.parse()?;
                         self.stop_parse()?;
                         continue;
@@ -277,7 +300,9 @@ impl<'a> Parser<'a> {
                 Ok(node) => node,
                 Err(e) => return Err(e),
             };
-            tree.root.as_mut().map(|mut r| r.append(node));
+            self.tree
+                .as_mut()
+                .map(|tree| tree.root.as_mut().map(|mut r| r.append(node)));
 
             t = match self.next() {
                 None => return self.error(format!("unable to peek for tree {}", id)),
@@ -313,22 +338,81 @@ impl<'a> Parser<'a> {
     }
 
     fn action(&mut self) -> Result<Nodes, String> {
-        Err("doom".to_owned())
+        let token = self.next_non_space_must("action")?;
+        match token.typ {
+            ItemType::ItemBlock => return self.block_control(),
+            ItemType::ItemElse => return self.else_control(),
+            ItemType::ItemEnd => return self.end_control(),
+            ItemType::ItemIf => return self.if_control(),
+            ItemType::ItemRange => return self.range_control(),
+            ItemType::ItemTemplate => return self.template_control(),
+            ItemType::ItemWith => return self.with_control(),
+            _ => {}
+        }
+        let pos = token.pos;
+        self.backup(token);
+        Ok(Nodes::Action(ActionNode::new(self.tree_id, pos, self.pipeline("command")?)))
     }
 
     fn parse_control(&mut self,
                      allow_else_if: bool,
                      context: &str)
-                     -> Result<(Pos, usize, PipeNode, Option<ListNode>), String> {
-        Err("doom".to_owned())
+                     -> Result<(Pos, PipeNode, ListNode, Option<ListNode>), String> {
+        let pipe = self.pipeline(context)?;
+        let (list, next) = self.item_list()?;
+        let else_list = match *next.typ() {
+            NodeType::End => None,
+            NodeType::Else => {
+                if allow_else_if && self.peek_must("else if")?.typ == ItemType::ItemIf {
+                    self.next_must("else if")?;
+                    let mut else_list = ListNode::new(self.tree_id, next.pos());
+                    else_list.append(self.if_control()?);
+                    Some(else_list)
+                } else {
+                    let (else_list, next) = self.item_list()?;
+                    if *next.typ() != NodeType::End {
+                        return self.error(format!("expected end; found {}", next));
+                    }
+                    Some(else_list)
+                }
+            }
+            _ => return self.error(format!("expected end; found {}", next)),
+
+        };
+        // TODO: defer
+        Ok((pipe.pos(), pipe, list, else_list))
     }
 
-    fn if_control(&mut self) -> Result<IfNode, String> {
-        //IfNode::new(self.tree_id, self.parse_control(true, "if"))
-        Err("doom".to_owned())
+    fn if_control(&mut self) -> Result<Nodes, String> {
+        let (pos, pipe, list, else_list) = self.parse_control(true, "if")?;
+        Ok(Nodes::If(IfNode::new_if(self.tree_id, pos, pipe, list, else_list)))
     }
 
-    fn block_control(&mut self) -> Result<TemplateNode, String> {
+    fn range_control(&mut self) -> Result<Nodes, String> {
+        let (pos, pipe, list, else_list) = self.parse_control(false, "range")?;
+        Ok(Nodes::Range(RangeNode::new_range(self.tree_id, pos, pipe, list, else_list)))
+    }
+
+    fn with_control(&mut self) -> Result<Nodes, String> {
+        let (pos, pipe, list, else_list) = self.parse_control(false, "with")?;
+        Ok(Nodes::With(WithNode::new_with(self.tree_id, pos, pipe, list, else_list)))
+    }
+
+    fn end_control(&mut self) -> Result<Nodes, String> {
+        Ok(Nodes::End(EndNode::new(self.tree_id,
+                                   self.expect(ItemType::ItemRightDelim, "end")?.pos)))
+    }
+
+    fn else_control(&mut self) -> Result<Nodes, String> {
+        if self.peek_non_space_must("else")?.typ == ItemType::ItemIf {
+            let peek = self.peek_non_space_must("else")?;
+            return Ok(Nodes::Else(ElseNode::new(peek.pos, peek.line)));
+        }
+        let token = self.expect(ItemType::ItemRightDelim, "else")?;
+        Ok(Nodes::Else(ElseNode::new(token.pos, token.line)))
+    }
+
+    fn block_control(&mut self) -> Result<Nodes, String> {
         let context = "block clause";
         let token = self.next_non_space_must(context)?;
         let name = self.parse_template_name(&token, context)?;
@@ -344,7 +428,11 @@ impl<'a> Parser<'a> {
             return self.error(format!("unexpected {} in {}", end, context));
         }
         self.stop_parse()?;
-        Ok(TemplateNode::new(self.tree_id, token.pos, token.line, name, Some(pipe)))
+        Ok(Nodes::Template(TemplateNode::new(self.tree_id,
+                                             token.pos,
+                                             token.line,
+                                             name,
+                                             Some(pipe))))
     }
 
     fn template_control(&mut self) -> Result<Nodes, String> {
@@ -429,7 +517,7 @@ impl<'a> Parser<'a> {
 
     fn check_pipeline(&mut self, pipe: &mut PipeNode, context: &str) -> Result<(), String> {
         if pipe.cmds.is_empty() {
-            return self.error(format!("missing vlaue for {}", context));
+            return self.error(format!("missing value for {}", context));
         }
         for (i, c) in pipe.cmds.iter().enumerate().skip(1) {
             match c.args.first() {
@@ -482,9 +570,13 @@ impl<'a> Parser<'a> {
                 let next = self.next_must("operand")?;
                 if next.typ == ItemType::ItemField {
                     let typ = n.typ().clone();
-                    if typ == NodeType::Bool {
-                        return self.error(format!("unexpected . after term {}", n.to_string()));
-                    }
+                    match typ {
+                        NodeType::Bool | NodeType::String | NodeType::Number | NodeType::Nil |
+                        NodeType::Dot => {
+                            return self.error(format!("unexpected . after term {}", n.to_string()));
+                        }
+                        _ => {}
+                    };
                     let mut chain = ChainNode::new(self.tree_id, next.pos, n);
                     chain.add(next.val);
                     while self.peek()
@@ -543,6 +635,22 @@ impl<'a> Parser<'a> {
                     Err(e) => return self.error(e.to_string()),
                 }
             }
+            ItemType::ItemLeftParen => {
+                let pipe = self.pipeline("parenthesized pipeline")?;
+                let next = self.next_must("parenthesized pipeline")?;
+                if next.typ != ItemType::ItemRightParen {
+                    return self.error(format!("unclosed right paren: unexpected {}", next));
+                }
+                Nodes::Pipe(pipe)
+            }
+            ItemType::ItemString | ItemType::ItemRawString => {
+                if let Some(s) = unquote_str(&token.val) {
+                    Nodes::String(StringNode::new(self.tree_id, token.pos, token.val, s))
+                } else {
+                    return self.error(format!("unable to unqote string: {}", token.val));
+                }
+            }
+
             _ => {
                 self.backup(token);
                 return Ok(None);
@@ -702,11 +810,10 @@ mod tests_mocked {
 
     #[test]
     fn parse_basic_tree() {
-        let mut p = make_parser();
+        let mut p = make_parser_with(r#"{{ if eq .foo "bar" }} 2000 {{ end }}"#);
         let r = p.parse_tree();
 
-        assert!(r.is_err());
-        assert_eq!(&r.err().unwrap(), "doom")
+        assert!(r.is_ok());
     }
 
     #[test]
