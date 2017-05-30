@@ -61,14 +61,21 @@ impl Tree {
             vars: vec![],
         }
     }
+
+    pub fn pop_vars(&mut self, n: usize) {
+        self.vars.truncate(n);
+    }
 }
 
 pub fn parse<'a>(name: String,
                  text: String,
-                 funcs: HashMap<String, Func<'a>>)
-                 -> HashMap<String, Tree> {
-    let tree_ids = HashMap::new();
-    tree_ids
+                 funcs: Vec<HashMap<String, Func<'a>>>)
+                 -> Result<Parser, String> {
+    let mut p = Parser::new(name);
+    p.text = text;
+    p.funcs = funcs;
+    p.parse_tree()?;
+    Ok(p)
 }
 
 impl<'a> Parser<'a> {
@@ -358,6 +365,7 @@ impl<'a> Parser<'a> {
                      allow_else_if: bool,
                      context: &str)
                      -> Result<(Pos, PipeNode, ListNode, Option<ListNode>), String> {
+        let vars_len = self.tree.as_ref().map(|t| t.vars.len()).ok_or("no tree")?;
         let pipe = self.pipeline(context)?;
         let (list, next) = self.item_list()?;
         let else_list = match *next.typ() {
@@ -379,7 +387,7 @@ impl<'a> Parser<'a> {
             _ => return self.error(format!("expected end; found {}", next)),
 
         };
-        // TODO: defer
+        self.tree.as_mut().map(|t| t.pop_vars(vars_len));
         Ok((pipe.pos(), pipe, list, else_list))
     }
 
