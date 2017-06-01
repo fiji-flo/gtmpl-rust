@@ -5,6 +5,7 @@ extern crate itertools;
 mod lexer;
 mod node;
 mod parse;
+mod funcs;
 mod template;
 mod exec;
 mod utils;

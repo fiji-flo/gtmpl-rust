@@ -734,7 +734,12 @@ node!(
 );
 
 impl TemplateNode {
-    pub fn new(tr: TreeId, pos: Pos, line: usize, name: String, pipe: Option<PipeNode>) -> TemplateNode {
+    pub fn new(tr: TreeId,
+               pos: Pos,
+               line: usize,
+               name: String,
+               pipe: Option<PipeNode>)
+               -> TemplateNode {
         TemplateNode {
             typ: NodeType::Template,
             tr,
