@@ -1,5 +1,17 @@
 use std::any::Any;
 
+macro_rules! equal_as {
+    ($typ:ty, $args:ident) => {
+        if $args.iter().all(|x| x.is::<$typ>()) {
+            let first = $args[0].downcast_ref::<$typ>().unwrap();
+            return Ok(vec![Box::new($args.iter()
+                                    .skip(1)
+                                    .map(|x| x.downcast_ref::<$typ>().unwrap())
+                                    .all(|x| x == first))]);
+        }
+    }
+}
+
 #[derive(PartialEq)]
 enum Num {
     None,
@@ -12,20 +24,8 @@ fn eq(args: &[Box<Any>]) -> Result<Vec<Box<Any>>, String> {
     if args.len() < 2 {
         return Err(format!("eq requires at least 2 arugments"));
     }
-    if args.iter().all(|x| x.is::<String>()) {
-        let first = args[0].downcast_ref::<String>().unwrap();
-        return Ok(vec![Box::new(args.iter()
-                                    .skip(1)
-                                    .map(|x| x.downcast_ref::<String>().unwrap())
-                                    .all(|x| x == first))]);
-    }
-    if args.iter().all(|x| x.is::<String>()) {
-        let first = args[0].downcast_ref::<String>().unwrap();
-        return Ok(vec![Box::new(args.iter()
-                                    .skip(1)
-                                    .map(|x| x.downcast_ref::<String>().unwrap())
-                                    .all(|x| x == first))]);
-    }
+    equal_as!(String, args);
+    equal_as!(bool, args);
     let first = to_num(&args[0]);
     if first != Num::None {
         let equals = args.iter()
@@ -93,6 +93,11 @@ mod tests_mocked {
         let ret3 = ret2.downcast_ref::<bool>();
         assert_eq!(ret3, Some(&true));
         let vals: Vec<Box<Any>> = vec![Box::new(1u32), Box::new(1f32), Box::new(1i8)];
+        let ret = eq(&vals).unwrap();
+        let ret2 = &ret[0];
+        let ret3 = ret2.downcast_ref::<bool>();
+        assert_eq!(ret3, Some(&true));
+        let vals: Vec<Box<Any>> = vec![Box::new(false), Box::new(false), Box::new(false)];
         let ret = eq(&vals).unwrap();
         let ret2 = &ret[0];
         let ret3 = ret2.downcast_ref::<bool>();
