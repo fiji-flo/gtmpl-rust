@@ -1,4 +1,15 @@
 use std::any::Any;
+use std::collections::HashMap;
+
+pub type Func = fn(Vec<Box<Any>>) -> Result<Vec<Box<Any>>, String>;
+
+lazy_static! {
+    pub static ref BUILTINS: HashMap<String, Func> = {
+        let mut m = HashMap::new();
+        m.insert("eq".to_owned(), eq as Func);
+        m
+    };
+}
 
 macro_rules! equal_as {
     ($typ:ty, $args:ident) => {
@@ -20,7 +31,7 @@ enum Num {
     Float(f64),
 }
 
-fn eq(args: &[Box<Any>]) -> Result<Vec<Box<Any>>, String> {
+fn eq(args: Vec<Box<Any>>) -> Result<Vec<Box<Any>>, String> {
     if args.len() < 2 {
         return Err(format!("eq requires at least 2 arugments"));
     }
@@ -88,17 +99,27 @@ mod tests_mocked {
     #[test]
     fn test_eq() {
         let vals: Vec<Box<Any>> = vec![Box::new("foo".to_owned()), Box::new("foo".to_owned())];
-        let ret = eq(&vals).unwrap();
+        let ret = eq(vals).unwrap();
         let ret2 = &ret[0];
         let ret3 = ret2.downcast_ref::<bool>();
         assert_eq!(ret3, Some(&true));
         let vals: Vec<Box<Any>> = vec![Box::new(1u32), Box::new(1f32), Box::new(1i8)];
-        let ret = eq(&vals).unwrap();
+        let ret = eq(vals).unwrap();
         let ret2 = &ret[0];
         let ret3 = ret2.downcast_ref::<bool>();
         assert_eq!(ret3, Some(&true));
         let vals: Vec<Box<Any>> = vec![Box::new(false), Box::new(false), Box::new(false)];
-        let ret = eq(&vals).unwrap();
+        let ret = eq(vals).unwrap();
+        let ret2 = &ret[0];
+        let ret3 = ret2.downcast_ref::<bool>();
+        assert_eq!(ret3, Some(&true));
+    }
+
+    #[test]
+    fn test_builtins() {
+        let vals: Vec<Box<Any>> = vec![Box::new("foo".to_owned()), Box::new("foo".to_owned())];
+        let builtin_eq = BUILTINS.get("eq").unwrap();
+        let ret = builtin_eq(vals).unwrap();
         let ret2 = &ret[0];
         let ret3 = ret2.downcast_ref::<bool>();
         assert_eq!(ret3, Some(&true));

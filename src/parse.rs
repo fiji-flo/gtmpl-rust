@@ -1,41 +1,39 @@
-use std::any::Any;
 use std::collections::{HashMap, VecDeque};
 
 use lexer::{Item, ItemType, Lexer};
 use node::*;
 use utils::*;
-
-pub type Func<'a> = &'a Fn(Option<Box<Any>>) -> Option<Box<Any>>;
+use funcs::Func;
 
 pub struct Parser<'a> {
-    name: String,
-    text: String,
-    funcs: Vec<HashMap<String, Func<'a>>>,
+    name: &'a str,
+    text: &'a str,
+    pub funcs: Vec<&'a HashMap<String, Func>>,
     lex: Option<Lexer>,
     line: usize,
     token: VecDeque<Item>,
     peek_count: usize,
-    tree_ids: HashMap<TreeId, String>,
-    tree_set: HashMap<String, Tree>,
+    pub tree_ids: HashMap<TreeId, String>,
+    pub tree_set: HashMap<String, Tree<'a>>,
     tree_id: TreeId,
-    tree: Option<Tree>,
-    tree_stack: VecDeque<Tree>,
+    tree: Option<Tree<'a>>,
+    tree_stack: VecDeque<Tree<'a>>,
     max_tree_id: TreeId,
 }
 
-pub struct Tree {
+pub struct Tree<'a> {
     name: String,
     id: TreeId,
-    parse_name: String,
+    parse_name: &'a str,
     root: Option<ListNode>,
     vars: Vec<String>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(name: String) -> Parser<'a> {
+    pub fn new(name: &'a str) -> Parser<'a> {
         Parser {
             name,
-            text: String::default(),
+            text: "",
             funcs: Vec::new(),
             lex: None,
             line: 0,
@@ -51,12 +49,12 @@ impl<'a> Parser<'a> {
     }
 }
 
-impl Tree {
-    fn new(name: String, id: TreeId) -> Tree {
+impl<'a> Tree<'a> {
+    fn new(name: String, id: TreeId) -> Tree<'a> {
         Tree {
             name,
             id,
-            parse_name: String::default(),
+            parse_name: "",
             root: None,
             vars: vec![],
         }
@@ -67,13 +65,14 @@ impl Tree {
     }
 }
 
-pub fn parse<'a>(name: String,
-                 text: String,
-                 funcs: Vec<HashMap<String, Func<'a>>>)
-                 -> Result<Parser, String> {
+pub fn parse<'a>(name: &'a str,
+                 text: &'a str,
+                 funcs: Vec<&'a HashMap<String, Func>>)
+                 -> Result<Parser<'a>, String> {
     let mut p = Parser::new(name);
     p.text = text;
     p.funcs = funcs;
+    p.lex = Some(Lexer::new(name, text.to_owned()));
     p.parse_tree()?;
     Ok(p)
 }
@@ -168,7 +167,7 @@ impl<'a> Parser<'a> {
         (format!("{:?}:{}:{}", parse_name, line_num, byte_num), context)
     }
 
-    fn start_parse(&mut self, name: String, id: TreeId, parse_name: String) {
+    fn start_parse(&mut self, name: String, id: TreeId, parse_name: &'a str) {
         if let Some(t) = self.tree.take() {
             self.tree_stack.push_back(t);
         }
@@ -187,8 +186,8 @@ impl<'a> Parser<'a> {
 
     // top level parser
     fn parse_tree(&mut self) -> Result<(), String> {
-        let name = self.name.clone();
-        let parse_name = self.name.clone();
+        let name = self.name.to_owned();
+        let parse_name = self.name;
         self.start_parse(name, 1, parse_name);
         self.parse()?;
         self.stop_parse()?;
@@ -200,9 +199,10 @@ impl<'a> Parser<'a> {
             .get(&id)
             .and_then(|name| self.tree_set.get(name))
     }
-    fn add_tree(&mut self, name: &str, t: Tree) {
-        self.tree_ids.insert(t.id, name.to_owned());
-        self.tree_set.insert(name.to_owned(), t);
+
+    fn add_tree(&mut self, name: String, t: Tree<'a>) {
+        self.tree_ids.insert(t.id, name.clone());
+        self.tree_set.insert(name, t);
     }
 
     fn error<T>(&self, msg: String) -> Result<T, String> {
@@ -211,9 +211,9 @@ impl<'a> Parser<'a> {
 
     fn error_msg(&self, msg: String) -> String {
         let name = if let Some(t) = self.tree.as_ref() {
-            t.parse_name.clone()
+            &t.parse_name
         } else {
-            self.name.clone()
+            self.name
         };
         format!("template: {}:{}:{}", name, self.line, msg)
     }
@@ -243,7 +243,7 @@ impl<'a> Parser<'a> {
         let tree = self.tree
             .take()
             .ok_or_else(|| self.error_msg("no tree".to_owned()))?;
-        if let Some(t) = self.tree_set.get(&tree.name) {
+        if let Some(t) = self.tree_set.get(tree.name.as_str()) {
             if let Some(ref r) = t.root {
                 match r.is_empty_tree() {
                     Err(e) => return Err(e),
@@ -256,7 +256,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        self.tree_set.insert(tree.name.clone(), tree);
+        self.add_tree(tree.name.clone(), tree);
         Ok(())
     }
 
@@ -428,7 +428,7 @@ impl<'a> Parser<'a> {
 
         self.max_tree_id += 1;
         let tree_id = self.max_tree_id;
-        let parse_name = self.name.clone();
+        let parse_name = self.name;
         self.start_parse(name.clone(), tree_id, parse_name);
         let (root, end) = self.item_list()?;
         self.tree.as_mut().map(|t| t.root = Some(root));
@@ -737,8 +737,8 @@ mod tests_mocked {
     fn make_parser_with<'a>(s: &str) -> Parser<'a> {
         let lex = Lexer::new("foo", s.to_owned());
         Parser {
-            name: "foo".to_owned(),
-            text: "nope".to_owned(),
+            name: "foo",
+            text: "nope",
             funcs: Vec::new(),
             lex: Some(lex),
             line: 0,
