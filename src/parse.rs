@@ -25,7 +25,7 @@ pub struct Tree<'a> {
     name: String,
     id: TreeId,
     parse_name: &'a str,
-    root: Option<ListNode>,
+    pub root: Option<Nodes>,
     vars: Vec<String>,
 }
 
@@ -275,7 +275,7 @@ impl<'a> Parser<'a> {
         };
         self.tree
             .as_mut()
-            .map(|tree| tree.root = Some(ListNode::new(id, t.pos)));
+            .map(|tree| tree.root = Some(Nodes::List(ListNode::new(id, t.pos))));
         while t.typ != ItemType::ItemEOF {
             if t.typ == ItemType::ItemLeftDelim {
                 let nns = self.next_non_space();
@@ -309,7 +309,16 @@ impl<'a> Parser<'a> {
             };
             self.tree
                 .as_mut()
-                .map(|tree| tree.root.as_mut().map(|mut r| r.append(node)));
+                .and_then(|tree| tree.root.as_mut().and_then(|mut r| {
+                    match *r {
+                        Nodes::List(ref mut r) => {
+                            r.append(node);
+                            Some(())
+                        },
+                        _ => None,
+                    }
+                }))
+                .ok_or_else(|| self.error_msg(format!("invalid root node")))?;
 
             t = match self.next() {
                 None => return self.error(format!("unable to peek for tree {}", id)),
@@ -431,7 +440,7 @@ impl<'a> Parser<'a> {
         let parse_name = self.name;
         self.start_parse(name.clone(), tree_id, parse_name);
         let (root, end) = self.item_list()?;
-        self.tree.as_mut().map(|t| t.root = Some(root));
+        self.tree.as_mut().map(|t| t.root = Some(Nodes::List(root)));
         if end.typ() != &NodeType::End {
             return self.error(format!("unexpected {} in {}", end, context));
         }

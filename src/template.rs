@@ -6,11 +6,11 @@ use funcs::BUILTINS;
 use node::TreeId;
 
 pub struct Template<'a> {
-    name: &'a str,
-    text: &'a str,
-    funcs: Vec<&'a HashMap<String, Func>>,
-    tree_ids: HashMap<TreeId, String>,
-    tree_set: HashMap<String, Tree<'a>>,
+    pub name: &'a str,
+    pub text: &'a str,
+    pub funcs: Vec<&'a HashMap<String, Func>>,
+    pub tree_ids: HashMap<TreeId, String>,
+    pub tree_set: HashMap<String, Tree<'a>>,
 }
 
 impl<'a> Template<'a> {

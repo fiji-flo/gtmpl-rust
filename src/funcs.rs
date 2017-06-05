@@ -23,6 +23,54 @@ macro_rules! equal_as {
     }
 }
 
+macro_rules! gfn {
+    ($name:ident($($arg:ident : $typ:ty),*) -> ($($out:ty),*) { $($body:tt)* }) => {
+        fn $name($($arg : $typ,)*) -> ($($out),*) {
+            $($body)*
+        }
+    }
+}
+
+macro_rules! count_exprs {
+    () => (0);
+    ($head:ty $(, $tail:ty)*) => (1 + count_exprs!($($tail),*));
+}
+
+
+macro_rules! gn {
+    ($gname:ident -> $name:ident($($arg:ident : ref $typ:ty),*) -> ($($oarg:ident : $otyp:ty),*) { $($body:tt)* }) => {
+        fn $name(mut args: Vec<Box<Any>>) -> Result<Vec<Box<Any>>, String> {
+            $(let x = args.remove(0);
+              let $arg = x.downcast_ref::<$typ>()
+              .ok_or_else(|| format!("unable to downcast"))?;)*
+            fn inner($($arg : &$typ,)*) -> ($($otyp,)*) {
+                $($body)*
+            }
+            let ($($oarg,)*) = inner($($arg,)*);
+            let mut retv: Vec<Box<Any>> = vec!();
+            $(
+                retv.push(Box::new($oarg));
+                )*
+            Ok(retv)
+        }
+        static $gname: (Func, i32, i32) = (
+            $name,
+            count_exprs!($($arg),*),
+            count_exprs!($($oarg),*)
+        );
+    }
+}
+
+gn!(ADD -> add(a: ref i32, b: ref i32) -> (c: i32) {
+    (a + b,)
+});
+
+// Thanks to: https://danielkeep.github.io/quick-intro-to-macros.html
+gfn!(foo(a: usize, b: String) -> (i32, usize) {
+    println!("{} {}", a, b);
+    (0, 0)
+});
+
 #[derive(PartialEq)]
 enum Num {
     None,
@@ -30,6 +78,8 @@ enum Num {
     Uint(u64),
     Float(f64),
 }
+
+static GEQ: (Func, i32) = (eq, -1);
 
 fn eq(args: Vec<Box<Any>>) -> Result<Vec<Box<Any>>, String> {
     if args.len() < 2 {
@@ -123,5 +173,14 @@ mod tests_mocked {
         let ret2 = &ret[0];
         let ret3 = ret2.downcast_ref::<bool>();
         assert_eq!(ret3, Some(&true));
+    }
+
+    #[test]
+    fn test_add() {
+        let vals: Vec<Box<Any>> = vec![Box::new(1i32), Box::new(2i32)];
+        let ret = ADD.0(vals).unwrap();
+        let ret2 = &ret[0];
+        let ret3 = ret2.downcast_ref::<i32>();
+        assert_eq!(ret3, Some(&3));
     }
 }
