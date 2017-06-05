@@ -24,11 +24,16 @@ impl<'a> Template<'a> {
         }
     }
 
-    pub fn parse(&mut self, text: &'a str) -> Result<(),String> {
+    pub fn parse(&mut self, text: &'a str) -> Result<(), String> {
         let funcs = vec!(&BUILTINS as &HashMap<String, Func>);
         let parser = parse(self.name, text, funcs)?;
         match parser {
-            Parser { funcs, tree_ids, tree_set, .. } => {
+            Parser {
+                funcs,
+                tree_ids,
+                tree_set,
+                ..
+            } => {
                 self.funcs = funcs;
                 self.tree_set = tree_set;
                 self.tree_ids = tree_ids;

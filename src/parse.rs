@@ -309,15 +309,17 @@ impl<'a> Parser<'a> {
             };
             self.tree
                 .as_mut()
-                .and_then(|tree| tree.root.as_mut().and_then(|mut r| {
-                    match *r {
-                        Nodes::List(ref mut r) => {
-                            r.append(node);
-                            Some(())
-                        },
-                        _ => None,
-                    }
-                }))
+                .and_then(|tree| {
+                    tree.root
+                        .as_mut()
+                        .and_then(|mut r| match *r {
+                                      Nodes::List(ref mut r) => {
+                                          r.append(node);
+                                          Some(())
+                                      }
+                                      _ => None,
+                                  })
+                })
                 .ok_or_else(|| self.error_msg(format!("invalid root node")))?;
 
             t = match self.next() {

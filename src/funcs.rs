@@ -38,7 +38,12 @@ macro_rules! count_exprs {
 
 
 macro_rules! gn {
-    ($gname:ident -> $name:ident($($arg:ident : ref $typ:ty),*) -> ($($oarg:ident : $otyp:ty),*) { $($body:tt)* }) => {
+    (
+        $gname:ident :
+        $name:ident($($arg:ident : ref $typ:ty),*) ->
+            ($($oarg:ident : $otyp:ty),*)
+        { $($body:tt)* }
+    ) => {
         fn $name(mut args: Vec<Box<Any>>) -> Result<Vec<Box<Any>>, String> {
             $(let x = args.remove(0);
               let $arg = x.downcast_ref::<$typ>()
@@ -61,7 +66,7 @@ macro_rules! gn {
     }
 }
 
-gn!(ADD -> add(a: ref i32, b: ref i32) -> (c: i32) {
+gn!(ADD: add(a: ref i32, b: ref i32) -> (c: i32) {
     (a + b,)
 });
 

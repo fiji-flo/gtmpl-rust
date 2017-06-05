@@ -46,11 +46,8 @@ impl<'a, T: Write> State<'a, T> {
     fn walk(&mut self, dot: &'a Box<Any>, node: &'a Nodes) {
         self.node = Some(node);
         match *node {
-            Nodes::Action(ref n) => {
-
-            },
-            _ => {},
+            Nodes::Action(ref n) => {}
+            _ => {}
         }
     }
-
 }
