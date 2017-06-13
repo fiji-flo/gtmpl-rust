@@ -4,6 +4,7 @@ use std::collections::VecDeque;
 
 use template::Template;
 use node::Nodes;
+use node::CommandNode;
 
 type Variable<'a> = (String, &'a Box<Any>);
 
@@ -46,8 +47,31 @@ impl<'a, T: Write> State<'a, T> {
     fn walk(&mut self, dot: &'a Box<Any>, node: &'a Nodes) {
         self.node = Some(node);
         match *node {
-            Nodes::Action(ref n) => {}
+            Nodes::Action(ref n) => {
+                let val = self.eval_pipeline(dot, node);
+            }
             _ => {}
+            // TODO
         }
+    }
+
+    fn eval_pipeline(&mut self, dot: &'a Box<Any>, node: &'a Nodes) {
+        self.node = Some(node);
+        let mut val: Option<Box<Any>> = None;
+        if let &Nodes::Pipe(ref pipe) = node {
+            for cmd in &pipe.cmds {
+                val = self.eval_command(dot, cmd, val);
+                // TODO
+            }
+        }
+    }
+
+    fn eval_command(&mut self,
+                    dot: &'a Box<Any>,
+                    cmd: &CommandNode,
+                    val: Option<Box<Any>>)
+                    -> Option<Box<Any>> {
+
+        None
     }
 }
