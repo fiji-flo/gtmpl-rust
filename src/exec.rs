@@ -221,5 +221,13 @@ mod tests_mocked {
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
+
+        let data: Box<Any> = Box::new(1);
+        let mut w: Vec<u8> = vec!();
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{ if false -}} 2000 {{- else -}} 3000 {{- end }}"#).is_ok());
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "3000");
     }
 }
