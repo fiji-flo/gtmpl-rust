@@ -3,8 +3,16 @@ use std::collections::HashMap;
 
 pub type Func = fn(Vec<Box<Any>>) -> Result<Vec<Box<Any>>, String>;
 enum Funcy {
-    Base { f: Func, input: usize, output: usize },
-    VarArgs { f: Func, min_input: usize, output: usize },
+    Base {
+        f: Func,
+        input: usize,
+        output: usize,
+    },
+    VarArgs {
+        f: Func,
+        min_input: usize,
+        output: usize,
+    },
 }
 
 lazy_static! {

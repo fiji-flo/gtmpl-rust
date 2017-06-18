@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::io::Write;
-use std::collections::{HashMap,VecDeque};
+use std::collections::{HashMap, VecDeque};
 
 use template::Template;
 use node::*;
@@ -9,7 +9,9 @@ type Variable<'a> = (String, &'a Box<Any>);
 
 static MAX_EXEC_DEPTH: usize = 100000;
 
-struct State<'a, 'b, T: Write> where T: 'b {
+struct State<'a, 'b, T: Write>
+    where T: 'b
+{
     template: &'a Template<'a>,
     writer: &'b mut T,
     node: Option<&'a Nodes>,
@@ -43,20 +45,20 @@ impl<'a, 'b> Template<'a> {
 }
 
 impl<'a, 'b, T: Write> State<'a, 'b, T> {
-    fn walk_list(&mut self, dot: &Box<Any>, node: &'a ListNode) -> Result<(), String>{
+    fn walk_list(&mut self, dot: &Box<Any>, node: &'a ListNode) -> Result<(), String> {
         for n in &node.nodes {
             self.walk(dot, n)?;
         }
         Ok(())
     }
 
-    fn walk(&mut self, dot: &Box<Any>, node: &'a Nodes) -> Result<(), String>{
+    fn walk(&mut self, dot: &Box<Any>, node: &'a Nodes) -> Result<(), String> {
         self.node = Some(node);
         match *node {
             Nodes::Action(_) => {
                 let val = self.eval_pipeline(dot, node);
-                return Ok(())
-            },
+                return Ok(());
+            }
             Nodes::If(_) => {
                 return self.walk_if_or_with(node, dot);
             }
@@ -72,12 +74,15 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         self.node = Some(node);
         let mut val: Option<Box<Any>> = None;
         if let &Nodes::Pipe(ref pipe) = node {
-            let val = Some(self.eval_pipeline_raw(dot, pipe)?);
+            val = Some(self.eval_pipeline_raw(dot, pipe)?);
         }
-        Ok(Box::new(val))
+        val.ok_or_else(|| format!("error evaluating pipeline {}", node))
     }
 
-    fn eval_pipeline_raw(&mut self, dot: &Box<Any>, pipe: &'a PipeNode) -> Result<Box<Any>, String> {
+    fn eval_pipeline_raw(&mut self,
+                         dot: &Box<Any>,
+                         pipe: &'a PipeNode)
+                         -> Result<Box<Any>, String> {
         let mut val: Option<Box<Any>> = None;
         for cmd in &pipe.cmds {
             val = Some(self.eval_command(dot, cmd, val)?);
@@ -92,8 +97,8 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                     val: Option<Box<Any>>)
                     -> Result<Box<Any>, String> {
         let first_word = &cmd.args
-            .first()
-            .ok_or_else(|| format!("no arguments for command node: {}", cmd))?;
+                              .first()
+                              .ok_or_else(|| format!("no arguments for command node: {}", cmd))?;
 
         match *first_word {
             &Nodes::Field(ref n) => return self.eval_field_node(dot, n, &cmd.args, val),
@@ -109,7 +114,12 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         Err(format!("DOOM"))
     }
 
-    fn eval_field_node(&mut self, dot: &Box<Any>, field: &FieldNode, args: &[Nodes], val: Option<Box<Any>>) -> Result<Box<Any>, String> {
+    fn eval_field_node(&mut self,
+                       dot: &Box<Any>,
+                       field: &FieldNode,
+                       args: &[Nodes],
+                       val: Option<Box<Any>>)
+                       -> Result<Box<Any>, String> {
 
         Err(format!("DOOM"))
     }
@@ -134,7 +144,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                     if let Some(ref otherwise) = n.else_list {
                         return self.walk_list(dot, otherwise);
                     }
-                },
+                }
                 Nodes::With(ref n) => {
                     if let Some(ref otherwise) = n.else_list {
                         return self.walk_list(dot, otherwise);
@@ -199,7 +209,7 @@ mod tests_mocked {
     #[test]
     fn simple_template() {
         let data: Box<Any> = Box::new(1);
-        let mut w: Vec<u8> = vec!();
+        let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if false }} 2000 {{ end }}"#).is_ok());
         let out = t.execute(&mut w, &data);
@@ -207,7 +217,7 @@ mod tests_mocked {
         assert_eq!(String::from_utf8(w).unwrap(), "");
 
         let data: Box<Any> = Box::new(1);
-        let mut w: Vec<u8> = vec!();
+        let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if true }} 2000 {{ end }}"#).is_ok());
         let out = t.execute(&mut w, &data);
@@ -215,7 +225,7 @@ mod tests_mocked {
         assert_eq!(String::from_utf8(w).unwrap(), " 2000 ");
 
         let data: Box<Any> = Box::new(1);
-        let mut w: Vec<u8> = vec!();
+        let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if true -}} 2000 {{- end }}"#).is_ok());
         let out = t.execute(&mut w, &data);
@@ -223,9 +233,10 @@ mod tests_mocked {
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
         let data: Box<Any> = Box::new(1);
-        let mut w: Vec<u8> = vec!();
+        let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
-        assert!(t.parse(r#"{{ if false -}} 2000 {{- else -}} 3000 {{- end }}"#).is_ok());
+        assert!(t.parse(r#"{{ if false -}} 2000 {{- else -}} 3000 {{- end }}"#)
+                    .is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
