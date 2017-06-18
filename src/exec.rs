@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::io::Write;
-use std::collections::VecDeque;
+use std::collections::{HashMap,VecDeque};
 
 use template::Template;
 use node::*;
@@ -9,18 +9,18 @@ type Variable<'a> = (String, &'a Box<Any>);
 
 static MAX_EXEC_DEPTH: usize = 100000;
 
-struct State<'a, T: Write> {
+struct State<'a, 'b, T: Write> where T: 'b {
     template: &'a Template<'a>,
-    writer: T,
+    writer: &'b mut T,
     node: Option<&'a Nodes>,
     vars: VecDeque<Variable<'a>>,
     depth: usize,
 }
 
-impl<'a> Template<'a> {
-    fn execute<T: Write>(&mut self, writer: T, data: Box<Any>) -> Result<(), String> {
+impl<'a, 'b> Template<'a> {
+    fn execute<T: Write>(&mut self, writer: &'b mut T, data: &'b Box<Any>) -> Result<(), String> {
         let mut vars = VecDeque::new();
-        vars.push_back(("$".to_owned(), &data));
+        vars.push_back(("$".to_owned(), data));
 
         let mut state = State {
             template: &self,
@@ -31,18 +31,18 @@ impl<'a> Template<'a> {
         };
 
         let root = self.tree_ids
-            .get(&0usize)
+            .get(&1usize)
             .and_then(|name| self.tree_set.get(name))
             .and_then(|tree| tree.root.as_ref())
             .ok_or_else(|| format!("{} is an incomplete or empty template", self.name))?;
-        state.walk(&data, root)?;
+        state.walk(data, root)?;
 
 
         Ok(())
     }
 }
 
-impl<'a, T: Write> State<'a, T> {
+impl<'a, 'b, T: Write> State<'a, 'b, T> {
     fn walk_list(&mut self, dot: &Box<Any>, node: &'a ListNode) -> Result<(), String>{
         for n in &node.nodes {
             self.walk(dot, n)?;
@@ -61,6 +61,7 @@ impl<'a, T: Write> State<'a, T> {
                 return self.walk_if_or_with(node, dot);
             }
             Nodes::List(ref n) => return self.walk_list(dot, n),
+            Nodes::Text(ref n) => write!(self.writer, "{}", n).map_err(|e| format!("{}", e))?,
             _ => {}
             // TODO
         }
@@ -82,7 +83,7 @@ impl<'a, T: Write> State<'a, T> {
             val = Some(self.eval_command(dot, cmd, val)?);
             // TODO
         }
-        Ok(Box::new(val))
+        val.ok_or_else(|| format!("error evaluating pipeline {}", pipe))
     }
 
     fn eval_command(&mut self,
@@ -120,8 +121,8 @@ impl<'a, T: Write> State<'a, T> {
             _ => return Err(format!("expected if or with node, got {}", node)),
         };
         let val = self.eval_pipeline_raw(dot, &pipe)?;
-        let truth = true;
-        if true {
+        let truth = is_true(&val);
+        if truth.0 {
             match *node {
                 Nodes::If(ref n) => return self.walk_list(dot, &n.list),
                 Nodes::With(ref n) => return self.walk_list(&val, &n.list),
@@ -142,7 +143,7 @@ impl<'a, T: Write> State<'a, T> {
                 _ => {}
             }
         }
-        Err(format!("DOOM"))
+        Ok(())
     }
 }
 
@@ -151,4 +152,74 @@ fn not_a_function(args: &[Nodes], val: Option<Box<Any>>) -> Result<(), String> {
         return Err(format!("can't give arument to non-function {}", args[0]));
     }
     Ok(())
+}
+
+macro_rules! non_zero {
+    ($val:ident -> $($typ:ty),*) => {
+        $(
+            if let Some(i) = $val.downcast_ref::<$typ>() {
+                return (i != &(0 as $typ), true);
+            }
+          )*
+    }
+}
+
+fn is_true(val: &Box<Any>) -> (bool, bool) {
+    if let Some(i) = val.downcast_ref::<bool>() {
+        return (*i, true);
+    }
+    if let Some(s) = val.downcast_ref::<String>() {
+        return (!s.is_empty(), true);
+    }
+    if let Some(v) = val.downcast_ref::<Vec<Box<Any>>>() {
+        return (!v.is_empty(), true);
+    }
+    if let Some(v) = val.downcast_ref::<HashMap<String, Box<Any>>>() {
+        return (!v.is_empty(), true);
+    }
+
+
+
+    non_zero!(val -> u8, u16, u32, u64, i8, i16, i32, i64, f32, f64);
+    (true, true)
+}
+
+#[cfg(test)]
+mod tests_mocked {
+    use super::*;
+
+    #[test]
+    fn test_is_true() {
+        let t: Box<Any> = Box::new(1u32);
+        assert_eq!(is_true(&t).0, true);
+        let t: Box<Any> = Box::new(0u32);
+        assert_eq!(is_true(&t).0, false);
+    }
+
+    #[test]
+    fn simple_template() {
+        let data: Box<Any> = Box::new(1);
+        let mut w: Vec<u8> = vec!();
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{ if false }} 2000 {{ end }}"#).is_ok());
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "");
+
+        let data: Box<Any> = Box::new(1);
+        let mut w: Vec<u8> = vec!();
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{ if true }} 2000 {{ end }}"#).is_ok());
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), " 2000 ");
+
+        let data: Box<Any> = Box::new(1);
+        let mut w: Vec<u8> = vec!();
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{ if true -}} 2000 {{- end }}"#).is_ok());
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "2000");
+    }
 }

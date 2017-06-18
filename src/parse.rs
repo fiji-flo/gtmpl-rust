@@ -473,35 +473,39 @@ impl<'a> Parser<'a> {
         let mut token = self.next_non_space_must("pipeline")?;
         let pos = token.pos;
         // TODO: test this hard!
-        while token.typ == ItemType::ItemVariable {
-            let token_after_var = self.next_must("variable")?;
-            let next = if token_after_var.typ == ItemType::ItemSpace {
-                let next = self.next_non_space_must("variable")?;
-                if next.typ != ItemType::ItemColonEquals &&
-                   !(next.typ == ItemType::ItemChar && next.val == ",") {
-                    self.backup3(token, token_after_var, next);
-                    break;
-                }
-                next
-            } else {
-                token_after_var
-            };
-            if next.typ == ItemType::ItemColonEquals ||
-               (next.typ == ItemType::ItemChar && next.val == ",") {
-                self.add_var(next.val.clone())?;
-                let variable = VariableNode::new(self.tree_id, next.pos, next.val.clone());
-                decl.push(variable);
-                if next.typ == ItemType::ItemChar && next.val == "," {
-                    if context == "range" && decl.len() < 2 {
-                        token = self.next_non_space_must("variable")?;
-                        continue;
+        if token.typ == ItemType::ItemVariable {
+            while token.typ == ItemType::ItemVariable {
+                let token_after_var = self.next_must("variable")?;
+                let next = if token_after_var.typ == ItemType::ItemSpace {
+                    let next = self.next_non_space_must("variable")?;
+                    if next.typ != ItemType::ItemColonEquals &&
+                       !(next.typ == ItemType::ItemChar && next.val == ",") {
+                        self.backup3(token, token_after_var, next);
+                        break;
                     }
-                    return self.error(format!("to many decalarations in {}", context));
+                    next
+                } else {
+                    token_after_var
+                };
+                if next.typ == ItemType::ItemColonEquals ||
+                   (next.typ == ItemType::ItemChar && next.val == ",") {
+                    self.add_var(next.val.clone())?;
+                    let variable = VariableNode::new(self.tree_id, next.pos, next.val.clone());
+                    decl.push(variable);
+                    if next.typ == ItemType::ItemChar && next.val == "," {
+                        if context == "range" && decl.len() < 2 {
+                            token = self.next_non_space_must("variable")?;
+                            continue;
+                        }
+                        return self.error(format!("to many decalarations in {}", context));
+                    }
+                } else {
+                    self.backup2(token, next);
                 }
-            } else {
-                self.backup2(token, next);
+                break;
             }
-            break;
+        } else {
+            self.backup(token);
         }
         let mut pipe = PipeNode::new(self.tree_id, pos, decl);
         let mut token = self.next_non_space_must("pipeline")?;
@@ -721,6 +725,7 @@ impl<'a> Iterator for Parser<'a> {
 
 #[cfg(test)]
 mod tests_mocked {
+    use std::any::Any;
     use super::*;
     use lexer::ItemType;
 
@@ -745,12 +750,20 @@ mod tests_mocked {
         make_parser_with(s)
     }
 
+    fn eq_mock(_: Vec<Box<Any>>) -> Result<Vec<Box<Any>>, String> {
+        Ok(vec!(Box::new(true)))
+    }
+
     fn make_parser_with<'a>(s: &str) -> Parser<'a> {
+        make_parser_with_funcs(s, Vec::new())
+    }
+
+    fn make_parser_with_funcs<'a>(s: &str, funcs: Vec<&'a HashMap<String, Func>>) -> Parser<'a> {
         let lex = Lexer::new("foo", s.to_owned());
         Parser {
             name: "foo",
             text: "nope",
-            funcs: Vec::new(),
+            funcs,
             lex: Some(lex),
             line: 0,
             token: VecDeque::new(),
@@ -831,7 +844,12 @@ mod tests_mocked {
     fn parse_basic_tree() {
         let mut p = make_parser_with(r#"{{ if eq .foo "bar" }} 2000 {{ end }}"#);
         let r = p.parse_tree();
-
+        assert_eq!(r.err().unwrap(), "template: foo:2:function eq not defined");
+        let mut funcs_map: HashMap<String, Func> = HashMap::new();
+        funcs_map.insert("eq".to_owned(), eq_mock);
+        let funcs = vec!(&funcs_map);
+        let mut p = make_parser_with_funcs(r#"{{ if eq .foo "bar" }} 2000 {{ end }}"#, funcs);
+        let r = p.parse_tree();
         assert!(r.is_ok());
     }
 

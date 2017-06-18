@@ -52,6 +52,6 @@ mod tests_mocked {
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if eq "bar" "bar" }} 2000 {{ end }}"#).is_ok());
         assert!(t.tree_set.contains_key("foo"));
-
+        assert!(t.tree_ids.contains_key(&1usize));
     }
 }
