@@ -7,9 +7,12 @@ use node::*;
 
 type Variable<'a> = (String, &'a Box<Any>);
 
+enum Dot { Dot }
+
+
 static MAX_EXEC_DEPTH: usize = 100000;
 
-struct State<'a, 'b, T: Write>
+struct State<'a, 'c, 'b, T: Write>
     where T: 'b
 {
     template: &'a Template<'a>,
@@ -17,6 +20,7 @@ struct State<'a, 'b, T: Write>
     node: Option<&'a Nodes>,
     vars: VecDeque<Variable<'a>>,
     depth: usize,
+    dot: &'c Box<Any>,
 }
 
 impl<'a, 'b> Template<'a> {
@@ -30,6 +34,7 @@ impl<'a, 'b> Template<'a> {
             node: None,
             vars,
             depth: 0,
+            dot: data,
         };
 
         let root = self.tree_ids
@@ -44,7 +49,7 @@ impl<'a, 'b> Template<'a> {
     }
 }
 
-impl<'a, 'b, T: Write> State<'a, 'b, T> {
+impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
     fn walk_list(&mut self, dot: &Box<Any>, node: &'a ListNode) -> Result<(), String> {
         for n in &node.nodes {
             self.walk(dot, n)?;
@@ -107,6 +112,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         not_a_function(&cmd.args, val)?;
         match *first_word {
             &Nodes::Bool(ref n) => return Ok(Box::new(n.val)),
+            &Nodes::Dot(_) => return Ok(Box::new(Dot::Dot)),
             _ => {}
         }
 
@@ -154,6 +160,14 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             }
         }
         Ok(())
+    }
+
+    fn is_true(&self, val: &Box<Any>) -> (bool, bool) {
+        if let Some(_) = val.downcast_ref::<Dot>() {
+            println!("yay");
+            return is_true(self.dot);
+        }
+        return is_true(val);
     }
 }
 
@@ -238,6 +252,29 @@ mod tests_mocked {
         assert!(t.parse(r#"{{ if false -}} 2000 {{- else -}} 3000 {{- end }}"#)
                     .is_ok());
         let out = t.execute(&mut w, &data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "3000");
+    }
+
+    #[test]
+    fn basic_dot() {
+        let data: Box<Any> = Box::new(1);
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{ if . -}} 2000 {{- else -}} 3000 {{- end }}"#)
+                .is_ok());
+        let out = t.execute(&mut w, &data);
+        println!("{:?}", out);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "2000");
+
+        let data: Box<Any> = Box::new(false);
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{ if . -}} 2000 {{- else -}} 3000 {{- end }}"#)
+                .is_ok());
+        let out = t.execute(&mut w, &data);
+        println!("{:?}", out);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
     }
