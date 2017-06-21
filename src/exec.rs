@@ -140,7 +140,7 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
             _ => return Err(format!("expected if or with node, got {}", node)),
         };
         let val = self.eval_pipeline_raw(ctx, &pipe)?;
-        let truth = self.is_true(ctx, &val);
+        let truth = is_true(val_ref(ctx, &val));
         if truth.0 {
             match *node {
                 Nodes::If(ref n) => self.walk_list(ctx, &n.list)?,
@@ -167,13 +167,6 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
         }
         Ok(())
     }
-
-    fn is_true(&self, ctx: &Context, val: &Box<Any>) -> (bool, bool) {
-        if let Some(_) = val.downcast_ref::<Dot>() {
-            return is_true(ctx.dot);
-        }
-        return is_true(val);
-    }
 }
 
 fn not_a_function(args: &[Nodes], val: Option<Box<Any>>) -> Result<(), String> {
@@ -191,6 +184,13 @@ macro_rules! non_zero {
             }
           )*
     }
+}
+
+fn val_ref<'e>(ctx: &'e Context, val: &'e Box<Any>) -> &'e Box<Any> {
+    if let Some(_) = val.downcast_ref::<Dot>() {
+        return ctx.dot;
+    }
+    val
 }
 
 fn is_true(val: &Box<Any>) -> (bool, bool) {
