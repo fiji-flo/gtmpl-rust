@@ -7,12 +7,14 @@ use node::*;
 
 type Variable<'a> = (String, &'a Box<Any>);
 
-enum Dot { Dot }
+enum Dot {
+    Dot,
+}
 
 
 static MAX_EXEC_DEPTH: usize = 100000;
 
-struct State<'a, 'c, 'b, T: Write>
+struct State<'a, 'b, 'c, T: Write>
     where T: 'b
 {
     template: &'a Template<'a>,
@@ -21,6 +23,10 @@ struct State<'a, 'c, 'b, T: Write>
     vars: VecDeque<Variable<'a>>,
     depth: usize,
     dot: &'c Box<Any>,
+}
+
+struct Context<'d> {
+    dot: &'d Box<Any>,
 }
 
 impl<'a, 'b> Template<'a> {
@@ -42,32 +48,32 @@ impl<'a, 'b> Template<'a> {
             .and_then(|name| self.tree_set.get(name))
             .and_then(|tree| tree.root.as_ref())
             .ok_or_else(|| format!("{} is an incomplete or empty template", self.name))?;
-        state.walk(data, root)?;
-
+        let ctx = Context { dot: data };
+        state.walk(&ctx, root)?;
 
         Ok(())
     }
 }
 
 impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
-    fn walk_list(&mut self, dot: &Box<Any>, node: &'a ListNode) -> Result<(), String> {
+    fn walk_list(&mut self, ctx: &Context, node: &'a ListNode) -> Result<(), String> {
         for n in &node.nodes {
-            self.walk(dot, n)?;
+            self.walk(ctx, n)?;
         }
         Ok(())
     }
 
-    fn walk(&mut self, dot: &Box<Any>, node: &'a Nodes) -> Result<(), String> {
+    fn walk(&mut self, ctx: &Context, node: &'a Nodes) -> Result<(), String> {
         self.node = Some(node);
         match *node {
             Nodes::Action(_) => {
-                let val = self.eval_pipeline(dot, node);
+                let val = self.eval_pipeline(ctx, node);
                 return Ok(());
             }
             Nodes::If(_) => {
-                return self.walk_if_or_with(node, dot);
+                return self.walk_if_or_with(node, ctx);
             }
-            Nodes::List(ref n) => return self.walk_list(dot, n),
+            Nodes::List(ref n) => return self.walk_list(ctx, n),
             Nodes::Text(ref n) => write!(self.writer, "{}", n).map_err(|e| format!("{}", e))?,
             _ => {}
             // TODO
@@ -75,29 +81,26 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
         Ok(())
     }
 
-    fn eval_pipeline(&mut self, dot: &Box<Any>, node: &'a Nodes) -> Result<Box<Any>, String> {
+    fn eval_pipeline(&mut self, ctx: &Context, node: &'a Nodes) -> Result<Box<Any>, String> {
         self.node = Some(node);
         let mut val: Option<Box<Any>> = None;
         if let &Nodes::Pipe(ref pipe) = node {
-            val = Some(self.eval_pipeline_raw(dot, pipe)?);
+            val = Some(self.eval_pipeline_raw(ctx, pipe)?);
         }
         val.ok_or_else(|| format!("error evaluating pipeline {}", node))
     }
 
-    fn eval_pipeline_raw(&mut self,
-                         dot: &Box<Any>,
-                         pipe: &'a PipeNode)
-                         -> Result<Box<Any>, String> {
+    fn eval_pipeline_raw(&mut self, ctx: &Context, pipe: &'a PipeNode) -> Result<Box<Any>, String> {
         let mut val: Option<Box<Any>> = None;
         for cmd in &pipe.cmds {
-            val = Some(self.eval_command(dot, cmd, val)?);
+            val = Some(self.eval_command(ctx, cmd, val)?);
             // TODO
         }
         val.ok_or_else(|| format!("error evaluating pipeline {}", pipe))
     }
 
     fn eval_command(&mut self,
-                    dot: &Box<Any>,
+                    ctx: &Context,
                     cmd: &CommandNode,
                     val: Option<Box<Any>>)
                     -> Result<Box<Any>, String> {
@@ -106,7 +109,7 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
                               .ok_or_else(|| format!("no arguments for command node: {}", cmd))?;
 
         match *first_word {
-            &Nodes::Field(ref n) => return self.eval_field_node(dot, n, &cmd.args, val),
+            &Nodes::Field(ref n) => return self.eval_field_node(ctx, n, &cmd.args, val),
             _ => {}
         }
         not_a_function(&cmd.args, val)?;
@@ -121,7 +124,7 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
     }
 
     fn eval_field_node(&mut self,
-                       dot: &Box<Any>,
+                       ctx: &Context,
                        field: &FieldNode,
                        args: &[Nodes],
                        val: Option<Box<Any>>)
@@ -130,30 +133,33 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
         Err(format!("DOOM"))
     }
 
-    fn walk_if_or_with(&mut self, node: &'a Nodes, dot: &Box<Any>) -> Result<(), String> {
+    fn walk_if_or_with(&mut self, node: &'a Nodes, ctx: &Context) -> Result<(), String> {
         let pipe = match *node {
             Nodes::If(ref n) => &n.pipe,
             Nodes::With(ref n) => &n.pipe,
             _ => return Err(format!("expected if or with node, got {}", node)),
         };
-        let val = self.eval_pipeline_raw(dot, &pipe)?;
-        let truth = is_true(&val);
+        let val = self.eval_pipeline_raw(ctx, &pipe)?;
+        let truth = self.is_true(ctx, &val);
         if truth.0 {
             match *node {
-                Nodes::If(ref n) => return self.walk_list(dot, &n.list),
-                Nodes::With(ref n) => return self.walk_list(&val, &n.list),
+                Nodes::If(ref n) => self.walk_list(ctx, &n.list)?,
+                Nodes::With(ref n) => {
+                    let ctx = Context { dot: &val };
+                    self.walk_list(&ctx, &n.list)?;
+                }
                 _ => {}
             }
         } else {
             match *node {
                 Nodes::If(ref n) => {
                     if let Some(ref otherwise) = n.else_list {
-                        return self.walk_list(dot, otherwise);
+                        self.walk_list(ctx, otherwise)?;
                     }
                 }
                 Nodes::With(ref n) => {
                     if let Some(ref otherwise) = n.else_list {
-                        return self.walk_list(dot, otherwise);
+                        self.walk_list(ctx, otherwise)?;
                     }
                 }
                 _ => {}
@@ -162,10 +168,9 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
         Ok(())
     }
 
-    fn is_true(&self, val: &Box<Any>) -> (bool, bool) {
+    fn is_true(&self, ctx: &Context, val: &Box<Any>) -> (bool, bool) {
         if let Some(_) = val.downcast_ref::<Dot>() {
-            println!("yay");
-            return is_true(self.dot);
+            return is_true(ctx.dot);
         }
         return is_true(val);
     }
@@ -262,9 +267,8 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if . -}} 2000 {{- else -}} 3000 {{- end }}"#)
-                .is_ok());
+                    .is_ok());
         let out = t.execute(&mut w, &data);
-        println!("{:?}", out);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
@@ -272,9 +276,8 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if . -}} 2000 {{- else -}} 3000 {{- end }}"#)
-                .is_ok());
+                    .is_ok());
         let out = t.execute(&mut w, &data);
-        println!("{:?}", out);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
     }
