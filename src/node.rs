@@ -45,46 +45,48 @@ macro_rules! nodes {
     }
 }
 
-nodes!(ListNode,
-       List,
-       TextNode,
-       Text,
-       PipeNode,
-       Pipe,
-       ActionNode,
-       Action,
-       CommandNode,
-       Command,
-       IdentifierNode,
-       Identifier,
-       VariableNode,
-       Variable,
-       DotNode,
-       Dot,
-       NilNode,
-       Nil,
-       FieldNode,
-       Field,
-       ChainNode,
-       Chain,
-       BoolNode,
-       Bool,
-       NumberNode,
-       Number,
-       StringNode,
-       String,
-       EndNode,
-       End,
-       ElseNode,
-       Else,
-       IfNode,
-       If,
-       WithNode,
-       With,
-       RangeNode,
-       Range,
-       TemplateNode,
-       Template);
+nodes!(
+    ListNode,
+    List,
+    TextNode,
+    Text,
+    PipeNode,
+    Pipe,
+    ActionNode,
+    Action,
+    CommandNode,
+    Command,
+    IdentifierNode,
+    Identifier,
+    VariableNode,
+    Variable,
+    DotNode,
+    Dot,
+    NilNode,
+    Nil,
+    FieldNode,
+    Field,
+    ChainNode,
+    Chain,
+    BoolNode,
+    Bool,
+    NumberNode,
+    Number,
+    StringNode,
+    String,
+    EndNode,
+    End,
+    ElseNode,
+    Else,
+    IfNode,
+    If,
+    WithNode,
+    With,
+    RangeNode,
+    Range,
+    TemplateNode,
+    Template
+);
 
 
 pub type Pos = usize;
@@ -228,8 +230,9 @@ impl PipeNode {
 
 impl Display for PipeNode {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "{} := ", self.decl.iter().join(", "))
-            .and_then(|_| write!(f, "{}", self.cmds.iter().join(" | ")))
+        write!(f, "{} := ", self.decl.iter().join(", ")).and_then(
+            |_| write!(f, "{}", self.cmds.iter().join(" | ")),
+        )
     }
 }
 
@@ -282,11 +285,11 @@ impl Display for CommandNode {
         let s = self.args
             .iter()
             .map(|n| {
-                     match n {
-                         // Handle PipeNode.
-                         _ => n.to_string(),
-                     }
-                 })
+                match n {
+                    // Handle PipeNode.
+                    _ => n.to_string(),
+                }
+            })
             .join(" ");
         write!(f, "{}", s)
     }
@@ -400,7 +403,10 @@ impl FieldNode {
             typ: NodeType::Field,
             tr,
             pos,
-            ident: ident[1..].split('.').map(|s| s.to_owned()).collect(),
+            ident: ident[..]
+                .split('.')
+                .filter_map(|s| if s.is_empty() { None } else { Some(s.to_owned()) })
+                .collect(),
         }
     }
 }
@@ -437,9 +443,10 @@ impl ChainNode {
 impl Display for ChainNode {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         if let Err(e) = match self.node {
-               // Handle PipeNode.
-               _ => write!(f, "{}", self.node),
-           } {
+            // Handle PipeNode.
+            _ => write!(f, "{}", self.node),
+        }
+        {
             return Err(e);
         }
         for field in &self.field {
@@ -488,27 +495,28 @@ node!(
 
 impl NumberNode {
     #[cfg_attr(feature = "cargo-clippy", allow(float_cmp))]
-    pub fn new(tr: TreeId,
-               pos: Pos,
-               text: String,
-               item_typ: ItemType)
-               -> Result<NumberNode, Error> {
+    pub fn new(
+        tr: TreeId,
+        pos: Pos,
+        text: String,
+        item_typ: ItemType,
+    ) -> Result<NumberNode, Error> {
         match item_typ {
             ItemType::ItemCharConstant => {
                 unquote_char(&text, '\'')
                     .and_then(|c| {
                         Some(NumberNode {
-                                 typ: NodeType::Number,
-                                 tr,
-                                 pos,
-                                 is_i64: true,
-                                 is_u64: true,
-                                 is_f64: true,
-                                 as_i64: c as i64,
-                                 as_u64: c as u64,
-                                 as_f64: (c as i64) as f64,
-                                 text,
-                             })
+                            typ: NodeType::Number,
+                            tr,
+                            pos,
+                            is_i64: true,
+                            is_u64: true,
+                            is_f64: true,
+                            as_i64: c as i64,
+                            as_u64: c as u64,
+                            as_f64: (c as i64) as f64,
+                            text,
+                        })
                     })
                     .ok_or(Error)
             }
@@ -537,9 +545,10 @@ impl NumberNode {
                         Err(_) => (0.0 as f64, false),
                         Ok(f) => {
                             if !text.contains(|c| match c {
-                                                  '.' | 'e' | 'E' => true,
-                                                  _ => false,
-                                              }) {
+                                '.' | 'e' | 'E' => true,
+                                _ => false,
+                            })
+                            {
                                 return Err(Error);
                             }
                             (f, true)
@@ -558,17 +567,17 @@ impl NumberNode {
                     return Err(Error);
                 }
                 Ok(NumberNode {
-                       typ: NodeType::Number,
-                       tr,
-                       pos,
-                       is_i64,
-                       is_u64,
-                       is_f64,
-                       as_i64,
-                       as_u64,
-                       as_f64,
-                       text,
-                   })
+                    typ: NodeType::Number,
+                    tr,
+                    pos,
+                    is_i64,
+                    is_u64,
+                    is_f64,
+                    as_i64,
+                    as_u64,
+                    as_f64,
+                    text,
+                })
             }
         }
     }
@@ -658,12 +667,13 @@ pub type WithNode = BranchNode;
 pub type RangeNode = BranchNode;
 
 impl BranchNode {
-    pub fn new_if(tr: TreeId,
-                  pos: Pos,
-                  pipe: PipeNode,
-                  list: ListNode,
-                  else_list: Option<ListNode>)
-                  -> IfNode {
+    pub fn new_if(
+        tr: TreeId,
+        pos: Pos,
+        pipe: PipeNode,
+        list: ListNode,
+        else_list: Option<ListNode>,
+    ) -> IfNode {
         IfNode {
             typ: NodeType::If,
             tr,
@@ -674,12 +684,13 @@ impl BranchNode {
         }
     }
 
-    pub fn new_with(tr: TreeId,
-                    pos: Pos,
-                    pipe: PipeNode,
-                    list: ListNode,
-                    else_list: Option<ListNode>)
-                    -> WithNode {
+    pub fn new_with(
+        tr: TreeId,
+        pos: Pos,
+        pipe: PipeNode,
+        list: ListNode,
+        else_list: Option<ListNode>,
+    ) -> WithNode {
         WithNode {
             typ: NodeType::With,
             tr,
@@ -690,12 +701,13 @@ impl BranchNode {
         }
     }
 
-    pub fn new_range(tr: TreeId,
-                     pos: Pos,
-                     pipe: PipeNode,
-                     list: ListNode,
-                     else_list: Option<ListNode>)
-                     -> RangeNode {
+    pub fn new_range(
+        tr: TreeId,
+        pos: Pos,
+        pipe: PipeNode,
+        list: ListNode,
+        else_list: Option<ListNode>,
+    ) -> RangeNode {
         RangeNode {
             typ: NodeType::Range,
             tr,
@@ -734,12 +746,13 @@ node!(
 );
 
 impl TemplateNode {
-    pub fn new(tr: TreeId,
-               pos: Pos,
-               line: usize,
-               name: String,
-               pipe: Option<PipeNode>)
-               -> TemplateNode {
+    pub fn new(
+        tr: TreeId,
+        pos: Pos,
+        line: usize,
+        name: String,
+        pipe: Option<PipeNode>,
+    ) -> TemplateNode {
         TemplateNode {
             typ: NodeType::Template,
             tr,

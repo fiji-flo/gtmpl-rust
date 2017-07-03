@@ -2,10 +2,14 @@
 #[macro_use]
 extern crate lazy_static;
 extern crate itertools;
+extern crate serde_json;
+#[macro_use]
+extern crate serde_derive;
 mod lexer;
 mod node;
 mod parse;
 mod funcs;
 mod template;
+mod val;
 mod exec;
 mod utils;
