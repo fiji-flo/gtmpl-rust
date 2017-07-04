@@ -405,7 +405,11 @@ impl FieldNode {
             pos,
             ident: ident[..]
                 .split('.')
-                .filter_map(|s| if s.is_empty() { None } else { Some(s.to_owned()) })
+                .filter_map(|s| if s.is_empty() {
+                    None
+                } else {
+                    Some(s.to_owned())
+                })
                 .collect(),
         }
     }

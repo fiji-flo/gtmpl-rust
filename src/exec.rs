@@ -150,7 +150,7 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
         args: &[Nodes],
         fin: Option<Box<Any>>,
     ) -> Result<Box<Any>, String> {
-        return self.eval_field_chain(ctx, ctx.dot, &field.ident, args, fin)
+        return self.eval_field_chain(ctx, ctx.dot, &field.ident, args, fin);
     }
 
     fn eval_field_chain(
@@ -167,18 +167,46 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
         }
         // TODO clean shit up
         let mut r: Box<Any> = Box::new(0);
-        for i in 0..n-1 {
-            r = self.eval_field(ctx, if i == 0 { receiver } else { &r }, &ident[i], &[], None)?;
+        for i in 0..n - 1 {
+            r = self.eval_field(
+                ctx,
+                if i == 0 { receiver } else { &r },
+                &ident[i],
+                &[],
+                None,
+            )?;
         }
-        self.eval_field(ctx, if n == 1 { receiver } else { &r }, &ident[n-1], args, fin)
+        self.eval_field(
+            ctx,
+            if n == 1 { receiver } else { &r },
+            &ident[n - 1],
+            args,
+            fin,
+        )
     }
 
-    fn eval_field(&mut self, ctx: &Context, receiver: &Box<Any>, fieldName: &str, args: &[Nodes], fin: Option<Box<Any>>) -> Result<Box<Any>, String> {
+    fn eval_field(
+        &mut self,
+        ctx: &Context,
+        receiver: &Box<Any>,
+        field_name: &str,
+        args: &[Nodes],
+        fin: Option<Box<Any>>,
+    ) -> Result<Box<Any>, String> {
+        let has_args = args.len() > 1 || fin.is_some();
         if let Some(ref val) = receiver.downcast_ref::<Value>() {
-            return val.get(fieldName).map(|v| Box::new(v.clone()) as Box<Any>).ok_or_else(|| format!("no field {} for {}", fieldName, val));
+            if has_args {
+                return Err(format!(
+                    "{} has arguments but cannot be invoked as function",
+                    field_name
+                ));
+            }
+            return val.get(field_name)
+                .map(|v| Box::new(v.clone()) as Box<Any>)
+                .ok_or_else(|| format!("no field {} for {}", field_name, val));
         }
 
-        Err(format!("DOOM"))
+        Err(format!("only basic fields are supported"))
     }
 
     fn walk_if_or_with(&mut self, node: &'a Nodes, ctx: &Context) -> Result<(), String> {
@@ -231,6 +259,10 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
                     f32,
                     f64,
         };
+        if let Some(v) = val.downcast_ref::<Value>() {
+            write!(self.writer, "{}", v).map_err(|e| format!("{}", e))?;
+            return Ok(());
+        }
         Err(format!("unable to format value"))
     }
 }
@@ -436,5 +468,30 @@ mod tests_mocked {
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
+    }
+
+    #[test]
+    #[ignore]
+    fn basic_with() {
+        #[derive(Serialize)]
+        struct Foo {
+            foo: u16,
+        }
+        #[derive(Serialize)]
+        struct Bar {
+            bar: Foo,
+        }
+        let foo = Foo { foo: 1000 };
+        let data: Box<Any> = Box::new(serde_json::to_value(foo).unwrap());
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(
+            t.parse(r#"{{ with .foo -}} {{ . }} {{- else -}} 3000 {{- end }}"#)
+                .is_ok()
+        );
+        let out = t.execute(&mut w, &data);
+        println!("{:?}", out);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "1000");
     }
 }

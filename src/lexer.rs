@@ -239,11 +239,12 @@ impl LexerStateMachine {
     fn backup(&mut self) {
         self.pos -= 1;
         if self.width == 1 &&
-           self.input[self.pos..]
-               .chars()
-               .next()
-               .and_then(|c| if c == '\n' { Some(()) } else { None })
-               .is_some() {
+            self.input[self.pos..]
+                .chars()
+                .next()
+                .and_then(|c| if c == '\n' { Some(()) } else { None })
+                .is_some()
+        {
             self.line -= 1;
         }
     }
@@ -468,8 +469,9 @@ impl LexerStateMachine {
 
     fn lex_space(&mut self) -> State {
         while self.peek()
-                  .and_then(|c| Some(c.is_whitespace()))
-                  .unwrap_or(false) {}
+            .and_then(|c| Some(c.is_whitespace()))
+            .unwrap_or(false)
+        {}
         self.emit(ItemType::ItemSpace);
         State::LexInsideAction
     }
@@ -501,9 +503,9 @@ impl LexerStateMachine {
     fn lex_field_or_variable(&mut self, typ: ItemType) -> State {
         if self.at_terminator() {
             self.emit(match typ {
-                          ItemType::ItemVariable => ItemType::ItemVariable,
-                          _ => ItemType::ItemDot,
-                      });
+                ItemType::ItemVariable => ItemType::ItemVariable,
+                _ => ItemType::ItemDot,
+            });
             return State::LexInsideAction;
         }
         let c = self.skip_while(|c| c.is_alphanumeric()).next();
@@ -581,8 +583,9 @@ impl LexerStateMachine {
         }
         // Let's ignore imaginary numbers for now.
         if self.peek()
-               .and_then(|c| Some(c.is_alphanumeric()))
-               .unwrap_or(true) {
+            .and_then(|c| Some(c.is_alphanumeric()))
+            .unwrap_or(true)
+        {
             self.next();
             return false;
         }

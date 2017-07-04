@@ -25,7 +25,7 @@ impl<'a> Template<'a> {
     }
 
     pub fn parse(&mut self, text: &'a str) -> Result<(), String> {
-        let funcs = vec!(&BUILTINS as &HashMap<String, Func>);
+        let funcs = vec![&BUILTINS as &HashMap<String, Func>];
         let parser = parse(self.name, text, funcs)?;
         match parser {
             Parser {

@@ -106,20 +106,18 @@ fn eq(args: Vec<Box<Any>>) -> Result<Vec<Box<Any>>, String> {
     equal_as!(bool, args);
     let first = to_num(&args[0]);
     if first != Num::None {
-        let equals = args.iter()
-            .skip(1)
-            .all(|val| match (&first, to_num(val)) {
-                     (&Num::None, _) | (_, Num::None) => false,
-                     (&Num::Uint(l), Num::Uint(r)) => l == r,
-                     (&Num::Int(l), Num::Int(r)) => l == r,
-                     (&Num::Uint(l), Num::Int(r)) => l as i64 == r,
-                     (&Num::Int(l), Num::Uint(r)) => l == r as i64,
-                     (&Num::Float(l), Num::Float(r)) => l == r,
-                     (&Num::Int(l), Num::Float(r)) => l as f64 == r,
-                     (&Num::Uint(l), Num::Float(r)) => l as f64 == r,
-                     (&Num::Float(l), Num::Int(r)) => l == r as f64,
-                     (&Num::Float(l), Num::Uint(r)) => l == r as f64,
-                 });
+        let equals = args.iter().skip(1).all(|val| match (&first, to_num(val)) {
+            (&Num::None, _) | (_, Num::None) => false,
+            (&Num::Uint(l), Num::Uint(r)) => l == r,
+            (&Num::Int(l), Num::Int(r)) => l == r,
+            (&Num::Uint(l), Num::Int(r)) => l as i64 == r,
+            (&Num::Int(l), Num::Uint(r)) => l == r as i64,
+            (&Num::Float(l), Num::Float(r)) => l == r,
+            (&Num::Int(l), Num::Float(r)) => l as f64 == r,
+            (&Num::Uint(l), Num::Float(r)) => l as f64 == r,
+            (&Num::Float(l), Num::Int(r)) => l == r as f64,
+            (&Num::Float(l), Num::Uint(r)) => l == r as f64,
+        });
         return Ok(vec![Box::new(equals)]);
     }
     Err(format!("unable to compare arguments"))
