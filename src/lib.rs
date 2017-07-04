@@ -10,6 +10,5 @@ mod node;
 mod parse;
 mod funcs;
 mod template;
-mod val;
 mod exec;
 mod utils;
