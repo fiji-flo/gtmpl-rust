@@ -13,6 +13,7 @@ macro_rules! nodes {
         }
 
         #[derive(Clone)]
+        #[derive(Debug)]
         pub enum Nodes {
             $($name($node),)*
         }
@@ -105,6 +106,7 @@ macro_rules! node {
         $($field:ident : $typ:ty),*
     }) => {
         #[derive(Clone)]
+        #[derive(Debug)]
         pub struct $name {
             typ: NodeType,
             pos: Pos,

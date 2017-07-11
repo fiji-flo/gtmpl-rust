@@ -627,6 +627,9 @@ impl LexerStateMachine {
 }
 
 fn rtrim_len(s: &str) -> usize {
+    if s.is_empty() {
+        return 0;
+    }
     let l = s.len() - 1;
     l - s.rfind(|c: char| !c.is_whitespace()).unwrap_or(l)
 }
