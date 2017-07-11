@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::sync::Arc;
 use std::io::Write;
 use std::collections::{HashMap, VecDeque};
 
@@ -7,16 +8,11 @@ use node::*;
 
 use serde_json::Value;
 
-type Variable<'a> = (String, &'a Box<Any>);
-
-enum Dot {
-    Dot,
-}
-
+type Variable<'a> = (String, Arc<Any>);
 
 static MAX_EXEC_DEPTH: usize = 100000;
 
-struct State<'a, 'b, 'c, T: Write>
+struct State<'a, 'b, T: Write>
 where
     T: 'b,
 {
@@ -25,11 +21,11 @@ where
     node: Option<&'a Nodes>,
     vars: VecDeque<Variable<'a>>,
     depth: usize,
-    dot: &'c Box<Any>,
+    dot: Arc<Any>,
 }
 
-struct Context<'d> {
-    dot: &'d Box<Any>,
+struct Context {
+    dot: Arc<Any>,
 }
 
 macro_rules! print_val {
@@ -44,9 +40,9 @@ macro_rules! print_val {
 }
 
 impl<'a, 'b> Template<'a> {
-    fn execute<T: Write>(&mut self, writer: &'b mut T, data: &'b Box<Any>) -> Result<(), String> {
-        let mut vars = VecDeque::new();
-        vars.push_back(("$".to_owned(), data));
+    fn execute<T: Write>(&mut self, writer: &'b mut T, data: Arc<Any>) -> Result<(), String> {
+        let mut vars: VecDeque<(String, Arc<Any>)> = VecDeque::new();
+        vars.push_back(("$".to_owned(), data.clone()));
 
         let mut state = State {
             template: &self,
@@ -54,7 +50,7 @@ impl<'a, 'b> Template<'a> {
             node: None,
             vars,
             depth: 0,
-            dot: data,
+            dot: data.clone(),
         };
 
         let root = self.tree_ids
@@ -71,7 +67,7 @@ impl<'a, 'b> Template<'a> {
     }
 }
 
-impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
+impl<'a, 'b, T: Write> State<'a, 'b, T> {
     fn walk_list(&mut self, ctx: &Context, node: &'a ListNode) -> Result<(), String> {
         for n in &node.nodes {
             self.walk(ctx, n)?;
@@ -100,30 +96,34 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
         Ok(())
     }
 
-    fn eval_pipeline(&mut self, ctx: &Context, node: &'a Nodes) -> Result<Box<Any>, String> {
+    fn eval_pipeline(&mut self, ctx: &Context, node: &'a Nodes) -> Result<Arc<Any>, String> {
         self.node = Some(node);
-        let mut val: Option<Box<Any>> = None;
+        let mut val: Option<Arc<Any>> = None;
         if let &Nodes::Pipe(ref pipe) = node {
             val = Some(self.eval_pipeline_raw(ctx, pipe)?);
         }
         val.ok_or_else(|| format!("error evaluating pipeline {}", node))
     }
 
-    fn eval_pipeline_raw(&mut self, ctx: &Context, pipe: &'a PipeNode) -> Result<Box<Any>, String> {
-        let mut val: Option<Box<Any>> = None;
+    fn eval_pipeline_raw(&mut self, ctx: &Context, pipe: &'a PipeNode) -> Result<Arc<Any>, String> {
+        let mut val: Option<Arc<Any>> = None;
         for cmd in &pipe.cmds {
             val = Some(self.eval_command(ctx, cmd, val)?);
             // TODO
         }
-        val.ok_or_else(|| format!("error evaluating pipeline {}", pipe))
+        let val = val.ok_or_else(|| format!("error evaluating pipeline {}", pipe))?;
+        for var in &pipe.decl {
+            self.vars.push_back((var.ident[0].clone(), val.clone()));
+        }
+        Ok(val)
     }
 
     fn eval_command(
         &mut self,
         ctx: &Context,
         cmd: &CommandNode,
-        val: Option<Box<Any>>,
-    ) -> Result<Box<Any>, String> {
+        val: Option<Arc<Any>>,
+    ) -> Result<Arc<Any>, String> {
         let first_word = &cmd.args.first().ok_or_else(|| {
             format!("no arguments for command node: {}", cmd)
         })?;
@@ -134,8 +134,8 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
         }
         not_a_function(&cmd.args, val)?;
         match *first_word {
-            &Nodes::Bool(ref n) => return Ok(Box::new(n.val)),
-            &Nodes::Dot(_) => return Ok(Box::new(Dot::Dot)),
+            &Nodes::Bool(ref n) => return Ok(Arc::new(n.val)),
+            &Nodes::Dot(_) => return Ok(ctx.dot.clone()),
             _ => {}
         }
 
@@ -148,29 +148,29 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
         ctx: &Context,
         field: &FieldNode,
         args: &[Nodes],
-        fin: Option<Box<Any>>,
-    ) -> Result<Box<Any>, String> {
-        return self.eval_field_chain(ctx, ctx.dot, &field.ident, args, fin);
+        fin: Option<Arc<Any>>,
+    ) -> Result<Arc<Any>, String> {
+        return self.eval_field_chain(ctx, ctx.dot.clone(), &field.ident, args, fin);
     }
 
     fn eval_field_chain(
         &mut self,
         ctx: &Context,
-        receiver: &Box<Any>,
+        receiver: Arc<Any>,
         ident: &[String],
         args: &[Nodes],
-        fin: Option<Box<Any>>,
-    ) -> Result<Box<Any>, String> {
+        fin: Option<Arc<Any>>,
+    ) -> Result<Arc<Any>, String> {
         let n = ident.len();
         if n < 1 {
             return Err(format!("field chain without fields :/"));
         }
         // TODO clean shit up
-        let mut r: Box<Any> = Box::new(0);
+        let mut r: Arc<Any> = Arc::new(0);
         for i in 0..n - 1 {
             r = self.eval_field(
                 ctx,
-                if i == 0 { receiver } else { &r },
+                if i == 0 { &receiver } else { &r },
                 &ident[i],
                 &[],
                 None,
@@ -178,7 +178,7 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
         }
         self.eval_field(
             ctx,
-            if n == 1 { receiver } else { &r },
+            if n == 1 { &receiver } else { &r },
             &ident[n - 1],
             args,
             fin,
@@ -188,11 +188,11 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
     fn eval_field(
         &mut self,
         ctx: &Context,
-        receiver: &Box<Any>,
+        receiver: &Arc<Any>,
         field_name: &str,
         args: &[Nodes],
-        fin: Option<Box<Any>>,
-    ) -> Result<Box<Any>, String> {
+        fin: Option<Arc<Any>>,
+    ) -> Result<Arc<Any>, String> {
         let has_args = args.len() > 1 || fin.is_some();
         if let Some(ref val) = receiver.downcast_ref::<Value>() {
             if has_args {
@@ -202,7 +202,7 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
                 ));
             }
             return val.get(field_name)
-                .map(|v| Box::new(v.clone()) as Box<Any>)
+                .map(|v| Arc::new(v.clone()) as Arc<Any>)
                 .ok_or_else(|| format!("no field {} for {}", field_name, val));
         }
 
@@ -216,12 +216,12 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
             _ => return Err(format!("expected if or with node, got {}", node)),
         };
         let val = self.eval_pipeline_raw(ctx, &pipe)?;
-        let truth = is_true(val_ref(ctx, &val));
+        let truth = is_true(&val);
         if truth.0 {
             match *node {
                 Nodes::If(ref n) => self.walk_list(ctx, &n.list)?,
                 Nodes::With(ref n) => {
-                    let ctx = Context { dot: &val };
+                    let ctx = Context { dot: val };
                     self.walk_list(&ctx, &n.list)?;
                 }
                 _ => {}
@@ -244,7 +244,7 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
         Ok(())
     }
 
-    fn print_value(&mut self, val: &Box<Any>) -> Result<(), String> {
+    fn print_value(&mut self, val: &Arc<Any>) -> Result<(), String> {
         print_val!{ val: self <-
                     String,
                     bool,
@@ -267,7 +267,7 @@ impl<'a, 'b, 'c, T: Write> State<'a, 'b, 'c, T> {
     }
 }
 
-fn not_a_function(args: &[Nodes], val: Option<Box<Any>>) -> Result<(), String> {
+fn not_a_function(args: &[Nodes], val: Option<Arc<Any>>) -> Result<(), String> {
     if args.len() > 1 || val.is_some() {
         return Err(format!("can't give arument to non-function {}", args[0]));
     }
@@ -285,24 +285,17 @@ macro_rules! non_zero {
     }
 }
 
-fn val_ref<'e>(ctx: &'e Context, val: &'e Box<Any>) -> &'e Box<Any> {
-    if let Some(_) = val.downcast_ref::<Dot>() {
-        return ctx.dot;
-    }
-    val
-}
-
-fn is_true(val: &Box<Any>) -> (bool, bool) {
+fn is_true(val: &Arc<Any>) -> (bool, bool) {
     if let Some(i) = val.downcast_ref::<bool>() {
         return (*i, true);
     }
     if let Some(s) = val.downcast_ref::<String>() {
         return (!s.is_empty(), true);
     }
-    if let Some(v) = val.downcast_ref::<Vec<Box<Any>>>() {
+    if let Some(v) = val.downcast_ref::<Vec<Arc<Any>>>() {
         return (!v.is_empty(), true);
     }
-    if let Some(v) = val.downcast_ref::<HashMap<String, Box<Any>>>() {
+    if let Some(v) = val.downcast_ref::<HashMap<String, Arc<Any>>>() {
         return (!v.is_empty(), true);
     }
     if let Some(v) = val.downcast_ref::<Value>() {
@@ -342,71 +335,71 @@ mod tests_mocked {
 
     #[test]
     fn test_is_true() {
-        let t: Box<Any> = Box::new(1u32);
+        let t: Arc<Any> = Arc::new(1u32);
         assert_eq!(is_true(&t).0, true);
-        let t: Box<Any> = Box::new(0u32);
+        let t: Arc<Any> = Arc::new(0u32);
         assert_eq!(is_true(&t).0, false);
     }
 
     #[test]
     fn simple_template() {
-        let data: Box<Any> = Box::new(1);
+        let data: Arc<Any> = Arc::new(1);
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if false }} 2000 {{ end }}"#).is_ok());
-        let out = t.execute(&mut w, &data);
+        let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "");
 
-        let data: Box<Any> = Box::new(1);
+        let data: Arc<Any> = Arc::new(1);
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if true }} 2000 {{ end }}"#).is_ok());
-        let out = t.execute(&mut w, &data);
+        let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), " 2000 ");
 
-        let data: Box<Any> = Box::new(1);
+        let data: Arc<Any> = Arc::new(1);
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if true -}} 2000 {{- end }}"#).is_ok());
-        let out = t.execute(&mut w, &data);
+        let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
-        let data: Box<Any> = Box::new(1);
+        let data: Arc<Any> = Arc::new(1);
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
             t.parse(r#"{{ if false -}} 2000 {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, &data);
+        let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
     }
 
     #[test]
     fn basic_dot() {
-        let data: Box<Any> = Box::new(1);
+        let data: Arc<Any> = Arc::new(1);
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
             t.parse(r#"{{ if . -}} 2000 {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, &data);
+        let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
-        let data: Box<Any> = Box::new(false);
+        let data: Arc<Any> = Arc::new(false);
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
             t.parse(r#"{{ if . -}} 2000 {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, &data);
+        let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
     }
@@ -422,50 +415,50 @@ mod tests_mocked {
             bar: Foo,
         }
         let foo = Foo { foo: 1 };
-        let data: Box<Any> = Box::new(serde_json::to_value(foo).unwrap());
+        let data: Arc<Any> = Arc::new(serde_json::to_value(foo).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
             t.parse(r#"{{ if .foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, &data);
+        let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
         let foo = Foo { foo: 0 };
-        let data: Box<Any> = Box::new(serde_json::to_value(foo).unwrap());
+        let data: Arc<Any> = Arc::new(serde_json::to_value(foo).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
             t.parse(r#"{{ if .foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, &data);
+        let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
 
         let bar = Bar { bar: Foo { foo: 1 } };
-        let data: Box<Any> = Box::new(serde_json::to_value(bar).unwrap());
+        let data: Arc<Any> = Arc::new(serde_json::to_value(bar).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
             t.parse(r#"{{ if .bar.foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, &data);
+        let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
         let bar = Bar { bar: Foo { foo: 0 } };
-        let data: Box<Any> = Box::new(serde_json::to_value(bar).unwrap());
+        let data: Arc<Any> = Arc::new(serde_json::to_value(bar).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
             t.parse(r#"{{ if .bar.foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, &data);
+        let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
     }
@@ -482,14 +475,14 @@ mod tests_mocked {
             bar: Foo,
         }
         let foo = Foo { foo: 1000 };
-        let data: Box<Any> = Box::new(serde_json::to_value(foo).unwrap());
+        let data: Arc<Any> = Arc::new(serde_json::to_value(foo).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
             t.parse(r#"{{ with .foo -}} {{ . }} {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, &data);
+        let out = t.execute(&mut w, data);
         println!("{:?}", out);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "1000");
