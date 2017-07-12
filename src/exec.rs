@@ -482,10 +482,7 @@ mod tests_mocked {
                 .is_ok()
         );
         let out = t.execute(&mut w, data);
-        println!("{:?}", out);
         assert!(out.is_ok());
-        // TODO fix this
-        //assert_eq!(String::from_utf8(w).unwrap(), "1000");
-        assert_eq!(String::from_utf8(w).unwrap(), "1000 ");
+        assert_eq!(String::from_utf8(w).unwrap(), "1000");
     }
 }
