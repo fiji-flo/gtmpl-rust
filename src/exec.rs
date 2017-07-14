@@ -88,6 +88,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             Nodes::If(_) | Nodes::With(_) => {
                 return self.walk_if_or_with(node, ctx);
             }
+            Nodes::Range(ref n) => return self.walk_range(ctx, n),
             Nodes::List(ref n) => return self.walk_list(ctx, n),
             Nodes::Text(ref n) => write!(self.writer, "{}", n).map_err(|e| format!("{}", e))?,
             _ => {}
@@ -111,7 +112,9 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             val = Some(self.eval_command(ctx, cmd, val)?);
             // TODO
         }
-        let val = val.ok_or_else(|| format!("error evaluating pipeline {}", pipe))?;
+        let val = val.ok_or_else(
+            || format!("error evaluating pipeline {}", pipe),
+        )?;
         for var in &pipe.decl {
             self.vars.push_back((var.ident[0].clone(), val.clone()));
         }
@@ -242,6 +245,10 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             }
         }
         Ok(())
+    }
+
+    fn walk_range(&mut self, val: &Arc<Any>) -> Result<(), String> {
+        Err(format!("no range yet"))
     }
 
     fn print_value(&mut self, val: &Arc<Any>) -> Result<(), String> {
@@ -402,6 +409,31 @@ mod tests_mocked {
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
+    }
+
+    #[test]
+    fn basic_sub() {
+        let data: Arc<Any> = Arc::new(1u8);
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{.}}"#).is_ok());
+        let out = t.execute(&mut w, data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "1");
+
+        #[derive(Serialize)]
+        struct Foo {
+            foo: u8,
+        }
+        let foo = Foo { foo: 1 };
+        let data: Arc<Any> = Arc::new(serde_json::to_value(foo).unwrap());
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{.foo}}"#).is_ok());
+        let out = t.execute(&mut w, data);
+        println!("{:?}", out);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "1");
     }
 
     #[test]
