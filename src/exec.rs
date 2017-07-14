@@ -247,7 +247,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         Ok(())
     }
 
-    fn walk_range(&mut self, val: &Arc<Any>) -> Result<(), String> {
+    fn walk_range(&mut self, ctx: &Context, range: &RangeNode) -> Result<(), String> {
         Err(format!("no range yet"))
     }
 
