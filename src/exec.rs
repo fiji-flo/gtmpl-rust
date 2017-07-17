@@ -8,8 +8,6 @@ use node::*;
 
 use serde_json::Value;
 
-type Variable<'a> = (String, Arc<Any>);
-
 static MAX_EXEC_DEPTH: usize = 100000;
 
 struct State<'a, 'b, T: Write>
@@ -19,7 +17,7 @@ where
     template: &'a Template<'a>,
     writer: &'b mut T,
     node: Option<&'a Nodes>,
-    vars: VecDeque<Variable<'a>>,
+    vars: VecDeque<HashMap<String, Arc<Any>>>,
     depth: usize,
     dot: Arc<Any>,
 }
@@ -41,8 +39,10 @@ macro_rules! print_val {
 
 impl<'a, 'b> Template<'a> {
     fn execute<T: Write>(&mut self, writer: &'b mut T, data: Arc<Any>) -> Result<(), String> {
-        let mut vars: VecDeque<(String, Arc<Any>)> = VecDeque::new();
-        vars.push_back(("$".to_owned(), data.clone()));
+        let mut vars: VecDeque<HashMap<String, Arc<Any>>> = VecDeque::new();
+        let mut dot = HashMap::new();
+        dot.insert("$".to_owned(), data.clone());
+        vars.push_back(dot);
 
         let mut state = State {
             template: &self,
@@ -116,7 +116,10 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             || format!("error evaluating pipeline {}", pipe),
         )?;
         for var in &pipe.decl {
-            self.vars.push_back((var.ident[0].clone(), val.clone()));
+            self.vars
+                .back_mut()
+                .and_then(|v| v.insert(var.ident[0].clone(), val.clone()))
+                .ok_or_else(|| format!("no stack while evaluating pipeline"))?;
         }
         Ok(val)
     }
@@ -248,6 +251,11 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
     }
 
     fn walk_range(&mut self, ctx: &Context, range: &RangeNode) -> Result<(), String> {
+        let one_iteration = |key: String, val: Arc<Any>| {
+            let mut vars = HashMap::new();
+            self.vars.push_back(vars);
+
+        };
         Err(format!("no range yet"))
     }
 
@@ -431,7 +439,6 @@ mod tests_mocked {
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{.foo}}"#).is_ok());
         let out = t.execute(&mut w, data);
-        println!("{:?}", out);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "1");
     }
