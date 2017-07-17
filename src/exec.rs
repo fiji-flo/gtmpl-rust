@@ -10,6 +10,11 @@ use serde_json::Value;
 
 static MAX_EXEC_DEPTH: usize = 100000;
 
+struct Variable {
+    name: String,
+    value: Arc<Any>,
+}
+
 struct State<'a, 'b, T: Write>
 where
     T: 'b,
@@ -17,7 +22,7 @@ where
     template: &'a Template<'a>,
     writer: &'b mut T,
     node: Option<&'a Nodes>,
-    vars: VecDeque<HashMap<String, Arc<Any>>>,
+    vars: VecDeque<VecDeque<Variable>>,
     depth: usize,
     dot: Arc<Any>,
 }
@@ -39,9 +44,12 @@ macro_rules! print_val {
 
 impl<'a, 'b> Template<'a> {
     fn execute<T: Write>(&mut self, writer: &'b mut T, data: Arc<Any>) -> Result<(), String> {
-        let mut vars: VecDeque<HashMap<String, Arc<Any>>> = VecDeque::new();
-        let mut dot = HashMap::new();
-        dot.insert("$".to_owned(), data.clone());
+        let mut vars: VecDeque<VecDeque<Variable>> = VecDeque::new();
+        let mut dot = VecDeque::new();
+        dot.push_back(Variable {
+            name: "$".to_owned(),
+            value: data.clone(),
+        });
         vars.push_back(dot);
 
         let mut state = State {
@@ -68,6 +76,18 @@ impl<'a, 'b> Template<'a> {
 }
 
 impl<'a, 'b, T: Write> State<'a, 'b, T> {
+    fn set_kth_last_var_value(&mut self, k: usize, value: Arc<Any>) -> Result<(), String> {
+        if let Some(mut last_vars) = self.vars.back_mut() {
+            let i = last_vars.len() - k;
+            if let Some(kth_last_var) = last_vars.get_mut(i) {
+                kth_last_var.value = value;
+                return Ok(());
+            }
+            return Err(format!("current var context smaller than {}", k));
+        }
+        return Err(format!("empty var stack"));
+    }
+
     fn walk_list(&mut self, ctx: &Context, node: &'a ListNode) -> Result<(), String> {
         for n in &node.nodes {
             self.walk(ctx, n)?;
@@ -118,7 +138,12 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         for var in &pipe.decl {
             self.vars
                 .back_mut()
-                .and_then(|v| v.insert(var.ident[0].clone(), val.clone()))
+                .and_then(|v| {
+                    Some(v.push_back(Variable {
+                        name: var.ident[0].clone(),
+                        value: val.clone(),
+                    }))
+                })
                 .ok_or_else(|| format!("no stack while evaluating pipeline"))?;
         }
         Ok(val)
@@ -250,13 +275,47 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         Ok(())
     }
 
-    fn walk_range(&mut self, ctx: &Context, range: &RangeNode) -> Result<(), String> {
-        let one_iteration = |key: String, val: Arc<Any>| {
-            let mut vars = HashMap::new();
-            self.vars.push_back(vars);
+    fn one_iteration(
+        &mut self,
+        key: String,
+        val: Arc<Any>,
+        range: &'a RangeNode,
+    ) -> Result<(), String> {
+        if range.pipe.decl.len() > 0 {
+            self.set_kth_last_var_value(1, val.clone())?;
+        }
+        if range.pipe.decl.len() > 1 {
+            self.set_kth_last_var_value(2, Arc::new(key))?;
+        }
+        let vars = VecDeque::new();
+        self.vars.push_back(vars);
+        let ctx = Context { dot: val };
+        self.walk_list(&ctx, &range.list)?;
+        self.vars.pop_back();
+        Ok(())
+    }
 
-        };
-        Err(format!("no range yet"))
+    fn walk_range(&mut self, ctx: &Context, range: &'a RangeNode) -> Result<(), String> {
+        let val = self.eval_pipeline_raw(ctx, &range.pipe)?;
+        if let Some(map) = val.downcast_ref::<HashMap<String, Arc<Any>>>() {
+            for (k, v) in map {
+                self.one_iteration(k.clone(), v.clone(), range)?;
+            }
+        }
+        if let Some(value) = val.downcast_ref::<Value>() {
+            match value {
+                &Value::Object(ref map) => {
+                    for (k, v) in map.clone() {
+                        self.one_iteration(k.clone(), Arc::new(v), range)?;
+                    }
+                }
+                _ => return Err(format!("invalid range: {:?}", value)),
+            }
+        }
+        if let Some(ref else_list) = range.else_list {
+            self.walk_list(ctx, else_list)?;
+        }
+        Ok(())
     }
 
     fn print_value(&mut self, val: &Arc<Any>) -> Result<(), String> {
@@ -523,5 +582,38 @@ mod tests_mocked {
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "1000");
+    }
+
+    #[test]
+    fn basic_range() {
+        let mut map = HashMap::new();
+        map.insert("a".to_owned(), 1);
+        map.insert("b".to_owned(), 2);
+        let data: Arc<Any> = Arc::new(serde_json::to_value(map).unwrap());
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{ range . -}} {{.}} {{- end }}"#).is_ok());
+        let out = t.execute(&mut w, data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "12");
+    }
+
+    #[test]
+    #[ignore]
+    fn proper_range() {
+        let mut map = HashMap::new();
+        map.insert("a".to_owned(), 1);
+        map.insert("b".to_owned(), 2);
+        let data: Arc<Any> = Arc::new(serde_json::to_value(map).unwrap());
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        println!(
+            "{:?}",
+            t.parse(r#"{{ range $k, $v := . -}} {{$v}} {{- end }}"#)
+        );
+        let out = t.execute(&mut w, data);
+        println!("{:?}", out);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "12");
     }
 }
