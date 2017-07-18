@@ -522,8 +522,8 @@ impl<'a> Parser<'a> {
                 if next.typ == ItemType::ItemColonEquals ||
                     (next.typ == ItemType::ItemChar && next.val == ",")
                 {
-                    self.add_var(next.val.clone())?;
-                    let variable = VariableNode::new(self.tree_id, next.pos, next.val.clone());
+                    let variable = VariableNode::new(self.tree_id, token.pos, token.val.clone());
+                    self.add_var(token.val.clone())?;
                     decl.push(variable);
                     if next.typ == ItemType::ItemChar && next.val == "," {
                         if context == "range" && decl.len() < 2 {
