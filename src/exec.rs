@@ -88,6 +88,18 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         return Err(format!("empty var stack"));
     }
 
+    fn var_value(&self, key: &str) -> Result<Arc<Any>, String> {
+        for context in self.vars.iter().rev() {
+            for var in context.iter().rev() {
+                if var.name == key {
+                    return Ok(var.value.clone());
+                }
+            }
+        }
+        Err(format!("variable {} not found", key))
+
+    }
+
     fn walk_list(&mut self, ctx: &Context, node: &'a ListNode) -> Result<(), String> {
         for n in &node.nodes {
             self.walk(ctx, n)?;
@@ -161,6 +173,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
 
         match *first_word {
             &Nodes::Field(ref n) => return self.eval_field_node(ctx, n, &cmd.args, val),
+            &Nodes::Variable(ref n) => return self.eval_variable_node(ctx, n, &cmd.args, val),
             _ => {}
         }
         not_a_function(&cmd.args, val)?;
@@ -238,6 +251,21 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         }
 
         Err(format!("only basic fields are supported"))
+    }
+
+    fn eval_variable_node(
+        &mut self,
+        ctx: &Context,
+        variable: &VariableNode,
+        args: &[Nodes],
+        fin: Option<Arc<Any>>,
+    ) -> Result<Arc<Any>, String> {
+        let val = self.var_value(&variable.ident[0])?;
+        if variable.ident.len() == 1 {
+            not_a_function(args, fin)?;
+            return Ok(val);
+        }
+        self.eval_field_chain(ctx, val, &variable.ident[1..], args, fin)
     }
 
     fn walk_if_or_with(&mut self, node: &'a Nodes, ctx: &Context) -> Result<(), String> {
@@ -607,11 +635,11 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
-            t.parse(r#"{{ range $k, $v := . -}} {{ $v }} {{- end }}"#).is_ok()
+            t.parse(r#"{{ range $k, $v := . -}} {{ $v }} {{- end }}"#)
+                .is_ok()
         );
         let out = t.execute(&mut w, data);
-        //TODO
-        //assert!(out.is_ok());
-        //assert_eq!(String::from_utf8(w).unwrap(), "12");
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "12");
     }
 }
