@@ -641,5 +641,56 @@ mod tests_mocked {
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "12");
+
+        let mut map = HashMap::new();
+        map.insert("a".to_owned(), 1);
+        map.insert("b".to_owned(), 2);
+        let data: Arc<Any> = Arc::new(serde_json::to_value(map).unwrap());
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(
+            t.parse(r#"{{ range $k, $v := . -}} {{ $k }}{{ $v }} {{- end }}"#)
+                .is_ok()
+        );
+        let out = t.execute(&mut w, data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "a1b2");
+
+        let mut map = HashMap::new();
+        map.insert("a".to_owned(), 1);
+        map.insert("b".to_owned(), 2);
+        #[derive(Serialize)]
+        struct Foo {
+            foo: HashMap<String, i32>,
+        }
+        let foo = Foo { foo: map };
+        let data: Arc<Any> = Arc::new(serde_json::to_value(foo).unwrap());
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(
+            t.parse(r#"{{ range $k, $v := .foo -}} {{ $v }} {{- end }}"#)
+                .is_ok()
+        );
+        let out = t.execute(&mut w, data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "12");
+
+        let mut map = HashMap::new();
+        #[derive(Serialize)]
+        struct Bar {
+            bar: i32,
+        }
+        map.insert("a".to_owned(), Bar { bar: 1 });
+        map.insert("b".to_owned(), Bar { bar: 2 });
+        let data: Arc<Any> = Arc::new(serde_json::to_value(map).unwrap());
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(
+            t.parse(r#"{{ range $k, $v := . -}} {{ $v.bar }} {{- end }}"#)
+                .is_ok()
+        );
+        let out = t.execute(&mut w, data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "12");
     }
 }

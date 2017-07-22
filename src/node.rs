@@ -456,7 +456,8 @@ impl Display for ChainNode {
             return Err(e);
         }
         for field in &self.field {
-            if let Err(e) = write!(f, ".{}", field) {
+            // fields are prefixed with .
+            if let Err(e) = write!(f, "{}", field) {
                 return Err(e);
             }
         }
