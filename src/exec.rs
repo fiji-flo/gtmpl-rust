@@ -211,12 +211,12 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         match *node {
             Nodes::Dot(_) => Ok(ctx.dot.clone()),
             //Nodes::Nil
-            Nodes::Field(ref n) => self.eval_field_node(ctx, n, &vec!(), None), // args?
-            Nodes::Variable(ref n) => self.eval_variable_node(ctx, n, &vec!(), None),
+            Nodes::Field(ref n) => self.eval_field_node(ctx, n, &vec![], None), // args?
+            Nodes::Variable(ref n) => self.eval_variable_node(ctx, n, &vec![], None),
             Nodes::Pipe(ref n) => self.eval_pipeline_raw(ctx, n),
             // Nodes::Identifier
-            Nodes::Chain(ref n) => self.eval_chain_node(ctx, n, &vec!(), None),
-            _ => Err(format!("cant handle {} as arg", node))
+            Nodes::Chain(ref n) => self.eval_chain_node(ctx, n, &vec![], None),
+            _ => Err(format!("cant handle {} as arg", node)),
         }
 
     }
