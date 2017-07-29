@@ -138,7 +138,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         val.ok_or_else(|| format!("error evaluating pipeline {}", node))
     }
 
-    fn eval_pipeline_raw(&mut self, ctx: &Context, pipe: &'a PipeNode) -> Result<Arc<Any>, String> {
+    fn eval_pipeline_raw(&mut self, ctx: &Context, pipe: &PipeNode) -> Result<Arc<Any>, String> {
         let mut val: Option<Arc<Any>> = None;
         for cmd in &pipe.cmds {
             val = Some(self.eval_command(ctx, cmd, val)?);
@@ -174,6 +174,9 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         match *first_word {
             &Nodes::Field(ref n) => return self.eval_field_node(ctx, n, &cmd.args, val),
             &Nodes::Variable(ref n) => return self.eval_variable_node(ctx, n, &cmd.args, val),
+            &Nodes::Pipe(ref n) => return self.eval_pipeline_raw(ctx, n),
+            &Nodes::Chain(ref n) => return self.eval_chain_node(ctx, n, &cmd.args, val),
+            &Nodes::Variable(ref n) => return self.eval_variable_node(ctx, n, &cmd.args, val),
             _ => {}
         }
         not_a_function(&cmd.args, val)?;
@@ -184,7 +187,38 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         }
 
 
-        Err(format!("DOOM"))
+        Err(format!("can not evaluate command {}", first_word))
+    }
+
+    fn eval_chain_node(
+        &mut self,
+        ctx: &Context,
+        chain: &ChainNode,
+        args: &[Nodes],
+        fin: Option<Arc<Any>>,
+    ) -> Result<Arc<Any>, String> {
+        if chain.field.is_empty() {
+            return Err(format!("internal error: no fields in eval_chain_node"));
+        }
+        if let Nodes::Nil(_) = *chain.node {
+            return Err(format!("inderection throug explicit nul in {}", chain));
+        }
+        let pipe = self.eval_arg(ctx, &*chain.node)?;
+        self.eval_field_chain(ctx, pipe, &chain.field, args, fin)
+    }
+
+    fn eval_arg(&mut self, ctx: &Context, node: &Nodes) -> Result<Arc<Any>, String> {
+        match *node {
+            Nodes::Dot(_) => Ok(ctx.dot.clone()),
+            //Nodes::Nil
+            Nodes::Field(ref n) => self.eval_field_node(ctx, n, &vec!(), None), // args?
+            Nodes::Variable(ref n) => self.eval_variable_node(ctx, n, &vec!(), None),
+            Nodes::Pipe(ref n) => self.eval_pipeline_raw(ctx, n),
+            // Nodes::Identifier
+            Nodes::Chain(ref n) => self.eval_chain_node(ctx, n, &vec!(), None),
+            _ => Err(format!("cant handle {} as arg", node))
+        }
+
     }
 
     fn eval_field_node(
