@@ -693,7 +693,8 @@ impl<'a> Parser<'a> {
             ItemType::ItemBool => {
                 Nodes::Bool(BoolNode::new(self.tree_id, token.pos, token.val == "true"))
             }
-            ItemType::ItemCharConstant => {
+            ItemType::ItemCharConstant |
+            ItemType::ItemNumber => {
                 match NumberNode::new(self.tree_id, token.pos, token.val, token.typ) {
                     Ok(n) => Nodes::Number(n),
                     Err(e) => return self.error(e.to_string()),
@@ -766,6 +767,7 @@ impl<'a> Iterator for Parser<'a> {
 #[cfg(test)]
 mod tests_mocked {
     use std::any::Any;
+    use std::sync::Arc;
     use super::*;
     use lexer::ItemType;
 
@@ -790,8 +792,8 @@ mod tests_mocked {
         make_parser_with(s)
     }
 
-    fn eq_mock(_: Vec<Box<Any>>) -> Result<Vec<Box<Any>>, String> {
-        Ok(vec![Box::new(true)])
+    fn eq_mock(_: Vec<Arc<Any>>) -> Result<Vec<Arc<Any>>, String> {
+        Ok(vec![Arc::new(true)])
     }
 
     fn make_parser_with<'a>(s: &str) -> Parser<'a> {
@@ -893,6 +895,10 @@ mod tests_mocked {
         funcs_map.insert("eq".to_owned(), eq_mock);
         let funcs = vec![&funcs_map];
         let mut p = make_parser_with_funcs(r#"{{ if eq .foo "bar" }} 2000 {{ end }}"#, funcs);
+        let r = p.parse_tree();
+        assert!(r.is_ok());
+        let funcs = vec![&funcs_map];
+        let mut p = make_parser_with_funcs(r#"{{ if eq 1 2 }} 2000 {{ end }}"#, funcs);
         let r = p.parse_tree();
         assert!(r.is_ok());
     }

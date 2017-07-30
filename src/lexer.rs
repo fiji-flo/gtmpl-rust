@@ -274,7 +274,10 @@ impl LexerStateMachine {
     }
 
     fn accept(&mut self, valid: &str) -> bool {
-        if self.next().and_then(|s| Some(valid.contains(s))).is_some() {
+        if self.next()
+            .and_then(|s| Some(valid.contains(s)))
+            .unwrap_or(false)
+        {
             return true;
         }
         self.backup();

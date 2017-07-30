@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::io::Write;
 use std::collections::{HashMap, VecDeque};
 
+use funcs::Func;
 use template::Template;
 use node::*;
 
@@ -176,7 +177,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             &Nodes::Variable(ref n) => return self.eval_variable_node(ctx, n, &cmd.args, val),
             &Nodes::Pipe(ref n) => return self.eval_pipeline_raw(ctx, n),
             &Nodes::Chain(ref n) => return self.eval_chain_node(ctx, n, &cmd.args, val),
-            &Nodes::Variable(ref n) => return self.eval_variable_node(ctx, n, &cmd.args, val),
+            &Nodes::Identifier(ref n) => return self.eval_function(ctx, n, &cmd.args, val),
             _ => {}
         }
         not_a_function(&cmd.args, val)?;
@@ -188,6 +189,45 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
 
 
         Err(format!("can not evaluate command {}", first_word))
+    }
+
+    fn eval_function(
+        &mut self,
+        ctx: &Context,
+        ident: &IdentifierNode,
+        args: &[Nodes],
+        fin: Option<Arc<Any>>,
+    ) -> Result<Arc<Any>, String> {
+        let name = &ident.ident;
+        let function = self.template
+            .funcs
+            .iter()
+            .rev()
+            .find(|map| map.contains_key(name))
+            .and_then(|map| map.get(name))
+            .ok_or_else(|| format!("{} is not a defined function", name))?;
+        self.eval_call(ctx, function, &name, args, fin)
+    }
+
+    fn eval_call(
+        &mut self,
+        ctx: &Context,
+        function: &Func,
+        name: &str,
+        args: &[Nodes],
+        fin: Option<Arc<Any>>,
+    ) -> Result<Arc<Any>, String> {
+        let mut arg_vals = vec![];
+        for arg in &args[1..] {
+            let val = self.eval_arg(ctx, arg)?;
+            arg_vals.push(val);
+        }
+
+        function(arg_vals).and_then(|mut ret| {
+            ret.pop().ok_or_else(
+                || format!("no return value for {}", name),
+            )
+        })
     }
 
     fn eval_chain_node(
@@ -726,5 +766,16 @@ mod tests_mocked {
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "12");
+    }
+
+    #[test]
+    fn basic_function() {
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{ if eq . . -}} 2000 {{- end }}"#).is_ok());
+        let data: Arc<Any> = Arc::new(serde_json::to_value(1).unwrap());
+        let out = t.execute(&mut w, data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "2000");
     }
 }

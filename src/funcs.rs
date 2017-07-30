@@ -1,7 +1,10 @@
 use std::any::Any;
 use std::collections::HashMap;
+use std::sync::Arc;
 
-pub type Func = fn(Vec<Box<Any>>) -> Result<Vec<Box<Any>>, String>;
+use serde_json::Value;
+
+pub type Func = fn(Vec<Arc<Any>>) -> Result<Vec<Arc<Any>>, String>;
 enum Funcy {
     Base {
         f: Func,
@@ -27,7 +30,7 @@ macro_rules! equal_as {
     ($typ:ty, $args:ident) => {
         if $args.iter().all(|x| x.is::<$typ>()) {
             let first = $args[0].downcast_ref::<$typ>().unwrap();
-            return Ok(vec![Box::new($args.iter()
+            return Ok(vec![Arc::new($args.iter()
                                     .skip(1)
                                     .map(|x| x.downcast_ref::<$typ>().unwrap())
                                     .all(|x| x == first))]);
@@ -56,7 +59,7 @@ macro_rules! gn {
             ($($oarg:ident : $otyp:ty),*)
         { $($body:tt)* }
     ) => {
-        fn $name(mut args: Vec<Box<Any>>) -> Result<Vec<Box<Any>>, String> {
+        fn $name(mut args: Vec<Arc<Any>>) -> Result<Vec<Arc<Any>>, String> {
             $(let x = args.remove(0);
               let $arg = x.downcast_ref::<$typ>()
               .ok_or_else(|| format!("unable to downcast"))?;)*
@@ -64,9 +67,9 @@ macro_rules! gn {
                 $($body)*
             }
             let ($($oarg,)*) = inner($($arg,)*);
-            let mut retv: Vec<Box<Any>> = vec!();
+            let mut retv: Vec<Arc<Any>> = vec!();
             $(
-                retv.push(Box::new($oarg));
+                retv.push(Arc::new($oarg));
                 )*
             Ok(retv)
         }
@@ -98,12 +101,13 @@ enum Num {
 
 static GEQ: (Func, i32) = (eq, -1);
 
-fn eq(args: Vec<Box<Any>>) -> Result<Vec<Box<Any>>, String> {
+fn eq(args: Vec<Arc<Any>>) -> Result<Vec<Arc<Any>>, String> {
     if args.len() < 2 {
         return Err(format!("eq requires at least 2 arugments"));
     }
     equal_as!(String, args);
     equal_as!(bool, args);
+    equal_as!(Value, args);
     let first = to_num(&args[0]);
     if first != Num::None {
         let equals = args.iter().skip(1).all(|val| match (&first, to_num(val)) {
@@ -118,12 +122,12 @@ fn eq(args: Vec<Box<Any>>) -> Result<Vec<Box<Any>>, String> {
             (&Num::Float(l), Num::Int(r)) => l == r as f64,
             (&Num::Float(l), Num::Uint(r)) => l == r as f64,
         });
-        return Ok(vec![Box::new(equals)]);
+        return Ok(vec![Arc::new(equals)]);
     }
     Err(format!("unable to compare arguments"))
 }
 
-fn to_num(val: &Box<Any>) -> Num {
+fn to_num(val: &Arc<Any>) -> Num {
     if let Some(i) = val.downcast_ref::<u64>() {
         return Num::Uint(*i);
     }
@@ -163,17 +167,17 @@ mod tests_mocked {
 
     #[test]
     fn test_eq() {
-        let vals: Vec<Box<Any>> = vec![Box::new("foo".to_owned()), Box::new("foo".to_owned())];
+        let vals: Vec<Arc<Any>> = vec![Arc::new("foo".to_owned()), Arc::new("foo".to_owned())];
         let ret = eq(vals).unwrap();
         let ret2 = &ret[0];
         let ret3 = ret2.downcast_ref::<bool>();
         assert_eq!(ret3, Some(&true));
-        let vals: Vec<Box<Any>> = vec![Box::new(1u32), Box::new(1f32), Box::new(1i8)];
+        let vals: Vec<Arc<Any>> = vec![Arc::new(1u32), Arc::new(1f32), Arc::new(1i8)];
         let ret = eq(vals).unwrap();
         let ret2 = &ret[0];
         let ret3 = ret2.downcast_ref::<bool>();
         assert_eq!(ret3, Some(&true));
-        let vals: Vec<Box<Any>> = vec![Box::new(false), Box::new(false), Box::new(false)];
+        let vals: Vec<Arc<Any>> = vec![Arc::new(false), Arc::new(false), Arc::new(false)];
         let ret = eq(vals).unwrap();
         let ret2 = &ret[0];
         let ret3 = ret2.downcast_ref::<bool>();
@@ -182,7 +186,7 @@ mod tests_mocked {
 
     #[test]
     fn test_builtins() {
-        let vals: Vec<Box<Any>> = vec![Box::new("foo".to_owned()), Box::new("foo".to_owned())];
+        let vals: Vec<Arc<Any>> = vec![Arc::new("foo".to_owned()), Arc::new("foo".to_owned())];
         let builtin_eq = BUILTINS.get("eq").unwrap();
         let ret = builtin_eq(vals).unwrap();
         let ret2 = &ret[0];
@@ -192,7 +196,7 @@ mod tests_mocked {
 
     #[test]
     fn test_add() {
-        let vals: Vec<Box<Any>> = vec![Box::new(1i32), Box::new(2i32)];
+        let vals: Vec<Arc<Any>> = vec![Arc::new(1i32), Arc::new(2i32)];
         let ret = ADD.0(vals).unwrap();
         let ret2 = &ret[0];
         let ret3 = ret2.downcast_ref::<i32>();
