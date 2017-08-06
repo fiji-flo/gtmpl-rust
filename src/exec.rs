@@ -223,11 +223,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             arg_vals.push(val);
         }
 
-        function(arg_vals).and_then(|mut ret| {
-            ret.pop().ok_or_else(
-                || format!("no return value for {}", name),
-            )
-        })
+        function(arg_vals)
     }
 
     fn eval_chain_node(
@@ -256,6 +252,15 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             Nodes::Pipe(ref n) => self.eval_pipeline_raw(ctx, n),
             // Nodes::Identifier
             Nodes::Chain(ref n) => self.eval_chain_node(ctx, n, &vec![], None),
+            Nodes::String(ref n) => Ok(Arc::new(n.text.clone())),
+            Nodes::Bool(ref n) => Ok(Arc::new(n.val)),
+            Nodes::Number(ref n) => {
+                match n.number_typ {
+                    NumberType::Char | NumberType::U64 => Ok(Arc::new(n.as_u64)),
+                    NumberType::I64 => Ok(Arc::new(n.as_i64)),
+                    NumberType::Float => Ok(Arc::new(n.as_f64)),
+                }
+            }
             _ => Err(format!("cant handle {} as arg", node)),
         }
 
@@ -774,6 +779,63 @@ mod tests_mocked {
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if eq . . -}} 2000 {{- end }}"#).is_ok());
         let data: Arc<Any> = Arc::new(serde_json::to_value(1).unwrap());
+        let out = t.execute(&mut w, data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "2000");
+    }
+
+    #[test]
+    fn basic_eq() {
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{ if eq "a" "a" -}} 2000 {{- end }}"#).is_ok());
+        let data: Arc<Any> = Arc::new(serde_json::to_value(1).unwrap());
+        let out = t.execute(&mut w, data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "2000");
+
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{ if eq "a" "b" -}} 2000 {{- end }}"#).is_ok());
+        let data: Arc<Any> = Arc::new(serde_json::to_value(1).unwrap());
+        let out = t.execute(&mut w, data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "");
+
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{ if eq true true -}} 2000 {{- end }}"#).is_ok());
+        let data: Arc<Any> = Arc::new(serde_json::to_value(1).unwrap());
+        let out = t.execute(&mut w, data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "2000");
+
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(
+            t.parse(r#"{{ if eq true false -}} 2000 {{- end }}"#)
+                .is_ok()
+        );
+        let data: Arc<Any> = Arc::new(serde_json::to_value(1).unwrap());
+        let out = t.execute(&mut w, data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "");
+
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(
+            t.parse(r#"{{ if eq 23.42 23.42 -}} 2000 {{- end }}"#)
+                .is_ok()
+        );
+        let data: Arc<Any> = Arc::new(serde_json::to_value(1).unwrap());
+        let out = t.execute(&mut w, data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "2000");
+
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{ if eq 1 . -}} 2000 {{- end }}"#).is_ok());
+        let data: Arc<Any> = Arc::new(1);
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");

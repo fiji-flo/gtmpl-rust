@@ -488,6 +488,14 @@ impl Display for BoolNode {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum NumberType {
+    U64,
+    I64,
+    Float,
+    Char,
+}
+
 node!(
     NumberNode {
         is_i64: bool,
@@ -496,7 +504,8 @@ node!(
         as_i64: i64,
         as_u64: u64,
         as_f64: f64,
-        text: String
+        text: String,
+        number_typ: NumberType
     }
 );
 
@@ -523,19 +532,30 @@ impl NumberNode {
                             as_u64: c as u64,
                             as_f64: (c as i64) as f64,
                             text,
+                            number_typ: NumberType::Char,
                         })
                     })
                     .ok_or(Error)
             }
             _ => {
+                let mut number_typ = NumberType::Float;
+
                 // TODO: Deal with hex.
+                let (mut as_i64, mut is_i64) = text.parse::<i64>()
+                    .and_then(|i| Ok((i, true)))
+                    .unwrap_or((0i64, false));
+
+                if is_i64 {
+                    number_typ = NumberType::I64;
+                }
+
                 let (mut as_u64, mut is_u64) = text.parse::<u64>()
                     .and_then(|i| Ok((i, true)))
                     .unwrap_or((0u64, false));
 
-                let (mut as_i64, mut is_i64) = text.parse::<i64>()
-                    .and_then(|i| Ok((i, true)))
-                    .unwrap_or((0i64, false));
+                if is_u64 {
+                    number_typ = NumberType::U64;
+                }
 
                 if as_i64 == 0 {
                     // In case of -0.
@@ -584,6 +604,7 @@ impl NumberNode {
                     as_u64,
                     as_f64,
                     text,
+                    number_typ,
                 })
             }
         }

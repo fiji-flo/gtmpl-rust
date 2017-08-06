@@ -792,8 +792,8 @@ mod tests_mocked {
         make_parser_with(s)
     }
 
-    fn eq_mock(_: Vec<Arc<Any>>) -> Result<Vec<Arc<Any>>, String> {
-        Ok(vec![Arc::new(true)])
+    fn eq_mock(_: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
+        Ok(Arc::new(true))
     }
 
     fn make_parser_with<'a>(s: &str) -> Parser<'a> {

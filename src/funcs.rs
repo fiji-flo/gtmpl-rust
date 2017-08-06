@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use serde_json::Value;
 
-pub type Func = fn(Vec<Arc<Any>>) -> Result<Vec<Arc<Any>>, String>;
+pub type Func = fn(Vec<Arc<Any>>) -> Result<Arc<Any>, String>;
 enum Funcy {
     Base {
         f: Func,
@@ -30,10 +30,10 @@ macro_rules! equal_as {
     ($typ:ty, $args:ident) => {
         if $args.iter().all(|x| x.is::<$typ>()) {
             let first = $args[0].downcast_ref::<$typ>().unwrap();
-            return Ok(vec![Arc::new($args.iter()
+            return Ok(Arc::new($args.iter()
                                     .skip(1)
                                     .map(|x| x.downcast_ref::<$typ>().unwrap())
-                                    .all(|x| x == first))]);
+                                    .all(|x| x == first)));
         }
     }
 }
@@ -56,33 +56,27 @@ macro_rules! gn {
     (
         $gname:ident :
         $name:ident($($arg:ident : ref $typ:ty),*) ->
-            ($($oarg:ident : $otyp:ty),*)
+            $otyp:ty
         { $($body:tt)* }
     ) => {
-        fn $name(mut args: Vec<Arc<Any>>) -> Result<Vec<Arc<Any>>, String> {
+        fn $name(mut args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
             $(let x = args.remove(0);
               let $arg = x.downcast_ref::<$typ>()
               .ok_or_else(|| format!("unable to downcast"))?;)*
-            fn inner($($arg : &$typ,)*) -> ($($otyp,)*) {
+            fn inner($($arg : &$typ,)*) -> $otyp {
                 $($body)*
             }
-            let ($($oarg,)*) = inner($($arg,)*);
-            let mut retv: Vec<Arc<Any>> = vec!();
-            $(
-                retv.push(Arc::new($oarg));
-                )*
-            Ok(retv)
+            Ok(Arc::new(inner($($arg,)*)))
         }
-        static $gname: (Func, i32, i32) = (
+        static $gname: (Func, i32) = (
             $name,
             count_exprs!($($arg),*),
-            count_exprs!($($oarg),*)
         );
     }
 }
 
-gn!(ADD: add(a: ref i32, b: ref i32) -> (c: i32) {
-    (a + b,)
+gn!(ADD: add(a: ref i32, b: ref i32) -> i32 {
+    a + b
 });
 
 // Thanks to: https://danielkeep.github.io/quick-intro-to-macros.html
@@ -101,7 +95,7 @@ enum Num {
 
 static GEQ: (Func, i32) = (eq, -1);
 
-fn eq(args: Vec<Arc<Any>>) -> Result<Vec<Arc<Any>>, String> {
+fn eq(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     if args.len() < 2 {
         return Err(format!("eq requires at least 2 arugments"));
     }
@@ -122,7 +116,7 @@ fn eq(args: Vec<Arc<Any>>) -> Result<Vec<Arc<Any>>, String> {
             (&Num::Float(l), Num::Int(r)) => l == r as f64,
             (&Num::Float(l), Num::Uint(r)) => l == r as f64,
         });
-        return Ok(vec![Arc::new(equals)]);
+        return Ok(Arc::new(equals));
     }
     Err(format!("unable to compare arguments"))
 }
@@ -169,19 +163,16 @@ mod tests_mocked {
     fn test_eq() {
         let vals: Vec<Arc<Any>> = vec![Arc::new("foo".to_owned()), Arc::new("foo".to_owned())];
         let ret = eq(vals).unwrap();
-        let ret2 = &ret[0];
-        let ret3 = ret2.downcast_ref::<bool>();
-        assert_eq!(ret3, Some(&true));
+        let ret_ = ret.downcast_ref::<bool>();
+        assert_eq!(ret_, Some(&true));
         let vals: Vec<Arc<Any>> = vec![Arc::new(1u32), Arc::new(1f32), Arc::new(1i8)];
         let ret = eq(vals).unwrap();
-        let ret2 = &ret[0];
-        let ret3 = ret2.downcast_ref::<bool>();
-        assert_eq!(ret3, Some(&true));
+        let ret_ = ret.downcast_ref::<bool>();
+        assert_eq!(ret_, Some(&true));
         let vals: Vec<Arc<Any>> = vec![Arc::new(false), Arc::new(false), Arc::new(false)];
         let ret = eq(vals).unwrap();
-        let ret2 = &ret[0];
-        let ret3 = ret2.downcast_ref::<bool>();
-        assert_eq!(ret3, Some(&true));
+        let ret_ = ret.downcast_ref::<bool>();
+        assert_eq!(ret_, Some(&true));
     }
 
     #[test]
@@ -189,17 +180,15 @@ mod tests_mocked {
         let vals: Vec<Arc<Any>> = vec![Arc::new("foo".to_owned()), Arc::new("foo".to_owned())];
         let builtin_eq = BUILTINS.get("eq").unwrap();
         let ret = builtin_eq(vals).unwrap();
-        let ret2 = &ret[0];
-        let ret3 = ret2.downcast_ref::<bool>();
-        assert_eq!(ret3, Some(&true));
+        let ret_ = ret.downcast_ref::<bool>();
+        assert_eq!(ret_, Some(&true));
     }
 
     #[test]
     fn test_add() {
         let vals: Vec<Arc<Any>> = vec![Arc::new(1i32), Arc::new(2i32)];
         let ret = ADD.0(vals).unwrap();
-        let ret2 = &ret[0];
-        let ret3 = ret2.downcast_ref::<i32>();
-        assert_eq!(ret3, Some(&3));
+        let ret_ = ret.downcast_ref::<i32>();
+        assert_eq!(ret_, Some(&3));
     }
 }
