@@ -22,6 +22,7 @@ lazy_static! {
     pub static ref BUILTINS: HashMap<String, Func> = {
         let mut m = HashMap::new();
         m.insert("eq".to_owned(), eq as Func);
+        m.insert("length".to_owned(), length as Func);
         m
     };
 }
@@ -93,7 +94,28 @@ enum Num {
     Float(f64),
 }
 
-static GEQ: (Func, i32) = (eq, -1);
+fn length(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
+    if args.len() != 1 {
+        return Err(format!("length requires exactly 1 arugment"));
+    }
+    let arg = &args[0];
+    let len = if let Some(x) = arg.downcast_ref::<String>() {
+        x.len()
+    } else if let Some(x) = arg.downcast_ref::<Value>() {
+        match *x {
+            Value::String(ref s) => s.len(),
+            Value::Array(ref a) => a.len(),
+            Value::Object(ref o) => o.len(),
+            _ => {
+                return Err(format!("unable to call length on {}", x));
+            }
+        }
+    } else {
+        return Err(format!("unable to call length on the given argument"));
+    };
+
+    Ok(Arc::new(len))
+}
 
 fn eq(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     if args.len() < 2 {

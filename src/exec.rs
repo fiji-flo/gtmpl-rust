@@ -184,11 +184,12 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         match *first_word {
             &Nodes::Bool(ref n) => return Ok(Arc::new(n.val)),
             &Nodes::Dot(_) => return Ok(ctx.dot.clone()),
+            &Nodes::Number(ref n) => return Ok(n.as_any_arc()),
             _ => {}
         }
 
 
-        Err(format!("can not evaluate command {}", first_word))
+        Err(format!("cannot evaluate command {}", first_word))
     }
 
     fn eval_function(
@@ -439,6 +440,8 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                     i64,
                     f32,
                     f64,
+                    isize,
+                    usize,
         };
         if let Some(v) = val.downcast_ref::<Value>() {
             write!(self.writer, "{}", v).map_err(|e| format!("{}", e))?;
@@ -561,7 +564,7 @@ mod tests_mocked {
     }
 
     #[test]
-    fn basic_dot() {
+    fn test_dot() {
         let data: Arc<Any> = Arc::new(1);
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
@@ -586,7 +589,7 @@ mod tests_mocked {
     }
 
     #[test]
-    fn basic_sub() {
+    fn test_sub() {
         let data: Arc<Any> = Arc::new(1u8);
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
@@ -610,7 +613,7 @@ mod tests_mocked {
     }
 
     #[test]
-    fn basic_dot_value() {
+    fn test_dot_value() {
         #[derive(Serialize)]
         struct Foo {
             foo: u8,
@@ -669,7 +672,7 @@ mod tests_mocked {
     }
 
     #[test]
-    fn basic_with() {
+    fn test_with() {
         #[derive(Serialize)]
         struct Foo {
             foo: u16,
@@ -692,7 +695,7 @@ mod tests_mocked {
     }
 
     #[test]
-    fn basic_range() {
+    fn test_range() {
         let mut map = HashMap::new();
         map.insert("a".to_owned(), 1);
         map.insert("b".to_owned(), 2);
@@ -706,7 +709,7 @@ mod tests_mocked {
     }
 
     #[test]
-    fn proper_range() {
+    fn test_proper_range() {
         let mut map = HashMap::new();
         map.insert("a".to_owned(), 1);
         map.insert("b".to_owned(), 2);
@@ -774,7 +777,39 @@ mod tests_mocked {
     }
 
     #[test]
-    fn basic_function() {
+    fn test_length() {
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"my len is {{ length . }}"#).is_ok());
+        let data: Arc<Any> = Arc::new(serde_json::to_value(vec![1, 2, 3]).unwrap());
+        let out = t.execute(&mut w, data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "my len is 3");
+
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{ length . }}"#).is_ok());
+        let data: Arc<Any> = Arc::new(serde_json::to_value("hello".to_owned()).unwrap());
+        let out = t.execute(&mut w, data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "5");
+    }
+
+    #[test]
+    #[ignore]
+    fn test_pipeline_function() {
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::new("foo");
+        assert!(t.parse(r#"{{ if ( 1 | eq . ) -}} 2000 {{- end }}"#).is_ok());
+        let data: Arc<Any> = Arc::new(serde_json::to_value(1).unwrap());
+        let out = t.execute(&mut w, data);
+        println!("{:?}", out);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "2000");
+    }
+
+    #[test]
+    fn test_function() {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if eq . . -}} 2000 {{- end }}"#).is_ok());
@@ -785,7 +820,7 @@ mod tests_mocked {
     }
 
     #[test]
-    fn basic_eq() {
+    fn test_eq() {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if eq "a" "a" -}} 2000 {{- end }}"#).is_ok());

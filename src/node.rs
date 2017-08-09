@@ -1,4 +1,7 @@
+use std::any::Any;
 use std::fmt::{Display, Error, Formatter};
+use std::sync::Arc;
+
 use itertools::Itertools;
 use lexer::ItemType;
 use utils::unquote_char;
@@ -607,6 +610,14 @@ impl NumberNode {
                     number_typ,
                 })
             }
+        }
+    }
+
+    pub fn as_any_arc(&self) -> Arc<Any> {
+        match self.number_typ {
+            NumberType::Char | NumberType::U64 => Arc::new(self.as_u64),
+            NumberType::I64 => Arc::new(self.as_i64),
+            NumberType::Float => Arc::new(self.as_f64),
         }
     }
 }
