@@ -5,6 +5,7 @@ use funcs::Func;
 use funcs::BUILTINS;
 use node::TreeId;
 
+/// The main template structure.
 pub struct Template<'a> {
     pub name: &'a str,
     pub text: &'a str,

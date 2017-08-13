@@ -7,7 +7,7 @@ use funcs::Func;
 use template::Template;
 use node::*;
 
-use serde_json::Value;
+use serde_json::{self, Value};
 
 static MAX_EXEC_DEPTH: usize = 100000;
 
@@ -28,8 +28,27 @@ where
     dot: Arc<Any>,
 }
 
-struct Context {
+/// A Context for the template. Passed to the template exectution.
+pub struct Context {
     dot: Arc<Any>,
+}
+
+impl Context {
+    pub fn from_any(value: Arc<Any>) -> Context {
+        Context { dot: value }
+    }
+
+    pub fn from_serde(value: Value) -> Context {
+        Context { dot: Arc::new(value) }
+    }
+
+    pub fn from_map(map: HashMap<String, String>) -> Result<Context, serde_json::Error> {
+        Ok(Context { dot: Arc::new(serde_json::to_value(map)?) })
+    }
+
+    pub fn from_str(value: &str) -> Result<Context, serde_json::Error> {
+        Ok(Context { dot: Arc::new(serde_json::to_value(value)?) })
+    }
 }
 
 macro_rules! print_val {
@@ -44,12 +63,12 @@ macro_rules! print_val {
 }
 
 impl<'a, 'b> Template<'a> {
-    fn execute<T: Write>(&mut self, writer: &'b mut T, data: Arc<Any>) -> Result<(), String> {
+    pub fn execute<T: Write>(&mut self, writer: &'b mut T, data: Context) -> Result<(), String> {
         let mut vars: VecDeque<VecDeque<Variable>> = VecDeque::new();
         let mut dot = VecDeque::new();
         dot.push_back(Variable {
             name: "$".to_owned(),
-            value: data.clone(),
+            value: data.dot.clone(),
         });
         vars.push_back(dot);
 
@@ -59,7 +78,7 @@ impl<'a, 'b> Template<'a> {
             node: None,
             vars,
             depth: 0,
-            dot: data.clone(),
+            dot: data.dot.clone(),
         };
 
         let root = self.tree_ids
@@ -69,10 +88,15 @@ impl<'a, 'b> Template<'a> {
             .ok_or_else(|| {
                 format!("{} is an incomplete or empty template", self.name)
             })?;
-        let ctx = Context { dot: data };
-        state.walk(&ctx, root)?;
+        state.walk(&data, root)?;
 
         Ok(())
+    }
+
+    pub fn render(&mut self, data: Context) -> Result<String, String> {
+        let mut w: Vec<u8> = vec![];
+        self.execute(&mut w, data)?;
+        String::from_utf8(w).map_err(|e| format!("unable to contert output into utf8: {}", e))
     }
 }
 
@@ -444,7 +468,15 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                     usize,
         };
         if let Some(v) = val.downcast_ref::<Value>() {
-            write!(self.writer, "{}", v).map_err(|e| format!("{}", e))?;
+            if v.is_string() {
+                write!(self.writer, "{}", v.as_str().unwrap()).map_err(
+                    |e| {
+                        format!("{}", e)
+                    },
+                )?;
+            } else {
+                write!(self.writer, "{}", v).map_err(|e| format!("{}", e))?;
+            }
             return Ok(());
         }
         Err(format!("unable to format value"))
@@ -527,7 +559,7 @@ mod tests_mocked {
 
     #[test]
     fn simple_template() {
-        let data: Arc<Any> = Arc::new(1);
+        let data = Context::from_any(Arc::new(1));
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if false }} 2000 {{ end }}"#).is_ok());
@@ -535,7 +567,7 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "");
 
-        let data: Arc<Any> = Arc::new(1);
+        let data = Context::from_any(Arc::new(1));
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if true }} 2000 {{ end }}"#).is_ok());
@@ -543,7 +575,7 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), " 2000 ");
 
-        let data: Arc<Any> = Arc::new(1);
+        let data = Context::from_any(Arc::new(1));
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if true -}} 2000 {{- end }}"#).is_ok());
@@ -551,7 +583,7 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
-        let data: Arc<Any> = Arc::new(1);
+        let data = Context::from_any(Arc::new(1));
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
@@ -565,7 +597,7 @@ mod tests_mocked {
 
     #[test]
     fn test_dot() {
-        let data: Arc<Any> = Arc::new(1);
+        let data = Context::from_any(Arc::new(1));
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
@@ -576,7 +608,7 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
-        let data: Arc<Any> = Arc::new(false);
+        let data = Context::from_any(Arc::new(false));
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
@@ -590,7 +622,7 @@ mod tests_mocked {
 
     #[test]
     fn test_sub() {
-        let data: Arc<Any> = Arc::new(1u8);
+        let data = Context::from_any(Arc::new(1u8));
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{.}}"#).is_ok());
@@ -603,7 +635,7 @@ mod tests_mocked {
             foo: u8,
         }
         let foo = Foo { foo: 1 };
-        let data: Arc<Any> = Arc::new(serde_json::to_value(foo).unwrap());
+        let data = Context::from_serde(serde_json::to_value(foo).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{.foo}}"#).is_ok());
@@ -623,7 +655,7 @@ mod tests_mocked {
             bar: Foo,
         }
         let foo = Foo { foo: 1 };
-        let data: Arc<Any> = Arc::new(serde_json::to_value(foo).unwrap());
+        let data = Context::from_serde(serde_json::to_value(foo).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
@@ -635,7 +667,7 @@ mod tests_mocked {
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
         let foo = Foo { foo: 0 };
-        let data: Arc<Any> = Arc::new(serde_json::to_value(foo).unwrap());
+        let data = Context::from_serde(serde_json::to_value(foo).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
@@ -647,7 +679,7 @@ mod tests_mocked {
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
 
         let bar = Bar { bar: Foo { foo: 1 } };
-        let data: Arc<Any> = Arc::new(serde_json::to_value(bar).unwrap());
+        let data = Context::from_serde(serde_json::to_value(bar).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
@@ -659,7 +691,7 @@ mod tests_mocked {
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
         let bar = Bar { bar: Foo { foo: 0 } };
-        let data: Arc<Any> = Arc::new(serde_json::to_value(bar).unwrap());
+        let data = Context::from_serde(serde_json::to_value(bar).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
@@ -682,7 +714,7 @@ mod tests_mocked {
             bar: Foo,
         }
         let foo = Foo { foo: 1000 };
-        let data: Arc<Any> = Arc::new(serde_json::to_value(foo).unwrap());
+        let data = Context::from_serde(serde_json::to_value(foo).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
@@ -699,7 +731,7 @@ mod tests_mocked {
         let mut map = HashMap::new();
         map.insert("a".to_owned(), 1);
         map.insert("b".to_owned(), 2);
-        let data: Arc<Any> = Arc::new(serde_json::to_value(map).unwrap());
+        let data = Context::from_serde(serde_json::to_value(map).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ range . -}} {{.}} {{- end }}"#).is_ok());
@@ -713,7 +745,7 @@ mod tests_mocked {
         let mut map = HashMap::new();
         map.insert("a".to_owned(), 1);
         map.insert("b".to_owned(), 2);
-        let data: Arc<Any> = Arc::new(serde_json::to_value(map).unwrap());
+        let data = Context::from_serde(serde_json::to_value(map).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
@@ -727,7 +759,7 @@ mod tests_mocked {
         let mut map = HashMap::new();
         map.insert("a".to_owned(), 1);
         map.insert("b".to_owned(), 2);
-        let data: Arc<Any> = Arc::new(serde_json::to_value(map).unwrap());
+        let data = Context::from_serde(serde_json::to_value(map).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
@@ -746,7 +778,7 @@ mod tests_mocked {
             foo: HashMap<String, i32>,
         }
         let foo = Foo { foo: map };
-        let data: Arc<Any> = Arc::new(serde_json::to_value(foo).unwrap());
+        let data = Context::from_serde(serde_json::to_value(foo).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
@@ -764,7 +796,7 @@ mod tests_mocked {
         }
         map.insert("a".to_owned(), Bar { bar: 1 });
         map.insert("b".to_owned(), Bar { bar: 2 });
-        let data: Arc<Any> = Arc::new(serde_json::to_value(map).unwrap());
+        let data = Context::from_serde(serde_json::to_value(map).unwrap());
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
@@ -781,7 +813,7 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"my len is {{ length . }}"#).is_ok());
-        let data: Arc<Any> = Arc::new(serde_json::to_value(vec![1, 2, 3]).unwrap());
+        let data = Context::from_serde(serde_json::to_value(vec![1, 2, 3]).unwrap());
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "my len is 3");
@@ -789,7 +821,7 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ length . }}"#).is_ok());
-        let data: Arc<Any> = Arc::new(serde_json::to_value("hello".to_owned()).unwrap());
+        let data = Context::from_serde(serde_json::to_value("hello".to_owned()).unwrap());
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "5");
@@ -801,7 +833,7 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if ( 1 | eq . ) -}} 2000 {{- end }}"#).is_ok());
-        let data: Arc<Any> = Arc::new(serde_json::to_value(1).unwrap());
+        let data = Context::from_serde(serde_json::to_value(1).unwrap());
         let out = t.execute(&mut w, data);
         println!("{:?}", out);
         assert!(out.is_ok());
@@ -813,7 +845,7 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if eq . . -}} 2000 {{- end }}"#).is_ok());
-        let data: Arc<Any> = Arc::new(serde_json::to_value(1).unwrap());
+        let data = Context::from_serde(serde_json::to_value(1).unwrap());
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
@@ -824,7 +856,7 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if eq "a" "a" -}} 2000 {{- end }}"#).is_ok());
-        let data: Arc<Any> = Arc::new(serde_json::to_value(1).unwrap());
+        let data = Context::from_serde(serde_json::to_value(1).unwrap());
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
@@ -832,7 +864,7 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if eq "a" "b" -}} 2000 {{- end }}"#).is_ok());
-        let data: Arc<Any> = Arc::new(serde_json::to_value(1).unwrap());
+        let data = Context::from_serde(serde_json::to_value(1).unwrap());
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "");
@@ -840,7 +872,7 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if eq true true -}} 2000 {{- end }}"#).is_ok());
-        let data: Arc<Any> = Arc::new(serde_json::to_value(1).unwrap());
+        let data = Context::from_serde(serde_json::to_value(1).unwrap());
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
@@ -851,7 +883,7 @@ mod tests_mocked {
             t.parse(r#"{{ if eq true false -}} 2000 {{- end }}"#)
                 .is_ok()
         );
-        let data: Arc<Any> = Arc::new(serde_json::to_value(1).unwrap());
+        let data = Context::from_serde(serde_json::to_value(1).unwrap());
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "");
@@ -862,7 +894,7 @@ mod tests_mocked {
             t.parse(r#"{{ if eq 23.42 23.42 -}} 2000 {{- end }}"#)
                 .is_ok()
         );
-        let data: Arc<Any> = Arc::new(serde_json::to_value(1).unwrap());
+        let data = Context::from_serde(serde_json::to_value(1).unwrap());
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
@@ -870,7 +902,7 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if eq 1 . -}} 2000 {{- end }}"#).is_ok());
-        let data: Arc<Any> = Arc::new(1);
+        let data = Context::from_any(Arc::new(1));
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
