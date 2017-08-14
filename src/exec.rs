@@ -132,6 +132,8 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         Ok(())
     }
 
+    // Top level walk function. Steps through the major parts for the template strcuture and
+    // writes to the output.
     fn walk(&mut self, ctx: &Context, node: &'a Nodes) -> Result<(), String> {
         self.node = Some(node);
         match *node {
@@ -140,18 +142,15 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                 if n.pipe.decl.is_empty() {
                     self.print_value(&val)?;
                 }
-                return Ok(());
+                Ok(())
             }
-            Nodes::If(_) | Nodes::With(_) => {
-                return self.walk_if_or_with(node, ctx);
-            }
-            Nodes::Range(ref n) => return self.walk_range(ctx, n),
-            Nodes::List(ref n) => return self.walk_list(ctx, n),
-            Nodes::Text(ref n) => write!(self.writer, "{}", n).map_err(|e| format!("{}", e))?,
-            _ => {}
-            // TODO
+            Nodes::If(_) | Nodes::With(_) => self.walk_if_or_with(node, ctx),
+            Nodes::Range(ref n) => self.walk_range(ctx, n),
+            Nodes::List(ref n) => self.walk_list(ctx, n),
+            Nodes::Text(ref n) => write!(self.writer, "{}", n).map_err(|e| format!("{}", e)),
+            // TODO: Nodes::Template(ref n) =>
+            _ => Err(format!("unknown node: {}", node)),
         }
-        Ok(())
     }
 
     fn eval_pipeline(&mut self, ctx: &Context, node: &'a Nodes) -> Result<Arc<Any>, String> {
@@ -372,6 +371,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         self.eval_field_chain(ctx, val, &variable.ident[1..], args, fin)
     }
 
+    // Walks an `if` or `with` node. They behave the same, except that `wtih` sets dot.
     fn walk_if_or_with(&mut self, node: &'a Nodes, ctx: &Context) -> Result<(), String> {
         let pipe = match *node {
             Nodes::If(ref n) => &n.pipe,
