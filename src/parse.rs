@@ -287,14 +287,11 @@ impl<'a> Parser<'a> {
                 let nns = self.next_non_space();
                 match nns {
                     Some(ref item) if item.typ == ItemType::ItemDefine => {
-                        let parse_name =
-                            self.tree
-                                .as_ref()
-                                .map(|t| t.parse_name.clone())
-                                .ok_or_else(|| self.error_msg(format!("no tree in definition")))?;
-                        self.start_parse("definition".to_owned(), id + 1, parse_name);
-                        self.parse()?;
-                        self.stop_parse()?;
+                        self.parse_definition()?;
+                        t = match self.next() {
+                            None => return self.error(format!("unable to peek for tree {}", id)),
+                            Some(t) => t,
+                        };
                         continue;
                     }
                     _ => {}
@@ -316,7 +313,7 @@ impl<'a> Parser<'a> {
             self.tree
                 .as_mut()
                 .and_then(|tree| {
-                    tree.root.as_mut().and_then(|mut r| match *r {
+                    tree.root.as_mut().and_then(|r| match *r {
                         Nodes::List(ref mut r) => {
                             r.append(node);
                             Some(())
@@ -333,6 +330,24 @@ impl<'a> Parser<'a> {
         }
         self.backup(t);
         Ok(())
+    }
+
+    fn parse_definition(&mut self) -> Result<(), String> {
+        let context = "define clause";
+        let id = self.tree_id;
+        let parse_name = self.name;
+        let token = self.next_non_space_must(context)?;
+        let name = self.parse_template_name(&token, context)?;
+        self.expect(ItemType::ItemRightDelim, "define end")?;
+        self.start_parse(name, id + 1, parse_name);
+        let (list, end) = self.item_list()?;
+        if *end.typ() != NodeType::End {
+            return Err(format!("unexpected {} in {}", end, context));
+        }
+        if let Some(tree) = self.tree.as_mut() {
+            tree.root = Some(Nodes::List(list));
+        }
+        self.stop_parse()
     }
 
     fn item_list(&mut self) -> Result<(ListNode, Nodes), String> {

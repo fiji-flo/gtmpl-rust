@@ -33,7 +33,14 @@ pub struct Context {
     dot: Arc<Any>,
 }
 
+#[derive(Clone, Debug)]
+struct Nothing {}
+
 impl Context {
+    pub fn empty() -> Context {
+        Context { dot: Arc::new(Nothing {}) }
+    }
+
     pub fn from_any(value: Arc<Any>) -> Context {
         Context { dot: value }
     }
@@ -148,9 +155,34 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             Nodes::Range(ref n) => self.walk_range(ctx, n),
             Nodes::List(ref n) => self.walk_list(ctx, n),
             Nodes::Text(ref n) => write!(self.writer, "{}", n).map_err(|e| format!("{}", e)),
-            // TODO: Nodes::Template(ref n) =>
+            Nodes::Template(ref n) => self.walk_template(ctx, n),
             _ => Err(format!("unknown node: {}", node)),
         }
+    }
+
+    fn walk_template(&mut self, ctx: &Context, template: &TemplateNode) -> Result<(), String> {
+        let tree = self.template.tree_set.get(&template.name);
+        if let Some(tree) = tree {
+            if let Some(ref root) = tree.root {
+                let mut vars = VecDeque::new();
+                let mut dot = VecDeque::new();
+                dot.push_back(Variable {
+                    name: "$".to_owned(),
+                    value: ctx.dot.clone(),
+                });
+                vars.push_back(dot);
+                let mut new_state = State {
+                    template: self.template,
+                    writer: self.writer,
+                    node: None,
+                    vars,
+                    depth: self.depth + 1,
+                    dot: ctx.dot.clone(),
+                };
+                return new_state.walk(ctx, root);
+            }
+        }
+        Err(format!("work in progress"))
     }
 
     fn eval_pipeline(&mut self, ctx: &Context, node: &'a Nodes) -> Result<Arc<Any>, String> {
