@@ -2,7 +2,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use serde_json::Value;
+use serde_json::{self, Value};
 
 pub type Func = fn(Vec<Arc<Any>>) -> Result<Arc<Any>, String>;
 enum Funcy {
@@ -31,10 +31,12 @@ macro_rules! equal_as {
     ($typ:ty, $args:ident) => {
         if $args.iter().all(|x| x.is::<$typ>()) {
             let first = $args[0].downcast_ref::<$typ>().unwrap();
-            return Ok(Arc::new($args.iter()
-                                    .skip(1)
-                                    .map(|x| x.downcast_ref::<$typ>().unwrap())
-                                    .all(|x| x == first)));
+            return Ok(Arc::new(serde_json::to_value(
+                $args.iter()
+                    .skip(1)
+                    .map(|x| x.downcast_ref::<$typ>().unwrap())
+                    .all(|x| x == first)
+            ).unwrap()));
         }
     }
 }
@@ -114,7 +116,7 @@ fn length(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
         return Err(format!("unable to call length on the given argument"));
     };
 
-    Ok(Arc::new(len))
+    Ok(Arc::new(serde_json::to_value(len).unwrap()))
 }
 
 fn eq(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
@@ -138,7 +140,7 @@ fn eq(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
             (&Num::Float(l), Num::Int(r)) => l == r as f64,
             (&Num::Float(l), Num::Uint(r)) => l == r as f64,
         });
-        return Ok(Arc::new(equals));
+        return Ok(Arc::new(serde_json::to_value(equals).unwrap()));
     }
     Err(format!("unable to compare arguments"))
 }
@@ -185,16 +187,16 @@ mod tests_mocked {
     fn test_eq() {
         let vals: Vec<Arc<Any>> = vec![Arc::new("foo".to_owned()), Arc::new("foo".to_owned())];
         let ret = eq(vals).unwrap();
-        let ret_ = ret.downcast_ref::<bool>();
-        assert_eq!(ret_, Some(&true));
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::Bool(true)));
         let vals: Vec<Arc<Any>> = vec![Arc::new(1u32), Arc::new(1f32), Arc::new(1i8)];
         let ret = eq(vals).unwrap();
-        let ret_ = ret.downcast_ref::<bool>();
-        assert_eq!(ret_, Some(&true));
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::Bool(true)));
         let vals: Vec<Arc<Any>> = vec![Arc::new(false), Arc::new(false), Arc::new(false)];
         let ret = eq(vals).unwrap();
-        let ret_ = ret.downcast_ref::<bool>();
-        assert_eq!(ret_, Some(&true));
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::Bool(true)));
     }
 
     #[test]
@@ -202,8 +204,8 @@ mod tests_mocked {
         let vals: Vec<Arc<Any>> = vec![Arc::new("foo".to_owned()), Arc::new("foo".to_owned())];
         let builtin_eq = BUILTINS.get("eq").unwrap();
         let ret = builtin_eq(vals).unwrap();
-        let ret_ = ret.downcast_ref::<bool>();
-        assert_eq!(ret_, Some(&true));
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::Bool(true)));
     }
 
     #[test]

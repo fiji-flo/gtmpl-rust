@@ -310,13 +310,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             Nodes::Chain(ref n) => self.eval_chain_node(ctx, n, &vec![], None),
             Nodes::String(ref n) => Ok(Arc::new(n.text.clone())),
             Nodes::Bool(ref n) => Ok(Arc::new(n.val)),
-            Nodes::Number(ref n) => {
-                match n.number_typ {
-                    NumberType::Char | NumberType::U64 => Ok(Arc::new(n.as_u64)),
-                    NumberType::I64 => Ok(Arc::new(n.as_i64)),
-                    NumberType::Float => Ok(Arc::new(n.as_f64)),
-                }
-            }
+            Nodes::Number(ref n) => Ok(n.as_any_arc()),
             _ => Err(format!("cant handle {} as arg", node)),
         }
 
@@ -569,8 +563,6 @@ fn is_true(val: &Arc<Any>) -> (bool, bool) {
             return (!o.is_empty(), true);
         }
     }
-
-
 
     non_zero!(val -> u8, u16, u32, u64, i8, i16, i32, i64, f32, f64);
     (true, true)
