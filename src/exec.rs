@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::io::Write;
 use std::collections::{HashMap, VecDeque};
 
-use funcs::Func;
+use funcs::{Func, is_true};
 use template::Template;
 use node::*;
 
@@ -109,7 +109,7 @@ impl<'a, 'b> Template<'a> {
 
 impl<'a, 'b, T: Write> State<'a, 'b, T> {
     fn set_kth_last_var_value(&mut self, k: usize, value: Arc<Any>) -> Result<(), String> {
-        if let Some(mut last_vars) = self.vars.back_mut() {
+        if let Some(last_vars) = self.vars.back_mut() {
             let i = last_vars.len() - k;
             if let Some(kth_last_var) = last_vars.get_mut(i) {
                 kth_last_var.value = value;
@@ -516,70 +516,10 @@ fn not_a_function(args: &[Nodes], val: Option<Arc<Any>>) -> Result<(), String> {
     Ok(())
 }
 
-
-macro_rules! non_zero {
-    ($val:ident -> $($typ:ty),*) => {
-        $(
-            if let Some(i) = $val.downcast_ref::<$typ>() {
-                return (i != &(0 as $typ), true);
-            }
-          )*
-    }
-}
-
-fn is_true(val: &Arc<Any>) -> (bool, bool) {
-    if let Some(i) = val.downcast_ref::<bool>() {
-        return (*i, true);
-    }
-    if let Some(s) = val.downcast_ref::<String>() {
-        return (!s.is_empty(), true);
-    }
-    if let Some(v) = val.downcast_ref::<Vec<Arc<Any>>>() {
-        return (!v.is_empty(), true);
-    }
-    if let Some(v) = val.downcast_ref::<HashMap<String, Arc<Any>>>() {
-        return (!v.is_empty(), true);
-    }
-    if let Some(v) = val.downcast_ref::<Value>() {
-        if let Some(i) = v.as_i64() {
-            return (i != 0i64, true);
-        }
-        if let Some(i) = v.as_u64() {
-            return (i != 0u64, true);
-        }
-        if let Some(i) = v.as_f64() {
-            return (i != 0f64, true);
-        }
-        if let Some(s) = v.as_str() {
-            return (!s.is_empty(), true);
-        }
-        if let Some(b) = v.as_bool() {
-            return (b, true);
-        }
-        if let Some(a) = v.as_array() {
-            return (!a.is_empty(), true);
-        }
-        if let Some(o) = v.as_object() {
-            return (!o.is_empty(), true);
-        }
-    }
-
-    non_zero!(val -> u8, u16, u32, u64, i8, i16, i32, i64, f32, f64);
-    (true, true)
-}
-
 #[cfg(test)]
 mod tests_mocked {
     use super::*;
     use serde_json;
-
-    #[test]
-    fn test_is_true() {
-        let t: Arc<Any> = Arc::new(1u32);
-        assert_eq!(is_true(&t).0, true);
-        let t: Arc<Any> = Arc::new(0u32);
-        assert_eq!(is_true(&t).0, false);
-    }
 
     #[test]
     fn simple_template() {
