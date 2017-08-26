@@ -6,6 +6,8 @@ use itertools::Itertools;
 use lexer::ItemType;
 use utils::unquote_char;
 
+use serde_json::Value;
+
 macro_rules! nodes {
     ($($node:ident, $name:ident),*) => {
         #[derive(Debug)]
@@ -470,7 +472,8 @@ impl Display for ChainNode {
 
 node!(
     BoolNode {
-        val: bool
+        val: bool,
+        value: Value
     }
 );
 
@@ -481,13 +484,14 @@ impl BoolNode {
             tr,
             pos,
             val,
+            value: Value::from(val),
         }
     }
 }
 
 impl Display for BoolNode {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "{}", self.val)
+        write!(f, "{}", self.value)
     }
 }
 
@@ -508,7 +512,8 @@ node!(
         as_u64: u64,
         as_f64: f64,
         text: String,
-        number_typ: NumberType
+        number_typ: NumberType,
+        value: Value
     }
 );
 
@@ -536,6 +541,7 @@ impl NumberNode {
                             as_f64: (c as i64) as f64,
                             text,
                             number_typ: NumberType::Char,
+                            value: Value::from(c as u64),
                         })
                     })
                     .ok_or(Error)
@@ -596,6 +602,14 @@ impl NumberNode {
                 if !is_u64 && !is_i64 && !is_f64 {
                     return Err(Error);
                 }
+
+                let value = if is_u64 {
+                    Value::from(as_u64)
+                } else if is_i64 {
+                    Value::from(as_i64)
+                } else {
+                    Value::from(as_f64)
+                };
                 Ok(NumberNode {
                     typ: NodeType::Number,
                     tr,
@@ -608,6 +622,7 @@ impl NumberNode {
                     as_f64,
                     text,
                     number_typ,
+                    value,
                 })
             }
         }
@@ -631,7 +646,8 @@ impl Display for NumberNode {
 node!(
     StringNode {
         quoted: String,
-        text: String
+        text: String,
+        value: Value
     }
 );
 
@@ -642,7 +658,8 @@ impl StringNode {
             tr,
             pos,
             quoted: orig,
-            text,
+            text: text.clone(),
+            value: Value::from(text),
         }
     }
 }

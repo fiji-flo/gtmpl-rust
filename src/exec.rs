@@ -308,9 +308,9 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             Nodes::Pipe(ref n) => self.eval_pipeline_raw(ctx, n),
             // Nodes::Identifier
             Nodes::Chain(ref n) => self.eval_chain_node(ctx, n, &vec![], None),
-            Nodes::String(ref n) => Ok(Arc::new(n.text.clone())),
-            Nodes::Bool(ref n) => Ok(Arc::new(n.val)),
-            Nodes::Number(ref n) => Ok(n.as_any_arc()),
+            Nodes::String(ref n) => Ok(Arc::new(n.value.clone())),
+            Nodes::Bool(ref n) => Ok(Arc::new(n.value.clone())),
+            Nodes::Number(ref n) => Ok(Arc::new(n.value.clone())),
             _ => Err(format!("cant handle {} as arg", node)),
         }
 
@@ -866,7 +866,7 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if eq 1 . -}} 2000 {{- end }}"#).is_ok());
-        let data = Context::from_any(Arc::new(1));
+        let data = Context::from_serde(Value::from(1));
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
