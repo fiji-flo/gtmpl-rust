@@ -7,7 +7,7 @@
 //! let mut template = Template::new("shiny_template");
 //! template.parse("Finally! Some {{ . }} for Rust").unwrap();
 //!
-//! let context = Context::from_str("gtmpl").unwrap();
+//! let context = Context::from("gtmpl").unwrap();
 //!
 //! let output = template.render(context);
 //! assert_eq!(output.unwrap(), "Finally! Some gtmpl for Rust".to_string());
@@ -16,6 +16,7 @@
 #[macro_use]
 extern crate lazy_static;
 extern crate itertools;
+extern crate serde;
 extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;

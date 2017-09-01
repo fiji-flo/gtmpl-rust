@@ -96,6 +96,18 @@ enum Num {
     Float(f64),
 }
 
+fn or(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
+    for arg in &args {
+        if is_true(&arg).0 {
+            return Ok(arg.clone());
+        }
+    }
+    args.into_iter().last().ok_or_else(
+        || format!("and needs at least one argument"),
+    )
+}
+
+
 fn and(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     for arg in &args {
         if !is_true(&arg).0 {
