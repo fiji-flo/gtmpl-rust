@@ -23,6 +23,8 @@ lazy_static! {
         let mut m = HashMap::new();
         m.insert("eq".to_owned(), eq as Func);
         m.insert("length".to_owned(), length as Func);
+        m.insert("and".to_owned(), length as Func);
+        m.insert("or".to_owned(), length as Func);
         m
     };
 }
@@ -285,6 +287,20 @@ mod tests_mocked {
         let ret_ = ret.downcast_ref::<u8>();
         assert_eq!(ret_, Some(&2u8));
     }
+
+    #[test]
+    fn test_or() {
+        let vals: Vec<Arc<Any>> = vec![Arc::new(0i32), Arc::new(1u8)];
+        let ret = or(vals).unwrap();
+        let ret_ = ret.downcast_ref::<u8>();
+        assert_eq!(ret_, Some(&1u8));
+
+        let vals: Vec<Arc<Any>> = vec![Arc::new(0i32), Arc::new(0u8)];
+        let ret = or(vals).unwrap();
+        let ret_ = ret.downcast_ref::<u8>();
+        assert_eq!(ret_, Some(&0u8));
+    }
+
 
     #[test]
     fn test_builtins() {
