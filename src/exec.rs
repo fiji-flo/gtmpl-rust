@@ -277,6 +277,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             let val = self.eval_arg(ctx, arg)?;
             arg_vals.push(val);
         }
+        fin.map(|f| arg_vals.push(f.clone()));
 
         function(arg_vals)
     }
@@ -791,14 +792,12 @@ mod tests_mocked {
     }
 
     #[test]
-    #[ignore]
     fn test_pipeline_function() {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if ( 1 | eq . ) -}} 2000 {{- end }}"#).is_ok());
         let data = Context::from(1).unwrap();
         let out = t.execute(&mut w, data);
-        println!("{:?}", out);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
     }
