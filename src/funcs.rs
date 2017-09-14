@@ -126,9 +126,7 @@ fn length(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
         return Err(format!("length requires exactly 1 arugment"));
     }
     let arg = &args[0];
-    let len = if let Some(x) = arg.downcast_ref::<String>() {
-        x.len()
-    } else if let Some(x) = arg.downcast_ref::<Value>() {
+    let len = if let Some(x) = arg.downcast_ref::<Value>() {
         match *x {
             Value::String(ref s) => s.len(),
             Value::Array(ref a) => a.len(),
@@ -148,83 +146,12 @@ fn eq(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     if args.len() < 2 {
         return Err(format!("eq requires at least 2 arugments"));
     }
-    equal_as!(String, args);
-    equal_as!(bool, args);
     equal_as!(Value, args);
-    let first = to_num(&args[0]);
-    if first != Num::None {
-        let equals = args.iter().skip(1).all(|val| match (&first, to_num(val)) {
-            (&Num::None, _) | (_, Num::None) => false,
-            (&Num::Uint(l), Num::Uint(r)) => l == r,
-            (&Num::Int(l), Num::Int(r)) => l == r,
-            (&Num::Uint(l), Num::Int(r)) => l as i64 == r,
-            (&Num::Int(l), Num::Uint(r)) => l == r as i64,
-            (&Num::Float(l), Num::Float(r)) => l == r,
-            (&Num::Int(l), Num::Float(r)) => l as f64 == r,
-            (&Num::Uint(l), Num::Float(r)) => l as f64 == r,
-            (&Num::Float(l), Num::Int(r)) => l == r as f64,
-            (&Num::Float(l), Num::Uint(r)) => l == r as f64,
-        });
-        return Ok(Arc::new(serde_json::to_value(equals).unwrap()));
-    }
     Err(format!("unable to compare arguments"))
 }
 
-fn to_num(val: &Arc<Any>) -> Num {
-    if let Some(i) = val.downcast_ref::<u64>() {
-        return Num::Uint(*i);
-    }
-    if let Some(i) = val.downcast_ref::<u32>() {
-        return Num::Uint(*i as u64);
-    }
-    if let Some(i) = val.downcast_ref::<u16>() {
-        return Num::Uint(*i as u64);
-    }
-    if let Some(i) = val.downcast_ref::<u8>() {
-        return Num::Uint(*i as u64);
-    }
-    if let Some(i) = val.downcast_ref::<i64>() {
-        return Num::Int(*i);
-    }
-    if let Some(i) = val.downcast_ref::<i32>() {
-        return Num::Int(*i as i64);
-    }
-    if let Some(i) = val.downcast_ref::<i16>() {
-        return Num::Int(*i as i64);
-    }
-    if let Some(i) = val.downcast_ref::<i8>() {
-        return Num::Int(*i as i64);
-    }
-    if let Some(f) = val.downcast_ref::<f64>() {
-        return Num::Float(*f);
-    }
-    if let Some(f) = val.downcast_ref::<f32>() {
-        return Num::Float(*f as f64);
-    }
-    Num::None
-}
-
-macro_rules! non_zero {
-    ($val:ident -> $($typ:ty),*) => {
-        $(
-            if let Some(i) = $val.downcast_ref::<$typ>() {
-                return (i != &(0 as $typ), true);
-            }
-        )*
-    }
-}
-
 pub fn is_true(val: &Arc<Any>) -> (bool, bool) {
-    if let Some(i) = val.downcast_ref::<bool>() {
-        return (*i, true);
-    }
-    if let Some(s) = val.downcast_ref::<String>() {
-        return (!s.is_empty(), true);
-    }
     if let Some(v) = val.downcast_ref::<Vec<Arc<Any>>>() {
-        return (!v.is_empty(), true);
-    }
-    if let Some(v) = val.downcast_ref::<HashMap<String, Arc<Any>>>() {
         return (!v.is_empty(), true);
     }
     if let Some(v) = val.downcast_ref::<Value>() {
@@ -251,7 +178,6 @@ pub fn is_true(val: &Arc<Any>) -> (bool, bool) {
         }
     }
 
-    non_zero!(val -> u8, u16, u32, u64, i8, i16, i32, i64, f32, f64);
     (true, true)
 }
 
@@ -259,17 +185,21 @@ pub fn is_true(val: &Arc<Any>) -> (bool, bool) {
 mod tests_mocked {
     use super::*;
 
+    macro_rules! varc(
+        ($x:expr) => { Arc::new(Value::from($x)) }
+    );
+
     #[test]
     fn test_eq() {
-        let vals: Vec<Arc<Any>> = vec![Arc::new("foo".to_owned()), Arc::new("foo".to_owned())];
+        let vals: Vec<Arc<Any>> = vec![varc!("foo".to_owned()), varc!("foo".to_owned())];
         let ret = eq(vals).unwrap();
         let ret_ = ret.downcast_ref::<Value>();
         assert_eq!(ret_, Some(&Value::Bool(true)));
-        let vals: Vec<Arc<Any>> = vec![Arc::new(1u32), Arc::new(1f32), Arc::new(1i8)];
+        let vals: Vec<Arc<Any>> = vec![varc!(1u32), varc!(1u32), varc!(1i8)];
         let ret = eq(vals).unwrap();
         let ret_ = ret.downcast_ref::<Value>();
         assert_eq!(ret_, Some(&Value::Bool(true)));
-        let vals: Vec<Arc<Any>> = vec![Arc::new(false), Arc::new(false), Arc::new(false)];
+        let vals: Vec<Arc<Any>> = vec![varc!(false), varc!(false), varc!(false)];
         let ret = eq(vals).unwrap();
         let ret_ = ret.downcast_ref::<Value>();
         assert_eq!(ret_, Some(&Value::Bool(true)));
@@ -277,34 +207,34 @@ mod tests_mocked {
 
     #[test]
     fn test_and() {
-        let vals: Vec<Arc<Any>> = vec![Arc::new(0i32), Arc::new(1u8)];
+        let vals: Vec<Arc<Any>> = vec![varc!(0i32), varc!(1u8)];
         let ret = and(vals).unwrap();
-        let ret_ = ret.downcast_ref::<i32>();
-        assert_eq!(ret_, Some(&0i32));
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(0i32)));
 
-        let vals: Vec<Arc<Any>> = vec![Arc::new(1i32), Arc::new(2u8)];
+        let vals: Vec<Arc<Any>> = vec![varc!(1i32), varc!(2u8)];
         let ret = and(vals).unwrap();
-        let ret_ = ret.downcast_ref::<u8>();
-        assert_eq!(ret_, Some(&2u8));
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(2u8)));
     }
 
     #[test]
     fn test_or() {
-        let vals: Vec<Arc<Any>> = vec![Arc::new(0i32), Arc::new(1u8)];
+        let vals: Vec<Arc<Any>> = vec![varc!(0i32), varc!(1u8)];
         let ret = or(vals).unwrap();
-        let ret_ = ret.downcast_ref::<u8>();
-        assert_eq!(ret_, Some(&1u8));
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(1u8)));
 
-        let vals: Vec<Arc<Any>> = vec![Arc::new(0i32), Arc::new(0u8)];
+        let vals: Vec<Arc<Any>> = vec![varc!(0i32), varc!(0u8)];
         let ret = or(vals).unwrap();
-        let ret_ = ret.downcast_ref::<u8>();
-        assert_eq!(ret_, Some(&0u8));
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(0u8)));
     }
 
 
     #[test]
     fn test_builtins() {
-        let vals: Vec<Arc<Any>> = vec![Arc::new("foo".to_owned()), Arc::new("foo".to_owned())];
+        let vals: Vec<Arc<Any>> = vec![varc!("foo".to_owned()), varc!("foo".to_owned())];
         let builtin_eq = BUILTINS.get("eq").unwrap();
         let ret = builtin_eq(vals).unwrap();
         let ret_ = ret.downcast_ref::<Value>();
@@ -316,14 +246,14 @@ mod tests_mocked {
         let vals: Vec<Arc<Any>> = vec![Arc::new(1i32), Arc::new(2i32)];
         let ret = ADD.0(vals).unwrap();
         let ret_ = ret.downcast_ref::<i32>();
-        assert_eq!(ret_, Some(&3));
+        assert_eq!(ret_, Some(&3i32));
     }
 
     #[test]
     fn test_is_true() {
-        let t: Arc<Any> = Arc::new(1u32);
+        let t: Arc<Any> = varc!(1u32);
         assert_eq!(is_true(&t).0, true);
-        let t: Arc<Any> = Arc::new(0u32);
+        let t: Arc<Any> = varc!(0u32);
         assert_eq!(is_true(&t).0, false);
     }
 

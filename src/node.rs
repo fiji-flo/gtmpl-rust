@@ -472,8 +472,7 @@ impl Display for ChainNode {
 
 node!(
     BoolNode {
-        val: bool,
-        value: Value
+        value: Arc<Value>
     }
 );
 
@@ -483,8 +482,7 @@ impl BoolNode {
             typ: NodeType::Bool,
             tr,
             pos,
-            val,
-            value: Value::from(val),
+            value: Arc::new(Value::from(val)),
         }
     }
 }
@@ -508,12 +506,9 @@ node!(
         is_i64: bool,
         is_u64: bool,
         is_f64: bool,
-        as_i64: i64,
-        as_u64: u64,
-        as_f64: f64,
         text: String,
         number_typ: NumberType,
-        value: Value
+        value: Arc<Value>
     }
 );
 
@@ -536,12 +531,9 @@ impl NumberNode {
                             is_i64: true,
                             is_u64: true,
                             is_f64: true,
-                            as_i64: c as i64,
-                            as_u64: c as u64,
-                            as_f64: (c as i64) as f64,
                             text,
                             number_typ: NumberType::Char,
-                            value: Value::from(c as u64),
+                            value: Arc::new(Value::from(c as u64)),
                         })
                     })
                     .ok_or(Error)
@@ -617,22 +609,11 @@ impl NumberNode {
                     is_i64,
                     is_u64,
                     is_f64,
-                    as_i64,
-                    as_u64,
-                    as_f64,
                     text,
                     number_typ,
-                    value,
+                    value: Arc::new(value),
                 })
             }
-        }
-    }
-
-    pub fn as_any_arc(&self) -> Arc<Any> {
-        match self.number_typ {
-            NumberType::Char | NumberType::U64 => Arc::new(self.as_u64),
-            NumberType::I64 => Arc::new(self.as_i64),
-            NumberType::Float => Arc::new(self.as_f64),
         }
     }
 }
@@ -646,8 +627,7 @@ impl Display for NumberNode {
 node!(
     StringNode {
         quoted: String,
-        text: String,
-        value: Value
+        value: Arc<Value>
     }
 );
 
@@ -658,8 +638,7 @@ impl StringNode {
             tr,
             pos,
             quoted: orig,
-            text: text.clone(),
-            value: Value::from(text),
+            value: Arc::new(Value::from(text)),
         }
     }
 }

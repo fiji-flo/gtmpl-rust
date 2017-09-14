@@ -938,7 +938,7 @@ mod tests_mocked {
         let t = t.unwrap();
         assert_eq!(t.typ(), &NodeType::Bool);
         if let Nodes::Bool(n) = t {
-            assert_eq!(n.val, true);
+            assert_eq!(n.value.as_bool(), Some(true));
         } else {
             assert!(false);
         }
@@ -954,7 +954,7 @@ mod tests_mocked {
         assert_eq!(t.typ(), &NodeType::Bool);
         assert_eq!(t.typ(), &NodeType::Bool);
         if let Nodes::Bool(n) = t {
-            assert_eq!(n.val, false);
+            assert_eq!(n.value.as_bool(), Some(false));
         } else {
             assert!(false);
         }

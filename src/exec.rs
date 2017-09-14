@@ -236,9 +236,9 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         }
         not_a_function(&cmd.args, val)?;
         match *first_word {
-            &Nodes::Bool(ref n) => return Ok(Arc::new(n.val)),
+            &Nodes::Bool(ref n) => return Ok(n.value.clone()),
             &Nodes::Dot(_) => return Ok(ctx.dot.clone()),
-            &Nodes::Number(ref n) => return Ok(n.as_any_arc()),
+            &Nodes::Number(ref n) => return Ok(n.value.clone()),
             _ => {}
         }
 
@@ -307,9 +307,9 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             Nodes::Pipe(ref n) => self.eval_pipeline_raw(ctx, n),
             // Nodes::Identifier
             Nodes::Chain(ref n) => self.eval_chain_node(ctx, n, &vec![], None),
-            Nodes::String(ref n) => Ok(Arc::new(n.value.clone())),
-            Nodes::Bool(ref n) => Ok(Arc::new(n.value.clone())),
-            Nodes::Number(ref n) => Ok(Arc::new(n.value.clone())),
+            Nodes::String(ref n) => Ok(n.value.clone()),
+            Nodes::Bool(ref n) => Ok(n.value.clone()),
+            Nodes::Number(ref n) => Ok(n.value.clone()),
             _ => Err(format!("cant handle {} as arg", node)),
         }
 
@@ -522,7 +522,7 @@ mod tests_mocked {
 
     #[test]
     fn simple_template() {
-        let data = Context::from_any(Arc::new(1));
+        let data = Context::from(1).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if false }} 2000 {{ end }}"#).is_ok());
@@ -530,7 +530,7 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "");
 
-        let data = Context::from_any(Arc::new(1));
+        let data = Context::from(1).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if true }} 2000 {{ end }}"#).is_ok());
@@ -538,7 +538,7 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), " 2000 ");
 
-        let data = Context::from_any(Arc::new(1));
+        let data = Context::from(1).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{ if true -}} 2000 {{- end }}"#).is_ok());
@@ -546,7 +546,7 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
-        let data = Context::from_any(Arc::new(1));
+        let data = Context::from(1).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
@@ -560,7 +560,7 @@ mod tests_mocked {
 
     #[test]
     fn test_dot() {
-        let data = Context::from_any(Arc::new(1));
+        let data = Context::from(1).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
@@ -571,7 +571,7 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
-        let data = Context::from_any(Arc::new(false));
+        let data = Context::from(false).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(
@@ -585,7 +585,7 @@ mod tests_mocked {
 
     #[test]
     fn test_sub() {
-        let data = Context::from_any(Arc::new(1u8));
+        let data = Context::from(1u8).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
         assert!(t.parse(r#"{{.}}"#).is_ok());
