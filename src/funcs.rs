@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::collections::HashMap;
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 use serde_json::{self, Value};
@@ -22,9 +23,14 @@ lazy_static! {
     pub static ref BUILTINS: HashMap<String, Func> = {
         let mut m = HashMap::new();
         m.insert("eq".to_owned(), eq as Func);
+        m.insert("ne".to_owned(), ne as Func);
+        m.insert("lt".to_owned(), lt as Func);
+        m.insert("le".to_owned(), le as Func);
+        m.insert("gt".to_owned(), gt as Func);
+        m.insert("ge".to_owned(), ge as Func);
         m.insert("length".to_owned(), length as Func);
-        m.insert("and".to_owned(), length as Func);
-        m.insert("or".to_owned(), length as Func);
+        m.insert("and".to_owned(), and as Func);
+        m.insert("or".to_owned(), or as Func);
         m
     };
 }
@@ -43,23 +49,8 @@ macro_rules! equal_as {
     }
 }
 
-macro_rules! gfn {
-    ($name:ident($($arg:ident : $typ:ty),*) -> ($($out:ty),*) { $($body:tt)* }) => {
-        fn $name($($arg : $typ,)*) -> ($($out),*) {
-            $($body)*
-        }
-    }
-}
-
-macro_rules! count_exprs {
-    () => (0);
-    ($head:ty $(, $tail:ty)*) => (1 + count_exprs!($($tail),*));
-}
-
-
 macro_rules! gn {
     (
-        $gname:ident :
         $name:ident($($arg:ident : ref $typ:ty),*) ->
             $otyp:ty
         { $($body:tt)* }
@@ -68,27 +59,18 @@ macro_rules! gn {
             $(let x = args.remove(0);
               let $arg = x.downcast_ref::<$typ>()
               .ok_or_else(|| format!("unable to downcast"))?;)*
-            fn inner($($arg : &$typ,)*) -> $otyp {
+            fn inner($($arg : &$typ,)*) -> Result<$otyp, String> {
                 $($body)*
             }
-            Ok(Arc::new(inner($($arg,)*)))
+            Ok(Arc::new(inner($($arg,)*)?))
         }
-        static $gname: (Func, i32) = (
-            $name,
-            count_exprs!($($arg),*),
-        );
     }
 }
 
-gn!(ADD: add(a: ref i32, b: ref i32) -> i32 {
-    a + b
+gn!(add(a: ref i32, b: ref i32) -> i32 {
+    Ok(a + b)
 });
 
-// Thanks to: https://danielkeep.github.io/quick-intro-to-macros.html
-gfn!(foo(a: usize, b: String) -> (i32, usize) {
-    println!("{} {}", a, b);
-    (0, 0)
-});
 
 #[derive(PartialEq)]
 enum Num {
@@ -150,6 +132,47 @@ fn eq(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     Err(format!("unable to compare arguments"))
 }
 
+gn!(ne(a: ref Value, b: ref Value) -> Value {
+    Ok(Value::from(a != b))
+});
+
+gn!(lt(a: ref Value, b: ref Value) -> Value {
+    let ret = match cmp(a, b) {
+        None => return Err(format!("unable to compare {} and {}", a, b)),
+        Some(Ordering::Less) => true,
+        _ => false,
+    };
+    Ok(Value::from(ret))
+});
+
+gn!(le(a: ref Value, b: ref Value) -> Value {
+    let ret = match cmp(a, b) {
+        None => return Err(format!("unable to compare {} and {}", a, b)),
+        Some(Ordering::Less) | Some(Ordering::Equal) => true,
+        _ => false,
+    };
+    Ok(Value::from(ret))
+});
+
+
+gn!(gt(a: ref Value, b: ref Value) -> Value {
+    let ret = match cmp(a, b) {
+        None => return Err(format!("unable to compare {} and {}", a, b)),
+        Some(Ordering::Greater) => true,
+        _ => false,
+    };
+    Ok(Value::from(ret))
+});
+
+gn!(ge(a: ref Value, b: ref Value) -> Value {
+    let ret = match cmp(a, b) {
+        None => return Err(format!("unable to compare {} and {}", a, b)),
+        Some(Ordering::Greater) | Some(Ordering::Equal) => true,
+        _ => false,
+    };
+    Ok(Value::from(ret))
+});
+
 pub fn is_true(val: &Arc<Any>) -> (bool, bool) {
     if let Some(v) = val.downcast_ref::<Vec<Arc<Any>>>() {
         return (!v.is_empty(), true);
@@ -180,6 +203,22 @@ pub fn is_true(val: &Arc<Any>) -> (bool, bool) {
 
     (true, true)
 }
+
+fn cmp(left: &Value, right: &Value) -> Option<Ordering> {
+    if let (&Value::Number(ref l), &Value::Number(ref r)) = (left, right) {
+        if let (Some(li), Some(ri)) = (l.as_i64(), r.as_i64()) {
+            return li.partial_cmp(&ri);
+        }
+        if let (Some(lu), Some(ru)) = (l.as_u64(), r.as_u64()) {
+            return lu.partial_cmp(&ru);
+        }
+        if let (Some(lf), Some(rf)) = (l.as_f64(), r.as_f64()) {
+            return lf.partial_cmp(&rf);
+        }
+    }
+    None
+}
+
 
 #[cfg(test)]
 mod tests_mocked {
@@ -231,6 +270,100 @@ mod tests_mocked {
         assert_eq!(ret_, Some(&Value::from(0u8)));
     }
 
+    #[test]
+    fn test_ne() {
+        let vals: Vec<Arc<Any>> = vec![varc!(0i32), varc!(1u8)];
+        let ret = ne(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(true)));
+
+        let vals: Vec<Arc<Any>> = vec![varc!(0i32), varc!(0u8)];
+        let ret = ne(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(false)));
+
+        let vals: Vec<Arc<Any>> = vec![varc!("foo"), varc!("bar")];
+        let ret = ne(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(true)));
+
+        let vals: Vec<Arc<Any>> = vec![varc!("foo"), varc!("foo")];
+        let ret = ne(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(false)));
+    }
+
+    #[test]
+    fn test_lt() {
+        let vals: Vec<Arc<Any>> = vec![varc!(-1i32), varc!(1u8)];
+        let ret = lt(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(true)));
+
+        let vals: Vec<Arc<Any>> = vec![varc!(0i32), varc!(0u8)];
+        let ret = lt(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(false)));
+
+        let vals: Vec<Arc<Any>> = vec![varc!(1i32), varc!(0u8)];
+        let ret = lt(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(false)));
+    }
+
+    #[test]
+    fn test_le() {
+        let vals: Vec<Arc<Any>> = vec![varc!(-1i32), varc!(1u8)];
+        let ret = le(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(true)));
+
+        let vals: Vec<Arc<Any>> = vec![varc!(0i32), varc!(0u8)];
+        let ret = le(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(true)));
+
+        let vals: Vec<Arc<Any>> = vec![varc!(1i32), varc!(0u8)];
+        let ret = le(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(false)));
+    }
+
+    #[test]
+    fn test_gt() {
+        let vals: Vec<Arc<Any>> = vec![varc!(-1i32), varc!(1u8)];
+        let ret = gt(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(false)));
+
+        let vals: Vec<Arc<Any>> = vec![varc!(0i32), varc!(0u8)];
+        let ret = gt(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(false)));
+
+        let vals: Vec<Arc<Any>> = vec![varc!(1i32), varc!(0u8)];
+        let ret = gt(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(true)));
+    }
+
+    #[test]
+    fn test_ge() {
+        let vals: Vec<Arc<Any>> = vec![varc!(-1i32), varc!(1u8)];
+        let ret = ge(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(false)));
+
+        let vals: Vec<Arc<Any>> = vec![varc!(0i32), varc!(0u8)];
+        let ret = ge(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(true)));
+
+        let vals: Vec<Arc<Any>> = vec![varc!(1i32), varc!(0u8)];
+        let ret = ge(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(true)));
+    }
 
     #[test]
     fn test_builtins() {
@@ -244,7 +377,7 @@ mod tests_mocked {
     #[test]
     fn test_add() {
         let vals: Vec<Arc<Any>> = vec![Arc::new(1i32), Arc::new(2i32)];
-        let ret = ADD.0(vals).unwrap();
+        let ret = add(vals).unwrap();
         let ret_ = ret.downcast_ref::<i32>();
         assert_eq!(ret_, Some(&3i32));
     }

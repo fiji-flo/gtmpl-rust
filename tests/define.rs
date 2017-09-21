@@ -13,7 +13,6 @@ fn simple_define() {
     let context = Context::empty();
 
     let output = template.render(context);
-    println!("{:?}", output);
     assert!(output.is_ok());
     assert_eq!(output.unwrap(), "there is some template".to_string());
 }
