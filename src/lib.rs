@@ -2,15 +2,10 @@
 //!
 //! ## Example
 //! ```rust
-//! use gtmpl::{Context, Template};
+//! use gtmpl;
 //!
-//! let mut template = Template::new("shiny_template");
-//! template.parse("Finally! Some {{ . }} for Rust").unwrap();
-//!
-//! let context = Context::from("gtmpl").unwrap();
-//!
-//! let output = template.render(context);
-//! assert_eq!(output.unwrap(), "Finally! Some gtmpl for Rust".to_string());
+//! let output = gtmpl::template("Finally! Some {{ . }} for Rust", "gtmpl");
+//! assert_eq!(&output.unwrap(), "Finally! Some gtmpl for Rust");
 //! ```
 #![allow(dead_code)]
 #[macro_use]
@@ -31,3 +26,11 @@ mod utils;
 pub use template::Template;
 
 pub use exec::Context;
+
+use serde::Serialize;
+
+pub fn template<T: Serialize>(template_str: &str, context: T) -> Result<String, String> {
+    let mut tmpl = Template::new("");
+    tmpl.parse(template_str)?;
+    tmpl.render(Context::from(context)?)
+}

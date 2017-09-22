@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use serde_json::{self, Value};
 
+/// Function type that is used to implement builtin and custom functions.
 pub type Func = fn(Vec<Arc<Any>>) -> Result<Arc<Any>, String>;
 enum Funcy {
     Base {
@@ -124,18 +125,36 @@ fn length(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     Ok(Arc::new(serde_json::to_value(len).unwrap()))
 }
 
+/// # Example
+/// ```
+/// use gtmpl::template;
+/// let equal = template("{{ eq 1 1 . }}", 1);
+/// assert_eq!(&equal.unwrap(), "true");
+/// ```
 fn eq(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     if args.len() < 2 {
-        return Err(format!("eq requires at least 2 arugments"));
+        return Err(format!("eq requires at least 2 arguments"));
     }
     equal_as!(Value, args);
     Err(format!("unable to compare arguments"))
 }
 
+/// # Example
+/// ```
+/// use gtmpl::template;
+/// let not_equal = template("{{ ne 2 . }}", 1);
+/// assert_eq!(&equal.unwrap(), "true");
+/// ```
 gn!(ne(a: ref Value, b: ref Value) -> Value {
     Ok(Value::from(a != b))
 });
 
+/// # Example
+/// ```
+/// use gtmpl::template;
+/// let less_than = template("{{ lt 0 . }}", 1);
+/// assert_eq!(&equal.unwrap(), "true");
+/// ```
 gn!(lt(a: ref Value, b: ref Value) -> Value {
     let ret = match cmp(a, b) {
         None => return Err(format!("unable to compare {} and {}", a, b)),
@@ -145,6 +164,15 @@ gn!(lt(a: ref Value, b: ref Value) -> Value {
     Ok(Value::from(ret))
 });
 
+/// # Example
+/// ```
+/// use gtmpl::template;
+/// let less_or_equal = template("{{ le 1.4 . }}", 1.4);
+/// assert_eq!(&equal.unwrap(), "true");
+///
+/// let less_or_equal = template("{{ le 0.2 . }}", 1.4);
+/// assert_eq!(&equal.unwrap(), "true");
+/// ```
 gn!(le(a: ref Value, b: ref Value) -> Value {
     let ret = match cmp(a, b) {
         None => return Err(format!("unable to compare {} and {}", a, b)),
