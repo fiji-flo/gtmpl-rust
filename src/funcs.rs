@@ -52,11 +52,13 @@ macro_rules! equal_as {
 
 macro_rules! gn {
     (
+        $(#[$outer:meta])*
         $name:ident($($arg:ident : ref $typ:ty),*) ->
             $otyp:ty
         { $($body:tt)* }
     ) => {
-        fn $name(mut args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
+        $(#[$outer])*
+        pub fn $name(mut args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
             $(let x = args.remove(0);
               let $arg = x.downcast_ref::<$typ>()
               .ok_or_else(|| format!("unable to downcast"))?;)*
@@ -125,13 +127,15 @@ fn length(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     Ok(Arc::new(serde_json::to_value(len).unwrap()))
 }
 
-/// # Example
-/// ```
-/// use gtmpl::template;
-/// let equal = template("{{ eq 1 1 . }}", 1);
-/// assert_eq!(&equal.unwrap(), "true");
-/// ```
-fn eq(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
+#[doc = "
+# Example
+```
+use gtmpl::template;
+let equal = template(\"{{ eq 1 1 . }}\", 1);
+assert_eq!(&equal.unwrap(), \"true\");
+```
+"]
+pub fn eq(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     if args.len() < 2 {
         return Err(format!("eq requires at least 2 arguments"));
     }
@@ -139,23 +143,29 @@ fn eq(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     Err(format!("unable to compare arguments"))
 }
 
-/// # Example
-/// ```
-/// use gtmpl::template;
-/// let not_equal = template("{{ ne 2 . }}", 1);
-/// assert_eq!(&equal.unwrap(), "true");
-/// ```
-gn!(ne(a: ref Value, b: ref Value) -> Value {
+gn!(
+#[doc="
+# Example
+```
+use gtmpl::template;
+let not_equal = template(\"{{ ne 2 . }}\", 1);
+assert_eq!(&not_equal.unwrap(), \"true\");
+```
+"]
+ne(a: ref Value, b: ref Value) -> Value {
     Ok(Value::from(a != b))
 });
 
-/// # Example
-/// ```
-/// use gtmpl::template;
-/// let less_than = template("{{ lt 0 . }}", 1);
-/// assert_eq!(&equal.unwrap(), "true");
-/// ```
-gn!(lt(a: ref Value, b: ref Value) -> Value {
+gn!(
+#[doc="
+# Example
+```
+use gtmpl::template;
+let less_than = template(\"{{ lt 0 . }}\", 1);
+assert_eq!(&less_than.unwrap(), \"true\");
+```
+"]
+lt(a: ref Value, b: ref Value) -> Value {
     let ret = match cmp(a, b) {
         None => return Err(format!("unable to compare {} and {}", a, b)),
         Some(Ordering::Less) => true,
@@ -164,16 +174,19 @@ gn!(lt(a: ref Value, b: ref Value) -> Value {
     Ok(Value::from(ret))
 });
 
-/// # Example
-/// ```
-/// use gtmpl::template;
-/// let less_or_equal = template("{{ le 1.4 . }}", 1.4);
-/// assert_eq!(&equal.unwrap(), "true");
-///
-/// let less_or_equal = template("{{ le 0.2 . }}", 1.4);
-/// assert_eq!(&equal.unwrap(), "true");
-/// ```
-gn!(le(a: ref Value, b: ref Value) -> Value {
+gn!(
+#[doc="
+# Example
+```
+use gtmpl::template;
+let less_or_equal = template(\"{{ le 1.4 . }}\", 1.4);
+assert_eq!(less_or_equal.unwrap(), \"true\");
+
+let less_or_equal = template(\"{{ le 0.2 . }}\", 1.4);
+assert_eq!(&less_or_equal.unwrap(), \"true\");
+```
+"]
+le(a: ref Value, b: ref Value) -> Value {
     let ret = match cmp(a, b) {
         None => return Err(format!("unable to compare {} and {}", a, b)),
         Some(Ordering::Less) | Some(Ordering::Equal) => true,
