@@ -228,7 +228,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
 
         match *first_word {
             &Nodes::Field(ref n) => return self.eval_field_node(ctx, n, &cmd.args, val),
-            &Nodes::Variable(ref n) => return self.eval_variable_node(ctx, n, &cmd.args, val),
+            &Nodes::Variable(ref n) => return self.eval_variable_node(n, &cmd.args, val),
             &Nodes::Pipe(ref n) => return self.eval_pipeline_raw(ctx, n),
             &Nodes::Chain(ref n) => return self.eval_chain_node(ctx, n, &cmd.args, val),
             &Nodes::Identifier(ref n) => return self.eval_function(ctx, n, &cmd.args, val),
@@ -261,14 +261,13 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             .find(|map| map.contains_key(name))
             .and_then(|map| map.get(name))
             .ok_or_else(|| format!("{} is not a defined function", name))?;
-        self.eval_call(ctx, function, &name, args, fin)
+        self.eval_call(ctx, function, args, fin)
     }
 
     fn eval_call(
         &mut self,
         ctx: &Context,
         function: &Func,
-        name: &str,
         args: &[Nodes],
         fin: Option<Arc<Any>>,
     ) -> Result<Arc<Any>, String> {
@@ -296,7 +295,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             return Err(format!("inderection throug explicit nul in {}", chain));
         }
         let pipe = self.eval_arg(ctx, &*chain.node)?;
-        self.eval_field_chain(ctx, pipe, &chain.field, args, fin)
+        self.eval_field_chain(pipe, &chain.field, args, fin)
     }
 
     fn eval_arg(&mut self, ctx: &Context, node: &Nodes) -> Result<Arc<Any>, String> {
@@ -304,7 +303,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             Nodes::Dot(_) => Ok(ctx.dot.clone()),
             //Nodes::Nil
             Nodes::Field(ref n) => self.eval_field_node(ctx, n, &vec![], None), // args?
-            Nodes::Variable(ref n) => self.eval_variable_node(ctx, n, &vec![], None),
+            Nodes::Variable(ref n) => self.eval_variable_node(n, &vec![], None),
             Nodes::Pipe(ref n) => self.eval_pipeline_raw(ctx, n),
             // Nodes::Identifier
             Nodes::Chain(ref n) => self.eval_chain_node(ctx, n, &vec![], None),
@@ -323,12 +322,11 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         args: &[Nodes],
         fin: Option<Arc<Any>>,
     ) -> Result<Arc<Any>, String> {
-        return self.eval_field_chain(ctx, ctx.dot.clone(), &field.ident, args, fin);
+        return self.eval_field_chain(ctx.dot.clone(), &field.ident, args, fin);
     }
 
     fn eval_field_chain(
         &mut self,
-        ctx: &Context,
         receiver: Arc<Any>,
         ident: &[String],
         args: &[Nodes],
@@ -342,7 +340,6 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         let mut r: Arc<Any> = Arc::new(0);
         for i in 0..n - 1 {
             r = self.eval_field(
-                ctx,
                 if i == 0 { &receiver } else { &r },
                 &ident[i],
                 &[],
@@ -350,7 +347,6 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             )?;
         }
         self.eval_field(
-            ctx,
             if n == 1 { &receiver } else { &r },
             &ident[n - 1],
             args,
@@ -360,7 +356,6 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
 
     fn eval_field(
         &mut self,
-        ctx: &Context,
         receiver: &Arc<Any>,
         field_name: &str,
         args: &[Nodes],
@@ -384,7 +379,6 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
 
     fn eval_variable_node(
         &mut self,
-        ctx: &Context,
         variable: &VariableNode,
         args: &[Nodes],
         fin: Option<Arc<Any>>,
@@ -394,7 +388,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             not_a_function(args, fin)?;
             return Ok(val);
         }
-        self.eval_field_chain(ctx, val, &variable.ident[1..], args, fin)
+        self.eval_field_chain(val, &variable.ident[1..], args, fin)
     }
 
     // Walks an `if` or `with` node. They behave the same, except that `wtih` sets dot.
@@ -406,7 +400,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         };
         let val = self.eval_pipeline_raw(ctx, &pipe)?;
         let truth = is_true(&val);
-        if truth.0 {
+        if truth {
             match *node {
                 Nodes::If(ref n) => self.walk_list(ctx, &n.list)?,
                 Nodes::With(ref n) => {
@@ -519,7 +513,6 @@ fn not_a_function(args: &[Nodes], val: Option<Arc<Any>>) -> Result<(), String> {
 #[cfg(test)]
 mod tests_mocked {
     use super::*;
-    use serde_json;
 
     #[test]
     fn simple_template() {

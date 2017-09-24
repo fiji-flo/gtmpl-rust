@@ -7,18 +7,6 @@ use serde_json::{self, Value};
 
 /// Function type that is used to implement builtin and custom functions.
 pub type Func = fn(Vec<Arc<Any>>) -> Result<Arc<Any>, String>;
-enum Funcy {
-    Base {
-        f: Func,
-        input: usize,
-        output: usize,
-    },
-    VarArgs {
-        f: Func,
-        min_input: usize,
-        output: usize,
-    },
-}
 
 lazy_static! {
     pub static ref BUILTINS: HashMap<String, Func> = {
@@ -34,20 +22,6 @@ lazy_static! {
         m.insert("or".to_owned(), or as Func);
         m
     };
-}
-
-macro_rules! equal_as {
-    ($typ:ty, $args:ident) => {
-        if $args.iter().all(|x| x.is::<$typ>()) {
-            let first = $args[0].downcast_ref::<$typ>().unwrap();
-            return Ok(Arc::new(serde_json::to_value(
-                $args.iter()
-                    .skip(1)
-                    .map(|x| x.downcast_ref::<$typ>().unwrap())
-                    .all(|x| x == first)
-            ).unwrap()));
-        }
-    }
 }
 
 macro_rules! gn {
@@ -70,11 +44,6 @@ macro_rules! gn {
     }
 }
 
-gn!(add(a: ref i32, b: ref i32) -> i32 {
-    Ok(a + b)
-});
-
-
 #[derive(PartialEq)]
 enum Num {
     None,
@@ -85,25 +54,25 @@ enum Num {
 
 fn or(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     for arg in &args {
-        if is_true(&arg).0 {
+        if is_true(&arg) {
             return Ok(arg.clone());
         }
     }
-    args.into_iter().last().ok_or_else(
-        || format!("and needs at least one argument"),
-    )
+    args.into_iter().last().ok_or_else(|| {
+        format!("and needs at least one argument")
+    })
 }
 
 
 fn and(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     for arg in &args {
-        if !is_true(&arg).0 {
+        if !is_true(&arg) {
             return Ok(arg.clone());
         }
     }
-    args.into_iter().last().ok_or_else(
-        || format!("and needs at least one argument"),
-    )
+    args.into_iter().last().ok_or_else(|| {
+        format!("and needs at least one argument")
+    })
 }
 
 fn length(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
@@ -128,6 +97,8 @@ fn length(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
 }
 
 #[doc = "
+Returns the boolean truth of arg1 == arg2 [== arg3 ...]
+
 # Example
 ```
 use gtmpl::template;
@@ -139,12 +110,21 @@ pub fn eq(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     if args.len() < 2 {
         return Err(format!("eq requires at least 2 arguments"));
     }
-    equal_as!(Value, args);
-    Err(format!("unable to compare arguments"))
+    let unpack = || format!("Arguments need to be of type Value.");
+    let first = args[0].downcast_ref::<Value>().ok_or_else(unpack)?;
+    return Ok(Arc::new(Value::from(
+        args.iter().skip(1).map(|x| x.downcast_ref::<Value>()).all(
+            |x| {
+                x.map(|x| x == first).unwrap_or(false)
+            },
+        ),
+    )));
 }
 
 gn!(
 #[doc="
+Returns the boolean truth of arg1 != arg2
+
 # Example
 ```
 use gtmpl::template;
@@ -158,6 +138,8 @@ ne(a: ref Value, b: ref Value) -> Value {
 
 gn!(
 #[doc="
+Returns the boolean truth of arg1 < arg2
+
 # Example
 ```
 use gtmpl::template;
@@ -176,6 +158,8 @@ lt(a: ref Value, b: ref Value) -> Value {
 
 gn!(
 #[doc="
+Returns the boolean truth of arg1 <= arg2
+
 # Example
 ```
 use gtmpl::template;
@@ -196,7 +180,18 @@ le(a: ref Value, b: ref Value) -> Value {
 });
 
 
-gn!(gt(a: ref Value, b: ref Value) -> Value {
+gn!(
+#[doc="
+Returns the boolean truth of arg1 > arg2
+
+# Example
+```
+use gtmpl::template;
+let greater_than = template(\"{{ gt 1.4 . }}\", 1.2);
+assert_eq!(&greater_than.unwrap(), \"true\");
+```
+"]
+gt(a: ref Value, b: ref Value) -> Value {
     let ret = match cmp(a, b) {
         None => return Err(format!("unable to compare {} and {}", a, b)),
         Some(Ordering::Greater) => true,
@@ -205,7 +200,21 @@ gn!(gt(a: ref Value, b: ref Value) -> Value {
     Ok(Value::from(ret))
 });
 
-gn!(ge(a: ref Value, b: ref Value) -> Value {
+gn!(
+#[doc="
+Returns the boolean truth of arg1 >= arg2
+
+# Example
+```
+use gtmpl::template;
+let greater_or_equal = template(\"{{ ge 1.4 1.3 }}\", 1.2);
+assert_eq!(greater_or_equal.unwrap(), \"true\");
+
+let greater_or_equal = template(\"{{ ge 1.4 . }}\", 0.2);
+assert_eq!(&greater_or_equal.unwrap(), \"true\");
+```
+"]
+ge(a: ref Value, b: ref Value) -> Value {
     let ret = match cmp(a, b) {
         None => return Err(format!("unable to compare {} and {}", a, b)),
         Some(Ordering::Greater) | Some(Ordering::Equal) => true,
@@ -214,50 +223,54 @@ gn!(ge(a: ref Value, b: ref Value) -> Value {
     Ok(Value::from(ret))
 });
 
-pub fn is_true(val: &Arc<Any>) -> (bool, bool) {
-    if let Some(v) = val.downcast_ref::<Vec<Arc<Any>>>() {
-        return (!v.is_empty(), true);
-    }
+/// Returns
+pub fn is_true(val: &Arc<Any>) -> bool {
     if let Some(v) = val.downcast_ref::<Value>() {
         if let Some(i) = v.as_i64() {
-            return (i != 0i64, true);
+            return i != 0i64;
         }
         if let Some(i) = v.as_u64() {
-            return (i != 0u64, true);
+            return i != 0u64;
         }
         if let Some(i) = v.as_f64() {
-            return (i != 0f64, true);
+            return i != 0f64;
         }
         if let Some(s) = v.as_str() {
-            return (!s.is_empty(), true);
+            return !s.is_empty();
         }
         if let Some(b) = v.as_bool() {
-            return (b, true);
+            return b;
         }
         if let Some(a) = v.as_array() {
-            return (!a.is_empty(), true);
+            return !a.is_empty();
         }
         if let Some(o) = v.as_object() {
-            return (!o.is_empty(), true);
+            return !o.is_empty();
         }
     }
 
-    (true, true)
+    false
 }
 
 fn cmp(left: &Value, right: &Value) -> Option<Ordering> {
-    if let (&Value::Number(ref l), &Value::Number(ref r)) = (left, right) {
-        if let (Some(li), Some(ri)) = (l.as_i64(), r.as_i64()) {
-            return li.partial_cmp(&ri);
+    match (left, right) {
+        (&Value::Number(ref l), &Value::Number(ref r)) => {
+            if let (Some(lf), Some(rf)) = (l.as_f64(), r.as_f64()) {
+                return lf.partial_cmp(&rf);
+            }
+            if let (Some(li), Some(ri)) = (l.as_i64(), r.as_i64()) {
+                return li.partial_cmp(&ri);
+            }
+            if let (Some(lu), Some(ru)) = (l.as_u64(), r.as_u64()) {
+                return lu.partial_cmp(&ru);
+            }
+            None
         }
-        if let (Some(lu), Some(ru)) = (l.as_u64(), r.as_u64()) {
-            return lu.partial_cmp(&ru);
-        }
-        if let (Some(lf), Some(rf)) = (l.as_f64(), r.as_f64()) {
-            return lf.partial_cmp(&rf);
-        }
+        (&Value::Bool(ref l), &Value::Bool(ref r)) => l.partial_cmp(r),
+        (&Value::String(ref l), &Value::String(ref r)) => l.partial_cmp(r),
+        (&Value::Array(ref l), &Value::Array(ref r)) => l.len().partial_cmp(&r.len()),
+        _ => None,
     }
-    None
 }
 
 
@@ -416,19 +429,11 @@ mod tests_mocked {
     }
 
     #[test]
-    fn test_add() {
-        let vals: Vec<Arc<Any>> = vec![Arc::new(1i32), Arc::new(2i32)];
-        let ret = add(vals).unwrap();
-        let ret_ = ret.downcast_ref::<i32>();
-        assert_eq!(ret_, Some(&3i32));
-    }
-
-    #[test]
     fn test_is_true() {
         let t: Arc<Any> = varc!(1u32);
-        assert_eq!(is_true(&t).0, true);
+        assert_eq!(is_true(&t), true);
         let t: Arc<Any> = varc!(0u32);
-        assert_eq!(is_true(&t).0, false);
+        assert_eq!(is_true(&t), false);
     }
 
 }

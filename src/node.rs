@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::fmt::{Display, Error, Formatter};
 use std::sync::Arc;
 
@@ -558,28 +557,23 @@ impl NumberNode {
                     number_typ = NumberType::U64;
                 }
 
-                if as_i64 == 0 {
+                if is_i64 && as_i64 == 0 {
                     // In case of -0.
                     as_u64 = 0;
                     is_u64 = true;
                 }
 
-                let (as_f64, is_f64) = if is_u64 {
-                    (as_u64 as f64, true)
-                } else if is_i64 {
-                    (as_i64 as f64, true)
-                } else {
-                    match text.parse::<f64>() {
-                        Err(_) => (0.0 as f64, false),
-                        Ok(f) => {
-                            if !text.contains(|c| match c {
-                                '.' | 'e' | 'E' => true,
-                                _ => false,
-                            })
-                            {
-                                return Err(Error);
-                            }
+                let (as_f64, is_f64) = match text.parse::<f64>() {
+                    Err(_) => (0.0 as f64, false),
+                    Ok(f) => {
+                        if text.contains(|c| match c {
+                            '.' | 'e' | 'E' => true,
+                            _ => false,
+                        })
+                        {
                             (f, true)
+                        } else {
+                            (f, false)
                         }
                     }
                 };
@@ -602,6 +596,7 @@ impl NumberNode {
                 } else {
                     Value::from(as_f64)
                 };
+
                 Ok(NumberNode {
                     typ: NodeType::Number,
                     tr,
