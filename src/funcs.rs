@@ -1,9 +1,10 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::cmp::Ordering;
+use std::fmt::Write;
 use std::sync::Arc;
 
-use serde_json::{self, Value};
+use serde_json::Value;
 
 extern crate percent_encoding;
 use self::percent_encoding::{DEFAULT_ENCODE_SET, utf8_percent_encode};
@@ -28,6 +29,8 @@ lazy_static! {
         m.insert("or".to_owned(), or as Func);
         m.insert("not".to_owned(), not as Func);
         m.insert("urlquery".to_owned(), urlquery as Func);
+        m.insert("print".to_owned(), print as Func);
+        m.insert("println".to_owned(), println as Func);
         m
     };
 }
@@ -150,7 +153,89 @@ pub fn len(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
         return Err(format!("unable to call len on the given argument"));
     };
 
-    Ok(Arc::new(serde_json::to_value(len).unwrap()))
+    Ok(varc!(len))
+}
+
+/// An implementation of golang's fmt.Sprint
+///
+/// Golang's Sprint formats using the default formats for its operands and returns the
+/// resulting string. Spaces are added between operands when neither is a string.
+///
+/// # Example
+/// ```
+/// use gtmpl::template;
+/// let equal = template(r#"{{ print "Hello " . "!" }}"#, "world");
+/// assert_eq!(&equal.unwrap(), "Hello world!");
+/// ```
+pub fn print(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
+    let vals: Vec<&Value> = args.iter()
+        .map(|arg| {
+            arg.downcast_ref::<Value>().ok_or_else(|| {
+                format!("print requires arguemnts of type Value")
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let mut no_space = true;
+    let mut s = String::new();
+    for val in vals {
+        if let Some(v) = val.as_str() {
+            no_space = true;
+            s.push_str(v);
+        } else {
+            if no_space {
+                s += &val.to_string();
+            } else {
+                s += &format!(" {}", val.to_string())
+            }
+            no_space = false;
+        }
+    }
+    Ok(varc!(s))
+}
+
+/// An implementation of golang's fmt.Sprintln
+///
+/// Sprintln formats using the default formats for its operands and returns the
+/// resulting string. Spaces are always added between operands and a newline is appended.
+///
+/// # Example
+/// ```
+/// use gtmpl::template;
+/// let equal = template(r#"{{ println "Hello" . "!" }}"#, "world");
+/// assert_eq!(&equal.unwrap(), "Hello world !\n");
+/// ```
+pub fn println(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
+    let vals: Vec<&Value> = args.iter()
+        .map(|arg| {
+            arg.downcast_ref::<Value>().ok_or_else(|| {
+                format!("print requires arguemnts of type Value")
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let mut iter = vals.iter();
+    let s = match iter.next() {
+        None => String::from("\n"),
+        Some(first_elt) => {
+            let (lower, _) = iter.size_hint();
+            let mut result = String::with_capacity(lower + 1);
+            if let Some(v) = first_elt.as_str() {
+                result.push_str(v);
+            } else {
+                write!(&mut result, "{}", first_elt).unwrap();
+            }
+            for elt in iter {
+                result.push_str(" ");
+                if let Some(v) = elt.as_str() {
+                    result.push_str(v);
+                } else {
+                    write!(&mut result, "{}", elt).unwrap();
+                }
+            }
+            result.push_str("\n");
+            result
+        }
+    };
+    Ok(varc!(s))
 }
 
 gn!(
@@ -462,6 +547,37 @@ mod tests_mocked {
         let ret = ge(vals).unwrap();
         let ret_ = ret.downcast_ref::<Value>();
         assert_eq!(ret_, Some(&Value::from(true)));
+    }
+
+    #[test]
+    fn test_print() {
+        let vals: Vec<Arc<Any>> = vec![varc!("foo"), varc!(1u8)];
+        let ret = print(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from("foo1")));
+
+        let vals: Vec<Arc<Any>> = vec![varc!("foo"), varc!(1u8), varc!(2)];
+        let ret = print(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from("foo1 2")));
+
+        let vals: Vec<Arc<Any>> = vec![varc!(true), varc!(1), varc!("foo"), varc!(2)];
+        let ret = print(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from("true 1foo2")));
+    }
+
+    #[test]
+    fn test_println() {
+        let vals: Vec<Arc<Any>> = vec![varc!("foo"), varc!(1u8)];
+        let ret = println(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from("foo 1\n")));
+
+        let vals: Vec<Arc<Any>> = vec![];
+        let ret = println(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from("\n")));
     }
 
     #[test]
