@@ -31,6 +31,7 @@ lazy_static! {
         m.insert("urlquery".to_owned(), urlquery as Func);
         m.insert("print".to_owned(), print as Func);
         m.insert("println".to_owned(), println as Func);
+        m.insert("index".to_owned(), index as Func);
         m
     };
 }
@@ -238,6 +239,51 @@ pub fn println(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     Ok(varc!(s))
 }
 
+/// Returns the result of indexing its first argument by the
+///	following arguments. Thus "index x 1 2 3" is, in Go syntax,
+///	x[1][2][3]. Each indexed item must be a map, slice or array.
+///
+/// # Example
+/// ```
+/// use gtmpl::template;
+/// let ctx = vec![23, 42, 7];
+/// let index = template("{{ index . 1 }}", ctx);
+/// assert_eq!(&index.unwrap(), "42");
+/// ```
+pub fn index(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
+    if args.len() < 2 {
+        return Err(format!("index requires at least 2 arugments"));
+    }
+    let mut col = args[0].downcast_ref::<Value>().ok_or_else(|| {
+        format!("index arguments must be of type Value")
+    })?;
+    for val in &args[1..] {
+        if let Some(k) = val.downcast_ref::<Value>() {
+            col = get_item(col, k)?;
+        } else {
+            return Err(format!("index arguments must be of type Value"));
+        }
+    }
+
+    Ok(Arc::new(col.clone()))
+}
+
+fn get_item<'a>(col: &'a Value, key: &Value) -> Result<&'a Value, String> {
+    let ret = match (col, key) {
+        (&Value::Array(ref a), &Value::Number(ref n)) => {
+            if let Some(i) = n.as_u64() {
+                a.get(i as usize)
+            } else {
+                None
+            }
+        }
+        (&Value::Object(ref o), &Value::Number(ref n)) => o.get(&n.to_string()),
+        (&Value::Object(ref o), &Value::String(ref s)) => o.get(s),
+        _ => None,
+    };
+    ret.ok_or_else(|| format!("unabled to get {} in {}", key, col))
+}
+
 gn!(
 #[doc="
 Returns the escaped value of the textual representation of
@@ -411,6 +457,7 @@ fn cmp(left: &Value, right: &Value) -> Option<Ordering> {
 #[cfg(test)]
 mod tests_mocked {
     use super::*;
+    use serde_json;
 
     #[test]
     fn test_eq() {
@@ -578,6 +625,22 @@ mod tests_mocked {
         let ret = println(vals).unwrap();
         let ret_ = ret.downcast_ref::<Value>();
         assert_eq!(ret_, Some(&Value::from("\n")));
+    }
+
+    #[test]
+    fn test_index() {
+        let vals: Vec<Arc<Any>> = vec![varc!(vec![vec![1, 2], vec![3, 4]]), varc!(1), varc!(0)];
+        let ret = index(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(3)));
+
+        let mut o = HashMap::new();
+        o.insert(String::from("foo"), vec![String::from("bar")]);
+        let col = Arc::new(serde_json::to_value(o).unwrap());
+        let vals: Vec<Arc<Any>> = vec![col, varc!("foo"), varc!(0)];
+        let ret = index(vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from("bar")));
     }
 
     #[test]
