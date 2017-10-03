@@ -3,8 +3,9 @@ use std::sync::Arc;
 use std::io::Write;
 use std::collections::{HashMap, VecDeque};
 
-use funcs::{Func, is_true};
+use funcs::Func;
 use template::Template;
+use utils::is_true;
 use node::*;
 
 use serde::ser::Serialize;
@@ -766,10 +767,10 @@ mod tests_mocked {
     }
 
     #[test]
-    fn test_length() {
+    fn test_len() {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
-        assert!(t.parse(r#"my len is {{ length . }}"#).is_ok());
+        assert!(t.parse(r#"my len is {{ len . }}"#).is_ok());
         let data = Context::from(vec![1, 2, 3]).unwrap();
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
@@ -777,7 +778,7 @@ mod tests_mocked {
 
         let mut w: Vec<u8> = vec![];
         let mut t = Template::new("foo");
-        assert!(t.parse(r#"{{ length . }}"#).is_ok());
+        assert!(t.parse(r#"{{ len . }}"#).is_ok());
         let data = Context::from("hello".to_owned()).unwrap();
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());

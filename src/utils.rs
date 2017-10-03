@@ -1,4 +1,8 @@
+use std::any::Any;
 use std::char;
+use std::sync::Arc;
+
+use serde_json::Value;
 
 pub fn unquote_char(s: &str, quote: char) -> Option<char> {
     if s.len() < 2 || !s.starts_with(quote) || !s.ends_with(quote) {
@@ -107,6 +111,36 @@ fn extract_bytes_x(s: &str) -> Option<(String, usize)> {
     String::from_utf8(bytes).ok().map(|s| (s, i))
 }
 
+/// Returns
+pub fn is_true(val: &Arc<Any>) -> bool {
+    if let Some(v) = val.downcast_ref::<Value>() {
+        if let Some(i) = v.as_i64() {
+            return i != 0i64;
+        }
+        if let Some(i) = v.as_u64() {
+            return i != 0u64;
+        }
+        if let Some(i) = v.as_f64() {
+            return i != 0f64;
+        }
+        if let Some(s) = v.as_str() {
+            return !s.is_empty();
+        }
+        if let Some(b) = v.as_bool() {
+            return b;
+        }
+        if let Some(a) = v.as_array() {
+            return !a.is_empty();
+        }
+        if let Some(o) = v.as_object() {
+            return !o.is_empty();
+        }
+    }
+
+    false
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -159,5 +193,13 @@ mod tests {
         let s = r#""Fran & Freddie's Diner\t\u263a""#;
         let u = unquote_str(s);
         assert_eq!(u, Some("Fran & Freddie's Diner\t☺".to_owned()));
+    }
+
+    #[test]
+    fn test_is_true() {
+        let t: Arc<Any> = Arc::new(Value::from(1i8));
+        assert_eq!(is_true(&t), true);
+        let t: Arc<Any> = Arc::new(Value::from(0u32));
+        assert_eq!(is_true(&t), false);
     }
 }

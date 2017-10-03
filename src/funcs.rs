@@ -5,10 +5,16 @@ use std::sync::Arc;
 
 use serde_json::{self, Value};
 
+extern crate percent_encoding;
+use self::percent_encoding::{DEFAULT_ENCODE_SET, utf8_percent_encode};
+
+use utils::is_true;
+
 /// Function type that is used to implement builtin and custom functions.
 pub type Func = fn(Vec<Arc<Any>>) -> Result<Arc<Any>, String>;
 
 lazy_static! {
+    /// Map of all builtin function.
     pub static ref BUILTINS: HashMap<String, Func> = {
         let mut m = HashMap::new();
         m.insert("eq".to_owned(), eq as Func);
@@ -17,12 +23,18 @@ lazy_static! {
         m.insert("le".to_owned(), le as Func);
         m.insert("gt".to_owned(), gt as Func);
         m.insert("ge".to_owned(), ge as Func);
-        m.insert("length".to_owned(), length as Func);
+        m.insert("len".to_owned(), len as Func);
         m.insert("and".to_owned(), and as Func);
         m.insert("or".to_owned(), or as Func);
+        m.insert("not".to_owned(), not as Func);
+        m.insert("urlquery".to_owned(), urlquery as Func);
         m
     };
 }
+
+macro_rules! varc(
+    ($x:expr) => { Arc::new(Value::from($x)) }
+);
 
 macro_rules! gn {
     (
@@ -52,7 +64,18 @@ enum Num {
     Float(f64),
 }
 
-fn or(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
+///	Returns the boolean OR of its arguments by returning the
+///	first non-empty argument or the last argument, that is,
+///	"or x y" behaves as "if x then x else y". All the
+///	arguments are evaluated.
+///
+/// # Example
+/// ```
+/// use gtmpl::template;
+/// let equal = template("{{ or 1 2.0 false . }}", "foo");
+/// assert_eq!(&equal.unwrap(), "1");
+/// ```
+pub fn or(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     for arg in &args {
         if is_true(&arg) {
             return Ok(arg.clone());
@@ -63,8 +86,18 @@ fn or(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     })
 }
 
-
-fn and(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
+/// Returns the boolean AND of its arguments by returning the
+///	first empty argument or the last argument, that is,
+///	"and x y" behaves as "if x then y else x". All the
+///	arguments are evaluated.
+///
+/// # Example
+/// ```
+/// use gtmpl::template;
+/// let equal = template("{{ and 1 2.0 true . }}", "foo");
+/// assert_eq!(&equal.unwrap(), "foo");
+/// ```
+pub fn and(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     for arg in &args {
         if !is_true(&arg) {
             return Ok(arg.clone());
@@ -75,9 +108,33 @@ fn and(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     })
 }
 
-fn length(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
+/// Returns the boolean negation of its single argument.
+///
+/// # Example
+/// ```
+/// use gtmpl::template;
+/// let equal = template("{{ not 0 }}", "");
+/// assert_eq!(&equal.unwrap(), "true");
+/// ```
+pub fn not(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
     if args.len() != 1 {
-        return Err(format!("length requires exactly 1 arugment"));
+        Err(format!("not requires a single argument"))
+    } else {
+        Ok(varc!(!is_true(&args[0])))
+    }
+}
+
+/// Returns the integer length of its argument.
+///
+/// # Example
+/// ```
+/// use gtmpl::template;
+/// let equal = template("{{ len . }}", "foo");
+/// assert_eq!(&equal.unwrap(), "3");
+/// ```
+pub fn len(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
+    if args.len() != 1 {
+        return Err(format!("len requires exactly 1 arugment"));
     }
     let arg = &args[0];
     let len = if let Some(x) = arg.downcast_ref::<Value>() {
@@ -86,15 +143,36 @@ fn length(args: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
             Value::Array(ref a) => a.len(),
             Value::Object(ref o) => o.len(),
             _ => {
-                return Err(format!("unable to call length on {}", x));
+                return Err(format!("unable to call len on {}", x));
             }
         }
     } else {
-        return Err(format!("unable to call length on the given argument"));
+        return Err(format!("unable to call len on the given argument"));
     };
 
     Ok(Arc::new(serde_json::to_value(len).unwrap()))
 }
+
+gn!(
+#[doc="
+Returns the escaped value of the textual representation of
+its arguments in a form suitable for embedding in a URL query.
+
+# Example
+```
+use gtmpl::template;
+let url = template(r#\"{{ urlquery \"foo bar?\" }}\"#, 0);
+assert_eq!(&url.unwrap(), \"foo%20bar%3F\");
+```
+"]
+urlquery(val: ref Value) -> Value {
+    match val {
+        &Value::String(ref s) => Ok(Value::from(
+            utf8_percent_encode(s, DEFAULT_ENCODE_SET).to_string())
+        ),
+        _ => Err(format!("Arguments need to be of type String"))
+    }
+});
 
 #[doc = "
 Returns the boolean truth of arg1 == arg2 [== arg3 ...]
@@ -223,35 +301,6 @@ ge(a: ref Value, b: ref Value) -> Value {
     Ok(Value::from(ret))
 });
 
-/// Returns
-pub fn is_true(val: &Arc<Any>) -> bool {
-    if let Some(v) = val.downcast_ref::<Value>() {
-        if let Some(i) = v.as_i64() {
-            return i != 0i64;
-        }
-        if let Some(i) = v.as_u64() {
-            return i != 0u64;
-        }
-        if let Some(i) = v.as_f64() {
-            return i != 0f64;
-        }
-        if let Some(s) = v.as_str() {
-            return !s.is_empty();
-        }
-        if let Some(b) = v.as_bool() {
-            return b;
-        }
-        if let Some(a) = v.as_array() {
-            return !a.is_empty();
-        }
-        if let Some(o) = v.as_object() {
-            return !o.is_empty();
-        }
-    }
-
-    false
-}
-
 fn cmp(left: &Value, right: &Value) -> Option<Ordering> {
     match (left, right) {
         (&Value::Number(ref l), &Value::Number(ref r)) => {
@@ -277,10 +326,6 @@ fn cmp(left: &Value, right: &Value) -> Option<Ordering> {
 #[cfg(test)]
 mod tests_mocked {
     use super::*;
-
-    macro_rules! varc(
-        ($x:expr) => { Arc::new(Value::from($x)) }
-    );
 
     #[test]
     fn test_eq() {
@@ -427,13 +472,4 @@ mod tests_mocked {
         let ret_ = ret.downcast_ref::<Value>();
         assert_eq!(ret_, Some(&Value::Bool(true)));
     }
-
-    #[test]
-    fn test_is_true() {
-        let t: Arc<Any> = varc!(1u32);
-        assert_eq!(is_true(&t), true);
-        let t: Arc<Any> = varc!(0u32);
-        assert_eq!(is_true(&t), false);
-    }
-
 }
