@@ -73,16 +73,16 @@ pub fn parse<'a>(
     let mut p = Parser::new(name);
     p.text = text;
     p.funcs = funcs;
-    p.lex = Some(Lexer::new(name, text.to_owned()));
+    p.lex = Some(Lexer::new(text.to_owned()));
     p.parse_tree()?;
     Ok(p)
 }
 
 impl<'a> Parser<'a> {
     fn next_from_lex(&mut self) -> Option<Item> {
-        match &mut self.lex {
-            &mut Some(ref mut l) => l.next(),
-            &mut None => None,
+        match self.lex {
+            Some(ref mut l) => l.next(),
+            None => None,
         }
     }
 
@@ -120,14 +120,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn peek_non_space(&mut self) -> Option<&Item> {
-        if let Some(t) = self.next_non_space() {
-            self.backup(t);
-            return self.token.front();
-        }
-        None
-    }
-
     fn peek_non_space_must(&mut self, context: &str) -> Result<&Item, String> {
         if let Some(t) = self.next_non_space() {
             self.backup(t);
@@ -150,27 +142,6 @@ impl<'a> Parser<'a> {
             return Ok(self.token.front().unwrap());
         }
         self.error(format!("unexpected end in {}", context))
-    }
-
-    fn error_context(&mut self, n: Nodes) -> (String, String) {
-        let pos = n.pos();
-        let tree_id = n.tree();
-        let parse_name = if tree_id == 0 && self.tree_ids.contains_key(&tree_id) {
-            self.tree_by_id(tree_id).map(|t| &t.parse_name)
-        } else {
-            self.tree.as_ref().map(|t| &t.parse_name)
-        };
-        let text = &self.text[0..pos];
-        let byte_num = match text.rfind('\n') {
-            Some(i) => pos - (i + 1),
-            None => pos,
-        };
-        let line_num = text.chars().filter(|c| *c == '\n').count();
-        let context = n.to_string();
-        (
-            format!("{:?}:{}:{}", parse_name, line_num, byte_num),
-            context,
-        )
     }
 
     fn start_parse(&mut self, name: String, id: TreeId, parse_name: &'a str) {
@@ -198,12 +169,6 @@ impl<'a> Parser<'a> {
         self.parse()?;
         self.stop_parse()?;
         Ok(())
-    }
-
-    fn tree_by_id(&self, id: TreeId) -> Option<&Tree> {
-        self.tree_ids.get(&id).and_then(
-            |name| self.tree_set.get(name),
-        )
     }
 
     fn add_tree(&mut self, name: String, t: Tree<'a>) {
@@ -321,7 +286,7 @@ impl<'a> Parser<'a> {
                         _ => None,
                     })
                 })
-                .ok_or_else(|| self.error_msg(format!("invalid root node")))?;
+                .ok_or_else(|| self.error_msg(String::from("invalid root node")))?;
 
             t = match self.next() {
                 None => return self.error(format!("unable to peek for tree {}", id)),
@@ -372,7 +337,7 @@ impl<'a> Parser<'a> {
             }
             Some(ref item) if item.typ == ItemType::ItemLeftDelim => self.action(),
             Some(ref item) => self.unexpected(item, "input"),
-            _ => self.error(format!("unexpected end of input")),
+            _ => self.error(String::from("unexpected end of input")),
         }
     }
 
@@ -498,7 +463,9 @@ impl<'a> Parser<'a> {
         let context = "template clause";
         let token = self.next_non_space_must(context)?;
         let name = self.parse_template_name(&token, context)?;
-        let next = self.next_non_space().ok_or(format!("unexpected end"))?;
+        let next = self.next_non_space().ok_or_else(
+            || String::from("unexpected end"),
+        )?;
         let pipe = if next.typ != ItemType::ItemRightDelim {
             self.backup(next);
             Some(self.pipeline(context)?)
@@ -753,7 +720,9 @@ impl<'a> Parser<'a> {
     fn parse_template_name(&self, token: &Item, context: &str) -> Result<String, String> {
         match token.typ {
             ItemType::ItemString | ItemType::ItemRawString => {
-                unquote_str(&token.val).ok_or(format!("unable to parse string: {}", token.val))
+                unquote_str(&token.val).ok_or_else(|| {
+                    format!("unable to parse string: {}", token.val)
+                })
             }
             _ => self.unexpected(token, context),
         }
@@ -807,7 +776,7 @@ mod tests_mocked {
         make_parser_with(s)
     }
 
-    fn eq_mock(_: Vec<Arc<Any>>) -> Result<Arc<Any>, String> {
+    fn eq_mock(_: &[Arc<Any>]) -> Result<Arc<Any>, String> {
         Ok(Arc::new(true))
     }
 
@@ -816,7 +785,7 @@ mod tests_mocked {
     }
 
     fn make_parser_with_funcs<'a>(s: &str, funcs: Vec<&'a HashMap<String, Func>>) -> Parser<'a> {
-        let lex = Lexer::new("foo", s.to_owned());
+        let lex = Lexer::new(s.to_owned());
         Parser {
             name: "foo",
             text: "nope",
@@ -894,8 +863,8 @@ mod tests_mocked {
         let typ = i.typ;
         assert_eq!(typ, ItemType::ItemLeftDelim);
         assert_eq!(
-            t.peek_non_space().and_then(|n| Some(&n.typ)),
-            Some(&ItemType::ItemIf)
+            t.peek_non_space_must("").and_then(|n| Ok(&n.typ)),
+            Ok(&ItemType::ItemIf)
         );
         assert_eq!(t.next().and_then(|n| Some(n.typ)), Some(ItemType::ItemIf));
         assert_eq!(t.last().and_then(|n| Some(n.typ)), Some(ItemType::ItemEOF));

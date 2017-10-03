@@ -133,14 +133,14 @@ macro_rules! node {
 
 impl Nodes {
     pub fn is_empty_tree(&self) -> Result<bool, String> {
-        match self {
-            &Nodes::List(ref n) => return n.is_empty_tree(),
-            &Nodes::Text(ref n) => Ok(n.text.is_empty()),
-            &Nodes::Action(_) |
-            &Nodes::If(_) |
-            &Nodes::Range(_) |
-            &Nodes::Template(_) |
-            &Nodes::With(_) => Ok(false),
+        match *self {
+            Nodes::List(ref n) => n.is_empty_tree(),
+            Nodes::Text(ref n) => Ok(n.text.is_empty()),
+            Nodes::Action(_) |
+            Nodes::If(_) |
+            Nodes::Range(_) |
+            Nodes::Template(_) |
+            Nodes::With(_) => Ok(false),
             _ => Err(format!("unknown node: {}", self)),
 
         }

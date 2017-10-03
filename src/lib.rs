@@ -7,12 +7,13 @@
 //! let output = gtmpl::template("Finally! Some {{ . }} for Rust", "gtmpl");
 //! assert_eq!(&output.unwrap(), "Finally! Some gtmpl for Rust");
 //! ```
-#![allow(dead_code)]
 #[macro_use]
 extern crate lazy_static;
 extern crate itertools;
 extern crate serde;
 extern crate serde_json;
+#[cfg_attr(feature = "cargo-clippy", allow(useless_attribute))]
+#[allow(unused_imports)]
 #[macro_use]
 extern crate serde_derive;
 mod lexer;

@@ -34,9 +34,9 @@ pub fn unquote_str(s: &str) -> Option<String> {
     let mut i = 0;
     while i < raw.len() {
         match unqote(&raw[i..]) {
-            Some((c, l)) => {
+            Some((c, len)) => {
                 r += &c;
-                i += l;
+                i += len;
             }
             None => return None,
         }

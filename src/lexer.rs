@@ -91,7 +91,6 @@ impl fmt::Display for Item {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.typ {
             ItemType::ItemEOF => write!(f, "EOF"),
-            ItemType::ItemError => write!(f, "{}", self.val),
             ItemType::ItemKeyword => write!(f, "<{}>", self.val),
             _ => write!(f, "{}", self.val),
         }
@@ -99,14 +98,12 @@ impl fmt::Display for Item {
 }
 
 pub struct Lexer {
-    name: String, // the name of the input; used only for error reports
     last_pos: Pos, // position of most recent item returned by nextItem
     items_receiver: Receiver<Item>, // channel of scanned items
     finished: bool, // flag if lexer is finished
 }
 
 struct LexerStateMachine {
-    name: String, // the name of the input; used only for error reports
     input: String, // the string being scanned
     state: State, // the next lexing function to enter
     pos: Pos, // current position in the input
@@ -159,10 +156,9 @@ impl Iterator for Lexer {
 }
 
 impl Lexer {
-    pub fn new(name: &str, input: String) -> Lexer {
+    pub fn new(input: String) -> Lexer {
         let (tx, rx) = channel();
         let mut l = LexerStateMachine {
-            name: name.to_owned(),
             input: input,
             state: State::LexText,
             pos: 0,
@@ -174,7 +170,6 @@ impl Lexer {
         };
         thread::spawn(move || l.run());
         Lexer {
-            name: name.to_owned(),
             last_pos: 0,
             items_receiver: rx,
             finished: false,
@@ -649,7 +644,7 @@ mod tests {
     use super::*;
     #[test]
     fn lexer_run() {
-        let mut l = Lexer::new("foo", "abc".to_owned());
+        let mut l = Lexer::new("abc".to_owned());
         let i1 = l.next().unwrap();
         assert_eq!(i1.typ, ItemType::ItemText);
         assert_eq!(&i1.val, "abc");
@@ -658,7 +653,7 @@ mod tests {
     #[test]
     fn lex_simple() {
         let s = r#"something {{ if eq "foo" "bar" }}"#;
-        let l = Lexer::new("foo", s.to_owned());
+        let l = Lexer::new(s.to_owned());
         let items = l.collect::<Vec<_>>();
         assert_eq!(items.len(), 13);
     }
@@ -666,7 +661,7 @@ mod tests {
     #[test]
     fn test_input() {
         let s = r#"something {{ .foo }}"#;
-        let l = Lexer::new("foo", s.to_owned());
+        let l = Lexer::new(s.to_owned());
         let items = l.collect::<Vec<_>>();
         let s_ = items.into_iter().map(|i| i.val).join("");
         assert_eq!(s_, s);
@@ -675,7 +670,7 @@ mod tests {
     #[test]
     fn test_trim() {
         let s = r#"something {{- .foo -}} 2000"#;
-        let l = Lexer::new("foo", s.to_owned());
+        let l = Lexer::new(s.to_owned());
         let items = l.collect::<Vec<_>>();
         let s_ = items.into_iter().map(|i| i.val).join("");
         assert_eq!(s_, r#"something{{.foo}}2000"#);
@@ -684,7 +679,7 @@ mod tests {
     #[test]
     fn test_comment() {
         let s = r#"something {{- /* foo */ -}} 2000"#;
-        let l = Lexer::new("foo", s.to_owned());
+        let l = Lexer::new(s.to_owned());
         let items = l.collect::<Vec<_>>();
         let s_ = items.into_iter().map(|i| i.val).join("");
         assert_eq!(s_, r#"something2000"#);
