@@ -16,6 +16,7 @@ pub struct Template<'a> {
 }
 
 impl<'a> Template<'a> {
+    /// Creates a new empty template with a given `name`.
     pub fn with_name(name: &'a str) -> Template<'a> {
         Template {
             name: name,
@@ -26,8 +27,44 @@ impl<'a> Template<'a> {
         }
     }
 
+    /// Adds custom functions to the template.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use std::any::Any;
+    /// use std::collections::HashMap;
+    /// use std::sync::Arc;
+    ///
+    /// use gtmpl::{Context, Func, Value};
+    ///
+    /// fn hello_world(_args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
+    ///   Ok(Arc::new(Value::from("Hello World!")) as Arc<Any>)
+    /// }
+    ///
+    /// let mut funcs = HashMap::new();
+    /// funcs.insert(String::from("helloWorld"), hello_world as Func);
+    /// let mut tmpl = gtmpl::Template::default();
+    /// tmpl.add_funcs(&funcs);
+    /// tmpl.parse("{{ helloWorld }}").unwrap();
+    /// let output = tmpl.render(Context::empty());
+    /// assert_eq!(&output.unwrap(), "Hello World!");
+    /// ```
+    pub fn add_funcs(&mut self, funcs: &'a HashMap<String, Func>) {
+        self.funcs.push(funcs);
+    }
+
+    /// Parse the given `text` as template body.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// let mut tmpl = gtmpl::Template::default();
+    /// tmpl.parse("Hello World!").unwrap();
+    /// ```
     pub fn parse(&mut self, text: &'a str) -> Result<(), String> {
-        let funcs = vec![&BUILTINS as &HashMap<String, Func>];
+        let mut funcs = vec![&BUILTINS as &HashMap<String, Func>];
+        funcs.extend(&self.funcs);
         let parser = parse(self.name, text, funcs)?;
         match parser {
             Parser {
