@@ -1,0 +1,15 @@
+sudo: false
+language: rust
+cache: cargo
+
+rust:
+  - stable
+  - nightly
+  - beta
+
+matrix:
+  include:
+    - rust: nightly
+      env: CLIPPY=true
+
+script: ./travis.sh
