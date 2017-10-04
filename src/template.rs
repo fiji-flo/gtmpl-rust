@@ -15,7 +15,11 @@ pub struct Template<'a> {
 }
 
 impl<'a> Template<'a> {
-    pub fn new(name: &'a str) -> Template<'a> {
+    pub fn new() -> Template<'a> {
+        Template::with_name("")
+    }
+
+    pub fn with_name(name: &'a str) -> Template<'a> {
         Template {
             name: name,
             text: "",
@@ -50,7 +54,7 @@ mod tests_mocked {
 
     #[test]
     fn test_parse() {
-        let mut t = Template::new("foo");
+        let mut t = Template::with_name("foo");
         assert!(t.parse(r#"{{ if eq "bar" "bar" }} 2000 {{ end }}"#).is_ok());
         assert!(t.tree_set.contains_key("foo"));
         assert!(t.tree_ids.contains_key(&1usize));
