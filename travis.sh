@@ -28,18 +28,11 @@ if [ -n "${CLIPPY}" ]; then
         exit
     fi
 
-    cargo clippy -- -Dclippy
+    cargo clippy
 else
-    CHANNEL=nightly
-    channel clean
-    channel build
-    (cd "$DIR/tests/deps" && channel build)
-    channel test
-    channel test --features preserve_order
-
-    for CHANNEL in stable beta; do
+    for CHANNEL in nightly stable beta; do
         channel clean
         channel build
-        channel build --features preserve_order
+        channel test
     done
 fi
