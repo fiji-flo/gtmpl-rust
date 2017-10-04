@@ -6,6 +6,7 @@ use funcs::BUILTINS;
 use node::TreeId;
 
 /// The main template structure.
+#[derive(Default)]
 pub struct Template<'a> {
     pub name: &'a str,
     pub text: &'a str,
@@ -15,10 +16,6 @@ pub struct Template<'a> {
 }
 
 impl<'a> Template<'a> {
-    pub fn new() -> Template<'a> {
-        Template::with_name("")
-    }
-
     pub fn with_name(name: &'a str) -> Template<'a> {
         Template {
             name: name,

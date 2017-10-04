@@ -31,7 +31,7 @@ pub use exec::Context;
 use serde::Serialize;
 
 pub fn template<T: Serialize>(template_str: &str, context: T) -> Result<String, String> {
-    let mut tmpl = Template::new();
+    let mut tmpl = Template::default();
     tmpl.parse(template_str)?;
     tmpl.render(Context::from(context)?)
 }

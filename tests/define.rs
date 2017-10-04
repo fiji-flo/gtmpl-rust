@@ -3,7 +3,7 @@ use gtmpl::{Context, Template};
 
 #[test]
 fn simple_define() {
-    let mut template = Template::new();
+    let mut template = Template::default();
     template
         .parse(
             r#"{{ define "tmpl"}} some {{ end -}} there is {{- template "tmpl" -}} template"#,
