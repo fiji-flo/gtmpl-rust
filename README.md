@@ -1,6 +1,9 @@
-# gtmpl-rust [![Build Stats]][travis]
+# gtmpl-rust &emsp; [![Build Status]][travis] [![Latest Version]][crates.io]
 [Build Status]: https://travis-ci.org/fiji-flo/gtmpl-rust.svg?branch=master
 [travis]: https://travis-ci.org/fiji-flo/gtmpl-rust
+[Latest Version]: https://img.shields.io/crates/v/gtmpl.svg
+[crates.io]: https://crates.io/crates/gtmpl
+
 
 **The Golang Templating Language for Rust**
 
