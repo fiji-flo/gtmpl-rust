@@ -1,4 +1,4 @@
-# gtmpl-rs [![Build Stats]][travis]
+# gtmpl-rust [![Build Stats]][travis]
 [Build Status]: https://travis-ci.org/fiji-flo/gtmpl-rust.svg?branch=master
 [travis]: https://travis-ci.org/fiji-flo/gtmpl-rust
 

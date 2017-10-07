@@ -12,7 +12,7 @@ readme = "README.md"
 include = ["Cargo.toml", "src/**/*.rs", "tests/**/*.rs", "README.md", "LICENSE"]
 
 [badges]
-travis-ci = { repository = "fiji-flo/gtmpl-rs" }
+travis-ci = { repository = "fiji-flo/gtmpl-rust" }
 
 [dependencies]
 itertools = "0.6"
