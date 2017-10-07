@@ -2,6 +2,17 @@
 name = "gtmpl"
 version = "0.1.0"
 authors = ["Florian Merz <flomerz@gmail.com>"]
+description = "The Golang Templating Language for Rust"
+license = "MIT"
+repository = "https://github.com/fiji-flo/gtmpl-rust"
+documentation = "https://docs.rs/crate/gtmpl"
+keywords = ["golang", "template", "templating"]
+category = ["template-engine"]
+readme = "README.md"
+include = ["Cargo.toml", "src/**/*.rs", "tests/**/*.rs", "README.md", "LICENSE"]
+
+[badges]
+travis-ci = { repository = "fiji-flo/gtmpl-rs" }
 
 [dependencies]
 itertools = "0.6"
