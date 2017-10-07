@@ -8,7 +8,7 @@
 
 ```toml
 [dependencies]
-gtml = "0.1.0"
+gtml = "0.1.1"
 ```
 
 * [gtml at crates.io](https://crates.io/crate/gtmpl)
