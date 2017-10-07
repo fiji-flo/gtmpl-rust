@@ -1,4 +1,4 @@
-//! The Golang Templating Language for Rust
+//! The Golang Templating Language for Rust.
 //!
 //! ## Example
 //! ```rust
@@ -19,15 +19,19 @@ extern crate serde_derive;
 mod lexer;
 mod node;
 mod parse;
+#[doc(inlne)]
 pub mod funcs;
-pub mod template;
-pub mod exec;
+mod template;
+mod exec;
 mod utils;
 
+#[doc(inline)]
 pub use template::Template;
 
+#[doc(inline)]
 pub use exec::Context;
 
+#[doc(inline)]
 pub use funcs::Func;
 
 pub use serde_json::Value;
