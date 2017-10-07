@@ -11,11 +11,11 @@
 
 ```toml
 [dependencies]
-gtml = "0.1.1"
+gtmpl = "0.1.2"
 ```
 
-* [gtml at crates.io](https://crates.io/crate/gtmpl)
-* [gtml documentation](https://docs.rs/crate/gtmpl)
+* [gtmpl at crates.io](https://crates.io/crate/gtmpl)
+* [gtmpl documentation](https://docs.rs/crate/gtmpl)
 * [golang documentation](https://golang.org/pkg/text/template/)
 
 ## Current Limitations
@@ -48,7 +48,7 @@ fn basic_template_rendering() {
 ```
 
 For more examples please take a look at the
-[gtml documentation](https://docs.rs/crate/gtmpl).
+[gtmpl documentation](https://docs.rs/crate/gtmpl).
 
 ## Why do we need this?
 
