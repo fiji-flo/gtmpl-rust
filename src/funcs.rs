@@ -41,6 +41,51 @@ macro_rules! varc(
     ($x:expr) => { Arc::new(Value::from($x)) }
 );
 
+#[macro_export]
+macro_rules! gtmpl_fn {
+    (
+        $(#[$outer:meta])*
+        fn $name:ident() -> Result<$otyp:ty, String>
+        { $($body:tt)* }
+    ) => {
+        $(#[$outer])*
+        pub fn $name(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
+            fn inner() -> Result<$otyp, String> {
+                $($body)*
+            }
+            Ok(Arc::new(Value::from(inner()?)))
+        }
+    };
+    (
+        $(#[$outer:meta])*
+        fn $name:ident($arg0:ident : $typ0:ty, $($arg:ident : $typ:ty),*) -> Result<$otyp:ty, String>
+        { $($body:tt)* }
+    ) => {
+        $(#[$outer])*
+        pub fn $name(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
+            let mut args = args;
+            if args.is_empty() {
+                return Err(String::from("at least one argument required"));
+            }
+            let x = &args[0];
+            let $arg0 = x.downcast_ref::<Value>()
+                .ok_or_else(|| format!("unable to downcast"))?;
+            let $arg0: $typ0 = serde_json::from_value($arg0.clone())
+                .map_err(|e| format!("unable to convert into Value: {}", e))?;
+            $(args = &args[1..];
+              let x = &args[0];
+              let $arg = x.downcast_ref::<Value>()
+              .ok_or_else(|| format!("unable to downcast"))?;
+              let $arg: $typ = serde_json::from_value($arg.clone())
+                .map_err(|e| format!("unable to convert into Value: {}", e))?;)*;
+            fn inner($arg0 : $typ0, $($arg : $typ,)*) -> Result<$otyp, String> {
+                $($body)*
+            }
+            Ok(Arc::new(Value::from(inner($arg0, $($arg),*)?)))
+        }
+    }
+}
+
 macro_rules! gn {
     (
         $(#[$outer:meta])*
@@ -659,5 +704,28 @@ mod tests_mocked {
         let ret = builtin_eq(&vals).unwrap();
         let ret_ = ret.downcast_ref::<Value>();
         assert_eq!(ret_, Some(&Value::Bool(true)));
+    }
+
+    #[test]
+    fn test_gtmpl_fn() {
+        gtmpl_fn!(
+            fn add(a: u32, b: u32) -> Result<u32, String> {
+                Ok(a + b)
+            }
+        );
+        let vals: Vec<Arc<Any>> = vec![varc!(1u32), varc!(2u32)];
+        let ret = add(&vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(3u32)));
+
+        gtmpl_fn!(
+            fn has_prefix(s: String, prefix: String) -> Result<bool, String> {
+                Ok(s.starts_with(&prefix))
+            }
+        );
+        let vals: Vec<Arc<Any>> = vec![varc!("foobar"), varc!("foo")];
+        let ret = has_prefix(&vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::from(true)));
     }
 }
