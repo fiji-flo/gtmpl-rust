@@ -41,6 +41,7 @@ macro_rules! varc(
     ($x:expr) => { Arc::new(Value::from($x)) }
 );
 
+/// Help to write new functions for gtmpl.
 #[macro_export]
 macro_rules! gtmpl_fn {
     (
@@ -62,26 +63,26 @@ macro_rules! gtmpl_fn {
         { $($body:tt)* }
     ) => {
         $(#[$outer])*
-        pub fn $name(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
+        pub fn $name(args: &[::std::sync::Arc<::std::any::Any>]) -> Result<::std::sync::Arc<::std::any::Any>, String> {
             let mut args = args;
             if args.is_empty() {
                 return Err(String::from("at least one argument required"));
             }
             let x = &args[0];
-            let $arg0 = x.downcast_ref::<Value>()
+            let $arg0 = x.downcast_ref::<::serde_json::Value>()
                 .ok_or_else(|| format!("unable to downcast"))?;
-            let $arg0: $typ0 = serde_json::from_value($arg0.clone())
+            let $arg0: $typ0 = ::serde_json::from_value($arg0.clone())
                 .map_err(|e| format!("unable to convert into Value: {}", e))?;
             $(args = &args[1..];
               let x = &args[0];
-              let $arg = x.downcast_ref::<Value>()
+              let $arg = x.downcast_ref::<::serde_json::Value>()
               .ok_or_else(|| format!("unable to downcast"))?;
-              let $arg: $typ = serde_json::from_value($arg.clone())
+              let $arg: $typ = ::serde_json::from_value($arg.clone())
                 .map_err(|e| format!("unable to convert into Value: {}", e))?;)*;
             fn inner($arg0 : $typ0, $($arg : $typ,)*) -> Result<$otyp, String> {
                 $($body)*
             }
-            Ok(Arc::new(Value::from(inner($arg0, $($arg),*)?)))
+            Ok(::std::sync::Arc::new(::serde_json::Value::from(inner($arg0, $($arg),*)?)))
         }
     }
 }
