@@ -8,8 +8,7 @@ use template::Template;
 use utils::is_true;
 use node::*;
 
-use serde::ser::Serialize;
-use serde_json::{self, Value};
+use gtmpl_value::Value;
 
 struct Variable {
     name: String,
@@ -42,11 +41,9 @@ impl Context {
 
     pub fn from<T>(value: T) -> Result<Context, String>
     where
-        T: Serialize,
+        T: Into<Value>,
     {
-        let serialized = serde_json::to_value(value).map_err(|e| {
-            format!("unable to serialize: {}", e)
-        })?;
+        let serialized = Value::from(value);
         Ok(Context { dot: Arc::new(serialized) })
     }
 
@@ -353,9 +350,10 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                     field_name
                 ));
             }
-            return val.get(field_name)
-                .map(|v| Arc::new(v.clone()) as Arc<Any>)
-                .ok_or_else(|| format!("no field {} for {}", field_name, val));
+            if let &Value::Object(ref o) = val {
+                return o.get(field_name).map(|v| Arc::new(v.clone()) as Arc<Any>)
+                    .ok_or_else(|| format!("no field {} for {}", field_name, val));
+            }
         }
 
         Err(String::from("only basic fields are supported"))
@@ -468,15 +466,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                     usize,
         };
         if let Some(v) = val.downcast_ref::<Value>() {
-            if v.is_string() {
-                write!(self.writer, "{}", v.as_str().unwrap()).map_err(
-                    |e| {
-                        format!("{}", e)
-                    },
-                )?;
-            } else {
-                write!(self.writer, "{}", v).map_err(|e| format!("{}", e))?;
-            }
+            write!(self.writer, "{}", v).map_err(|e| format!("{}", e))?;
             return Ok(());
         }
         Err(String::from("unable to format value"))
@@ -567,7 +557,7 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "1");
 
-        #[derive(Serialize)]
+        #[derive(Gtmpl)]
         struct Foo {
             foo: u8,
         }
@@ -583,11 +573,11 @@ mod tests_mocked {
 
     #[test]
     fn test_dot_value() {
-        #[derive(Serialize)]
+        #[derive(Gtmpl, Clone)]
         struct Foo {
             foo: u8,
         }
-        #[derive(Serialize)]
+        #[derive(Gtmpl, Clone)]
         struct Bar {
             bar: Foo,
         }
@@ -642,7 +632,7 @@ mod tests_mocked {
 
     #[test]
     fn test_with() {
-        #[derive(Serialize)]
+        #[derive(Gtmpl)]
         struct Foo {
             foo: u16,
         }
@@ -659,6 +649,12 @@ mod tests_mocked {
         assert_eq!(String::from_utf8(w).unwrap(), "1000");
     }
 
+    fn to_sorted_string(buf: Vec<u8>) -> String {
+        let mut chars: Vec<char> = String::from_utf8(buf).unwrap().chars().collect();
+        chars.sort();
+        chars.iter().cloned().collect::<String>()
+    }
+
     #[test]
     fn test_range() {
         let mut map = HashMap::new();
@@ -670,7 +666,7 @@ mod tests_mocked {
         assert!(t.parse(r#"{{ range . -}} {{.}} {{- end }}"#).is_ok());
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
-        assert_eq!(String::from_utf8(w).unwrap(), "12");
+        assert_eq!(to_sorted_string(w), "12");
     }
 
     #[test]
@@ -687,7 +683,21 @@ mod tests_mocked {
         );
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
-        assert_eq!(String::from_utf8(w).unwrap(), "12");
+        assert_eq!(to_sorted_string(w), "12");
+
+        let mut map = HashMap::new();
+        map.insert("a".to_owned(), "b");
+        map.insert("c".to_owned(), "d");
+        let data = Context::from(map).unwrap();
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::default();
+        assert!(
+            t.parse(r#"{{ range $k, $v := . -}} {{ $k }}{{ $v }} {{- end }}"#)
+                .is_ok()
+        );
+        let out = t.execute(&mut w, data);
+        assert!(out.is_ok());
+        assert_eq!(to_sorted_string(w), "abcd");
 
         let mut map = HashMap::new();
         map.insert("a".to_owned(), 1);
@@ -701,12 +711,12 @@ mod tests_mocked {
         );
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
-        assert_eq!(String::from_utf8(w).unwrap(), "a1b2");
+        assert_eq!(to_sorted_string(w), "12ab");
 
         let mut map = HashMap::new();
         map.insert("a".to_owned(), 1);
         map.insert("b".to_owned(), 2);
-        #[derive(Serialize)]
+        #[derive(Gtmpl)]
         struct Foo {
             foo: HashMap<String, i32>,
         }
@@ -720,10 +730,10 @@ mod tests_mocked {
         );
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
-        assert_eq!(String::from_utf8(w).unwrap(), "12");
+        assert_eq!(to_sorted_string(w), "12");
 
         let mut map = HashMap::new();
-        #[derive(Serialize)]
+        #[derive(Gtmpl, Clone)]
         struct Bar {
             bar: i32,
         }
@@ -738,7 +748,7 @@ mod tests_mocked {
         );
         let out = t.execute(&mut w, data);
         assert!(out.is_ok());
-        assert_eq!(String::from_utf8(w).unwrap(), "12");
+        assert_eq!(to_sorted_string(w), "12");
     }
 
     #[test]

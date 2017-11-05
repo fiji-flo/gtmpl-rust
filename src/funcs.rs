@@ -5,7 +5,7 @@ use std::cmp::Ordering;
 use std::fmt::Write;
 use std::sync::Arc;
 
-use serde_json::Value;
+use gtmpl_value::Value;
 
 extern crate percent_encoding;
 use self::percent_encoding::{DEFAULT_ENCODE_SET, utf8_percent_encode};
@@ -40,52 +40,6 @@ lazy_static! {
 macro_rules! varc(
     ($x:expr) => { Arc::new(Value::from($x)) }
 );
-
-/// Help to write new functions for gtmpl.
-#[macro_export]
-macro_rules! gtmpl_fn {
-    (
-        $(#[$outer:meta])*
-        fn $name:ident() -> Result<$otyp:ty, String>
-        { $($body:tt)* }
-    ) => {
-        $(#[$outer])*
-        pub fn $name(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
-            fn inner() -> Result<$otyp, String> {
-                $($body)*
-            }
-            Ok(Arc::new(Value::from(inner()?)))
-        }
-    };
-    (
-        $(#[$outer:meta])*
-        fn $name:ident($arg0:ident : $typ0:ty, $($arg:ident : $typ:ty),*) -> Result<$otyp:ty, String>
-        { $($body:tt)* }
-    ) => {
-        $(#[$outer])*
-        pub fn $name(args: &[::std::sync::Arc<::std::any::Any>]) -> Result<::std::sync::Arc<::std::any::Any>, String> {
-            let mut args = args;
-            if args.is_empty() {
-                return Err(String::from("at least one argument required"));
-            }
-            let x = &args[0];
-            let $arg0 = x.downcast_ref::<::serde_json::Value>()
-                .ok_or_else(|| format!("unable to downcast"))?;
-            let $arg0: $typ0 = ::serde_json::from_value($arg0.clone())
-                .map_err(|e| format!("unable to convert into Value: {}", e))?;
-            $(args = &args[1..];
-              let x = &args[0];
-              let $arg = x.downcast_ref::<::serde_json::Value>()
-              .ok_or_else(|| format!("unable to downcast"))?;
-              let $arg: $typ = ::serde_json::from_value($arg.clone())
-                .map_err(|e| format!("unable to convert into Value: {}", e))?;)*;
-            fn inner($arg0 : $typ0, $($arg : $typ,)*) -> Result<$otyp, String> {
-                $($body)*
-            }
-            Ok(::std::sync::Arc::new(::serde_json::Value::from(inner($arg0, $($arg),*)?)))
-        }
-    }
-}
 
 macro_rules! gn {
     (
@@ -228,7 +182,7 @@ pub fn print(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     let mut no_space = true;
     let mut s = String::new();
     for val in vals {
-        if let Some(v) = val.as_str() {
+        if let &Value::String(ref v) = val {
             no_space = true;
             s.push_str(v);
         } else {
@@ -268,14 +222,14 @@ pub fn println(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
         Some(first_elt) => {
             let (lower, _) = iter.size_hint();
             let mut result = String::with_capacity(lower + 1);
-            if let Some(v) = first_elt.as_str() {
+            if let &&Value::String(ref v) = first_elt {
                 result.push_str(v);
             } else {
                 write!(&mut result, "{}", first_elt).unwrap();
             }
             for elt in iter {
                 result.push_str(" ");
-                if let Some(v) = elt.as_str() {
+                if let &&Value::String(ref v) = elt {
                     result.push_str(v);
                 } else {
                     write!(&mut result, "{}", elt).unwrap();
@@ -512,7 +466,6 @@ fn cmp(left: &Value, right: &Value) -> Option<Ordering> {
 #[cfg(test)]
 mod tests_mocked {
     use super::*;
-    use serde_json;
 
     #[test]
     fn test_eq() {
@@ -691,7 +644,7 @@ mod tests_mocked {
 
         let mut o = HashMap::new();
         o.insert(String::from("foo"), vec![String::from("bar")]);
-        let col = Arc::new(serde_json::to_value(o).unwrap());
+        let col = Arc::new(Value::from(o));
         let vals: Vec<Arc<Any>> = vec![col, varc!("foo"), varc!(0)];
         let ret = index(&vals).unwrap();
         let ret_ = ret.downcast_ref::<Value>();
@@ -710,7 +663,7 @@ mod tests_mocked {
     #[test]
     fn test_gtmpl_fn() {
         gtmpl_fn!(
-            fn add(a: u32, b: u32) -> Result<u32, String> {
+            fn add(a: u64, b: u64) -> Result<u64, String> {
                 Ok(a + b)
             }
         );

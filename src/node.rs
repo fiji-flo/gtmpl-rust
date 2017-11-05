@@ -5,7 +5,7 @@ use itertools::Itertools;
 use lexer::ItemType;
 use utils::unquote_char;
 
-use serde_json::Value;
+use gtmpl_value::Value;
 
 macro_rules! nodes {
     ($($node:ident, $name:ident),*) => {

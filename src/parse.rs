@@ -754,6 +754,7 @@ mod tests_mocked {
     use std::sync::Arc;
     use super::*;
     use lexer::ItemType;
+    use gtmpl_value::Value;
 
     /*
        ItemText
@@ -907,7 +908,7 @@ mod tests_mocked {
         let t = t.unwrap();
         assert_eq!(t.typ(), &NodeType::Bool);
         if let Nodes::Bool(n) = t {
-            assert_eq!(n.value.as_bool(), Some(true));
+            assert_eq!(*n.value, Value::from(true));
         } else {
             assert!(false);
         }
@@ -923,7 +924,7 @@ mod tests_mocked {
         assert_eq!(t.typ(), &NodeType::Bool);
         assert_eq!(t.typ(), &NodeType::Bool);
         if let Nodes::Bool(n) = t {
-            assert_eq!(n.value.as_bool(), Some(false));
+            assert_eq!(*n.value, Value::from(false));
         } else {
             assert!(false);
         }
