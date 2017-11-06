@@ -20,3 +20,5 @@ lazy_static = "0.2"
 percent-encoding = "1.0.0"
 gtmpl_value = { git = "https://github.com/fiji-flo/gtmpl_value.git" }
 gtmpl_derive = { git = "https://github.com/fiji-flo/gtmpl_derive.git" }
+#gtmpl_value = { path = "../gtmpl_value" }
+#gtmpl_derive = { path = "../gtmpl_derive" }

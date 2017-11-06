@@ -577,7 +577,7 @@ mod tests_mocked {
         struct Foo {
             foo: u8,
         }
-        #[derive(Gtmpl, Clone)]
+        #[derive(Gtmpl)]
         struct Bar {
             bar: Foo,
         }
