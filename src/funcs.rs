@@ -182,7 +182,7 @@ pub fn print(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     let mut no_space = true;
     let mut s = String::new();
     for val in vals {
-        if let &Value::String(ref v) = val {
+        if let Value::String(ref v) = *val {
             no_space = true;
             s.push_str(v);
         } else {
@@ -222,14 +222,14 @@ pub fn println(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
         Some(first_elt) => {
             let (lower, _) = iter.size_hint();
             let mut result = String::with_capacity(lower + 1);
-            if let &&Value::String(ref v) = first_elt {
+            if let Value::String(ref v) = *(*first_elt) {
                 result.push_str(v);
             } else {
                 write!(&mut result, "{}", first_elt).unwrap();
             }
             for elt in iter {
                 result.push_str(" ");
-                if let &&Value::String(ref v) = elt {
+                if let Value::String(ref v) = *(*elt) {
                     result.push_str(v);
                 } else {
                     write!(&mut result, "{}", elt).unwrap();

@@ -64,7 +64,7 @@ macro_rules! print_val {
 }
 
 impl<'a, 'b> Template<'a> {
-    pub fn execute<T: Write>(&mut self, writer: &'b mut T, data: Context) -> Result<(), String> {
+    pub fn execute<T: Write>(&mut self, writer: &'b mut T, data: &Context) -> Result<(), String> {
         let mut vars: VecDeque<VecDeque<Variable>> = VecDeque::new();
         let mut dot = VecDeque::new();
         dot.push_back(Variable {
@@ -88,12 +88,12 @@ impl<'a, 'b> Template<'a> {
             .ok_or_else(|| {
                 format!("{} is an incomplete or empty template", self.name)
             })?;
-        state.walk(&data, root)?;
+        state.walk(data, root)?;
 
         Ok(())
     }
 
-    pub fn render(&mut self, data: Context) -> Result<String, String> {
+    pub fn render(&mut self, data: &Context) -> Result<String, String> {
         let mut w: Vec<u8> = vec![];
         self.execute(&mut w, data)?;
         String::from_utf8(w).map_err(|e| format!("unable to contert output into utf8: {}", e))
@@ -180,7 +180,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
     fn eval_pipeline(&mut self, ctx: &Context, pipe: &PipeNode) -> Result<Arc<Any>, String> {
         let mut val: Option<Arc<Any>> = None;
         for cmd in &pipe.cmds {
-            val = Some(self.eval_command(ctx, cmd, val)?);
+            val = Some(self.eval_command(ctx, cmd, &val)?);
             // TODO
         }
         let val = val.ok_or_else(
@@ -204,7 +204,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         &mut self,
         ctx: &Context,
         cmd: &CommandNode,
-        val: Option<Arc<Any>>,
+        val: &Option<Arc<Any>>,
     ) -> Result<Arc<Any>, String> {
         let first_word = &cmd.args.first().ok_or_else(|| {
             format!("no arguments for command node: {}", cmd)
@@ -218,7 +218,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             Nodes::Identifier(ref n) => return self.eval_function(ctx, n, &cmd.args, val),
             _ => {}
         }
-        not_a_function(&cmd.args, &val)?;
+        not_a_function(&cmd.args, val)?;
         match *(*first_word) {
             Nodes::Bool(ref n) => Ok(Arc::clone(&n.value) as Arc<Any>),
             Nodes::Dot(_) => Ok(Arc::clone(&ctx.dot)),
@@ -232,7 +232,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         ctx: &Context,
         ident: &IdentifierNode,
         args: &[Nodes],
-        fin: Option<Arc<Any>>,
+        fin: &Option<Arc<Any>>,
     ) -> Result<Arc<Any>, String> {
         let name = &ident.ident;
         let function = self.template
@@ -250,14 +250,16 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         ctx: &Context,
         function: &Func,
         args: &[Nodes],
-        fin: Option<Arc<Any>>,
+        fin: &Option<Arc<Any>>,
     ) -> Result<Arc<Any>, String> {
         let mut arg_vals = vec![];
         for arg in &args[1..] {
             let val = self.eval_arg(ctx, arg)?;
             arg_vals.push(val);
         }
-        fin.map(|f| arg_vals.push(Arc::clone(&f)));
+        if let Some(ref f) = *fin {
+            arg_vals.push(Arc::clone(f));
+        }
 
         function(&arg_vals)
     }
@@ -267,7 +269,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         ctx: &Context,
         chain: &ChainNode,
         args: &[Nodes],
-        fin: Option<Arc<Any>>,
+        fin: &Option<Arc<Any>>,
     ) -> Result<Arc<Any>, String> {
         if chain.field.is_empty() {
             return Err(String::from("internal error: no fields in eval_chain_node"));
@@ -276,18 +278,18 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             return Err(format!("inderection throug explicit nul in {}", chain));
         }
         let pipe = self.eval_arg(ctx, &*chain.node)?;
-        self.eval_field_chain(pipe, &chain.field, args, fin)
+        self.eval_field_chain(&pipe, &chain.field, args, fin)
     }
 
     fn eval_arg(&mut self, ctx: &Context, node: &Nodes) -> Result<Arc<Any>, String> {
         match *node {
             Nodes::Dot(_) => Ok(Arc::clone(&ctx.dot)),
             //Nodes::Nil
-            Nodes::Field(ref n) => self.eval_field_node(ctx, n, &[], None), // args?
-            Nodes::Variable(ref n) => self.eval_variable_node(n, &[], None),
+            Nodes::Field(ref n) => self.eval_field_node(ctx, n, &[], &None), // args?
+            Nodes::Variable(ref n) => self.eval_variable_node(n, &[], &None),
             Nodes::Pipe(ref n) => self.eval_pipeline(ctx, n),
             // Nodes::Identifier
-            Nodes::Chain(ref n) => self.eval_chain_node(ctx, n, &[], None),
+            Nodes::Chain(ref n) => self.eval_chain_node(ctx, n, &[], &None),
             Nodes::String(ref n) => Ok(Arc::clone(&n.value) as Arc<Any>),
             Nodes::Bool(ref n) => Ok(Arc::clone(&n.value) as Arc<Any>),
             Nodes::Number(ref n) => Ok(Arc::clone(&n.value) as Arc<Any>),
@@ -301,17 +303,17 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         ctx: &Context,
         field: &FieldNode,
         args: &[Nodes],
-        fin: Option<Arc<Any>>,
+        fin: &Option<Arc<Any>>,
     ) -> Result<Arc<Any>, String> {
-        self.eval_field_chain(Arc::clone(&ctx.dot), &field.ident, args, fin)
+        self.eval_field_chain(&ctx.dot, &field.ident, args, fin)
     }
 
     fn eval_field_chain(
         &mut self,
-        receiver: Arc<Any>,
+        receiver: &Arc<Any>,
         ident: &[String],
         args: &[Nodes],
-        fin: Option<Arc<Any>>,
+        fin: &Option<Arc<Any>>,
     ) -> Result<Arc<Any>, String> {
         let n = ident.len();
         if n < 1 {
@@ -321,18 +323,13 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         let mut r: Arc<Any> = Arc::new(0);
         for (i, id) in ident.iter().enumerate().take(n - 1) {
             r = self.eval_field(
-                if i == 0 { &receiver } else { &r },
+                if i == 0 { receiver } else { &r },
                 id,
                 &[],
-                None,
+                &None,
             )?;
         }
-        self.eval_field(
-            if n == 1 { &receiver } else { &r },
-            &ident[n - 1],
-            args,
-            fin,
-        )
+        self.eval_field(if n == 1 { receiver } else { &r }, &ident[n - 1], args, fin)
     }
 
     fn eval_field(
@@ -340,7 +337,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         receiver: &Arc<Any>,
         field_name: &str,
         args: &[Nodes],
-        fin: Option<Arc<Any>>,
+        fin: &Option<Arc<Any>>,
     ) -> Result<Arc<Any>, String> {
         let has_args = args.len() > 1 || fin.is_some();
         if let Some(val) = receiver.downcast_ref::<Value>() {
@@ -350,8 +347,9 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                     field_name
                 ));
             }
-            if let &Value::Object(ref o) = val {
-                return o.get(field_name).map(|v| Arc::new(v.clone()) as Arc<Any>)
+            if let Value::Object(ref o) = *val {
+                return o.get(field_name)
+                    .map(|v| Arc::new(v.clone()) as Arc<Any>)
                     .ok_or_else(|| format!("no field {} for {}", field_name, val));
             }
         }
@@ -363,14 +361,14 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         &mut self,
         variable: &VariableNode,
         args: &[Nodes],
-        fin: Option<Arc<Any>>,
+        fin: &Option<Arc<Any>>,
     ) -> Result<Arc<Any>, String> {
         let val = self.var_value(&variable.ident[0])?;
         if variable.ident.len() == 1 {
-            not_a_function(args, &fin)?;
+            not_a_function(args, fin)?;
             return Ok(val);
         }
-        self.eval_field_chain(val, &variable.ident[1..], args, fin)
+        self.eval_field_chain(&val, &variable.ident[1..], args, fin)
     }
 
     // Walks an `if` or `with` node. They behave the same, except that `wtih` sets dot.
@@ -490,7 +488,7 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
         assert!(t.parse(r#"{{ if false }} 2000 {{ end }}"#).is_ok());
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "");
 
@@ -498,7 +496,7 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
         assert!(t.parse(r#"{{ if true }} 2000 {{ end }}"#).is_ok());
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), " 2000 ");
 
@@ -506,7 +504,7 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
         assert!(t.parse(r#"{{ if true -}} 2000 {{- end }}"#).is_ok());
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
@@ -517,7 +515,7 @@ mod tests_mocked {
             t.parse(r#"{{ if false -}} 2000 {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
     }
@@ -531,7 +529,7 @@ mod tests_mocked {
             t.parse(r#"{{ if . -}} 2000 {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
@@ -542,7 +540,7 @@ mod tests_mocked {
             t.parse(r#"{{ if . -}} 2000 {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
     }
@@ -553,7 +551,7 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
         assert!(t.parse(r#"{{.}}"#).is_ok());
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "1");
 
@@ -566,7 +564,7 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
         assert!(t.parse(r#"{{.foo}}"#).is_ok());
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "1");
     }
@@ -589,7 +587,7 @@ mod tests_mocked {
             t.parse(r#"{{ if .foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
@@ -601,7 +599,7 @@ mod tests_mocked {
             t.parse(r#"{{ if .foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
 
@@ -613,7 +611,7 @@ mod tests_mocked {
             t.parse(r#"{{ if .bar.foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
@@ -625,7 +623,7 @@ mod tests_mocked {
             t.parse(r#"{{ if .bar.foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
     }
@@ -644,7 +642,7 @@ mod tests_mocked {
             t.parse(r#"{{ with .foo -}} {{.}} {{- else -}} 3000 {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "1000");
     }
@@ -664,7 +662,7 @@ mod tests_mocked {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
         assert!(t.parse(r#"{{ range . -}} {{.}} {{- end }}"#).is_ok());
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(to_sorted_string(w), "12");
     }
@@ -681,7 +679,7 @@ mod tests_mocked {
             t.parse(r#"{{ range $k, $v := . -}} {{ $v }} {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(to_sorted_string(w), "12");
 
@@ -695,7 +693,7 @@ mod tests_mocked {
             t.parse(r#"{{ range $k, $v := . -}} {{ $k }}{{ $v }} {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(to_sorted_string(w), "abcd");
 
@@ -709,7 +707,7 @@ mod tests_mocked {
             t.parse(r#"{{ range $k, $v := . -}} {{ $k }}{{ $v }} {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(to_sorted_string(w), "12ab");
 
@@ -728,7 +726,7 @@ mod tests_mocked {
             t.parse(r#"{{ range $k, $v := .foo -}} {{ $v }} {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(to_sorted_string(w), "12");
 
@@ -746,7 +744,7 @@ mod tests_mocked {
             t.parse(r#"{{ range $k, $v := . -}} {{ $v.bar }} {{- end }}"#)
                 .is_ok()
         );
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(to_sorted_string(w), "12");
     }
@@ -757,7 +755,7 @@ mod tests_mocked {
         let mut t = Template::default();
         assert!(t.parse(r#"my len is {{ len . }}"#).is_ok());
         let data = Context::from(vec![1, 2, 3]).unwrap();
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "my len is 3");
 
@@ -765,7 +763,7 @@ mod tests_mocked {
         let mut t = Template::default();
         assert!(t.parse(r#"{{ len . }}"#).is_ok());
         let data = Context::from("hello".to_owned()).unwrap();
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "5");
     }
@@ -776,7 +774,7 @@ mod tests_mocked {
         let mut t = Template::default();
         assert!(t.parse(r#"{{ if ( 1 | eq . ) -}} 2000 {{- end }}"#).is_ok());
         let data = Context::from(1).unwrap();
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
     }
@@ -787,7 +785,7 @@ mod tests_mocked {
         let mut t = Template::default();
         assert!(t.parse(r#"{{ if eq . . -}} 2000 {{- end }}"#).is_ok());
         let data = Context::from(1).unwrap();
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
     }
@@ -798,7 +796,7 @@ mod tests_mocked {
         let mut t = Template::default();
         assert!(t.parse(r#"{{ if eq "a" "a" -}} 2000 {{- end }}"#).is_ok());
         let data = Context::from(1).unwrap();
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
@@ -806,7 +804,7 @@ mod tests_mocked {
         let mut t = Template::default();
         assert!(t.parse(r#"{{ if eq "a" "b" -}} 2000 {{- end }}"#).is_ok());
         let data = Context::from(1).unwrap();
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "");
 
@@ -814,7 +812,7 @@ mod tests_mocked {
         let mut t = Template::default();
         assert!(t.parse(r#"{{ if eq true true -}} 2000 {{- end }}"#).is_ok());
         let data = Context::from(1).unwrap();
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
@@ -825,7 +823,7 @@ mod tests_mocked {
                 .is_ok()
         );
         let data = Context::from(1).unwrap();
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "");
 
@@ -836,7 +834,7 @@ mod tests_mocked {
                 .is_ok()
         );
         let data = Context::from(1).unwrap();
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
@@ -844,7 +842,7 @@ mod tests_mocked {
         let mut t = Template::default();
         assert!(t.parse(r#"{{ if eq 1 . -}} 2000 {{- end }}"#).is_ok());
         let data = Context::from(1).unwrap();
-        let out = t.execute(&mut w, data);
+        let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
     }

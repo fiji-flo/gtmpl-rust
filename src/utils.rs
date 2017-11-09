@@ -114,15 +114,15 @@ fn extract_bytes_x(s: &str) -> Option<(String, usize)> {
 /// Returns
 pub fn is_true(val: &Arc<Any>) -> bool {
     if let Some(v) = val.downcast_ref::<Value>() {
-        return match v {
-            &Value::Bool(ref b) => *b,
-            &Value::String(ref s) => !s.is_empty(),
-            &Value::Array(ref a) => !a.is_empty(),
-            &Value::Object(ref o) => !o.is_empty(),
-            &Value::Function(_) => true,
-            &Value::Nil => false,
-            &Value::Number(ref n) => n.as_u64().map(|u| u != 0).unwrap_or_else(|| true),
-        }
+        return match *v {
+            Value::Bool(ref b) => *b,
+            Value::String(ref s) => !s.is_empty(),
+            Value::Array(ref a) => !a.is_empty(),
+            Value::Object(ref o) => !o.is_empty(),
+            Value::Function(_) => true,
+            Value::Nil => false,
+            Value::Number(ref n) => n.as_u64().map(|u| u != 0).unwrap_or_else(|| true),
+        };
     }
 
     false
