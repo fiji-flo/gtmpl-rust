@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use parse::{Tree, Parser, parse};
-use funcs::Func;
 use funcs::BUILTINS;
 use node::TreeId;
+
+use gtmpl_value::Func;
 
 /// The main template structure.
 #[derive(Default)]

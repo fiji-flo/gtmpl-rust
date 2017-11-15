@@ -1,6 +1,6 @@
 [package]
 name = "gtmpl"
-version = "0.1.3"
+version = "0.2.0"
 authors = ["Florian Merz <flomerz@gmail.com>"]
 description = "The Golang Templating Language for Rust"
 license = "MIT"
@@ -18,7 +18,5 @@ travis-ci = { repository = "fiji-flo/gtmpl-rust" }
 itertools = "0.6"
 lazy_static = "0.2"
 percent-encoding = "1.0.0"
-gtmpl_value = { git = "https://github.com/fiji-flo/gtmpl_value.git" }
-gtmpl_derive = { git = "https://github.com/fiji-flo/gtmpl_derive.git" }
-#gtmpl_value = { path = "../gtmpl_value" }
-#gtmpl_derive = { path = "../gtmpl_derive" }
+gtmpl_value = "0.1.0"
+gtmpl_derive = "0.1.0"

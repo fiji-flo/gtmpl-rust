@@ -34,7 +34,7 @@ pub use template::Template;
 pub use exec::Context;
 
 #[doc(inline)]
-pub use funcs::Func;
+pub use gtmpl_value::Func;
 
 pub use gtmpl_value::Value;
 

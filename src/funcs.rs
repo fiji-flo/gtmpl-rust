@@ -5,15 +5,12 @@ use std::cmp::Ordering;
 use std::fmt::Write;
 use std::sync::Arc;
 
-use gtmpl_value::Value;
+use gtmpl_value::{Func, Value};
 
 extern crate percent_encoding;
 use self::percent_encoding::{DEFAULT_ENCODE_SET, utf8_percent_encode};
 
 use utils::is_true;
-
-/// Function type that is used to implement builtin and custom functions.
-pub type Func = fn(&[Arc<Any>]) -> Result<Arc<Any>, String>;
 
 lazy_static! {
     /// Map of all builtin function.
@@ -40,6 +37,54 @@ lazy_static! {
 macro_rules! varc(
     ($x:expr) => { Arc::new(Value::from($x)) }
 );
+
+/// Help to write new functions for gtmpl.
+#[macro_export]
+macro_rules! gtmpl_fn {
+    (
+        $(#[$outer:meta])*
+        fn $name:ident() -> Result<$otyp:ty, String>
+        { $($body:tt)* }
+    ) => {
+        $(#[$outer])*
+        pub fn $name(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
+            fn inner() -> Result<$otyp, String> {
+                $($body)*
+            }
+            Ok(Arc::new(Value::from(inner()?)))
+        }
+    };
+    (
+        $(#[$outer:meta])*
+        fn $name:ident($arg0:ident : $typ0:ty$(, $arg:ident : $typ:ty),*) -> Result<$otyp:ty, String>
+        { $($body:tt)* }
+    ) => {
+        $(#[$outer])*
+        pub fn $name(args: &[::std::sync::Arc<::std::any::Any>]) -> Result<::std::sync::Arc<::std::any::Any>, String> {
+            #[allow(unused_mut)]
+            let mut args = args;
+            if args.is_empty() {
+                return Err(String::from("at least one argument required"));
+            }
+            let x = &args[0];
+            let $arg0 = x.downcast_ref::<::gtmpl_value::Value>()
+                .ok_or_else(|| "unable to downcast".to_owned())?;
+            let $arg0: $typ0 = ::gtmpl_value::from_value($arg0)
+                .ok_or_else(|| "unable to convert from Value".to_owned())?;
+            $(args = &args[1..];
+              let x = &args[0];
+              let $arg = x.downcast_ref::<::gtmpl_value::Value>()
+              .ok_or_else(|| "unable to downcast".to_owned())?;
+              let $arg: $typ = ::gtmpl_value::from_value($arg)
+                .ok_or_else(|| "unable to convert from Value".to_owned())?;)*;
+            fn inner($arg0 : $typ0, $($arg : $typ,)*) -> Result<$otyp, String> {
+                $($body)*
+            }
+            let ret: ::gtmpl_value::Value = inner($arg0, $($arg),*)?.into();
+            Ok(::std::sync::Arc::new(ret))
+        }
+    }
+}
 
 macro_rules! gn {
     (

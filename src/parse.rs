@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use lexer::{Item, ItemType, Lexer};
 use node::*;
 use utils::*;
-use funcs::Func;
+use gtmpl_value::Func;
 
 pub struct Parser<'a> {
     name: &'a str,

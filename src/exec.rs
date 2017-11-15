@@ -3,12 +3,11 @@ use std::sync::Arc;
 use std::io::Write;
 use std::collections::{HashMap, VecDeque};
 
-use funcs::Func;
 use template::Template;
 use utils::is_true;
 use node::*;
 
-use gtmpl_value::Value;
+use gtmpl_value::{Func, Value};
 
 struct Variable {
     name: String,
