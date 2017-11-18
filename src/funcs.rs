@@ -56,6 +56,28 @@ macro_rules! gtmpl_fn {
     };
     (
         $(#[$outer:meta])*
+        fn $name:ident($arg0:ident : $typ0:ty) -> Result<$otyp:ty, String>
+        { $($body:tt)* }
+    ) => {
+        $(#[$outer])*
+        pub fn $name(args: &[::std::sync::Arc<::std::any::Any>]) -> Result<::std::sync::Arc<::std::any::Any>, String> {
+            if args.is_empty() {
+                return Err(String::from("at least one argument required"));
+            }
+            let x = &args[0];
+            let $arg0 = x.downcast_ref::<::gtmpl_value::Value>()
+                .ok_or_else(|| "unable to downcast".to_owned())?;
+            let $arg0: $typ0 = ::gtmpl_value::from_value($arg0)
+                .ok_or_else(|| "unable to convert from Value".to_owned())?;
+            fn inner($arg0 : $typ0) -> Result<$otyp, String> {
+                $($body)*
+            }
+            let ret: ::gtmpl_value::Value = inner($arg0)?.into();
+            Ok(::std::sync::Arc::new(ret))
+        }
+    };
+    (
+        $(#[$outer:meta])*
         fn $name:ident($arg0:ident : $typ0:ty$(, $arg:ident : $typ:ty),*) -> Result<$otyp:ty, String>
         { $($body:tt)* }
     ) => {
