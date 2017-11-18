@@ -1,6 +1,6 @@
 [package]
 name = "gtmpl"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Florian Merz <flomerz@gmail.com>"]
 description = "The Golang Templating Language for Rust"
 license = "MIT"

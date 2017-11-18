@@ -78,7 +78,7 @@ macro_rules! gtmpl_fn {
     };
     (
         $(#[$outer:meta])*
-        fn $name:ident($arg0:ident : $typ0:ty$(, $arg:ident : $typ:ty),*) -> Result<$otyp:ty, String>
+        fn $name:ident($arg0:ident : $typ0:ty$(, $arg:ident : $typ:ty)*) -> Result<$otyp:ty, String>
         { $($body:tt)* }
     ) => {
         $(#[$outer])*
