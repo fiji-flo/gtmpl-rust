@@ -10,12 +10,14 @@
 #[macro_use]
 extern crate lazy_static;
 extern crate itertools;
-extern crate serde;
-extern crate serde_json;
 #[cfg_attr(feature = "cargo-clippy", allow(useless_attribute))]
 #[allow(unused_imports)]
 #[macro_use]
-extern crate serde_derive;
+extern crate gtmpl_value;
+#[cfg_attr(feature = "cargo-clippy", allow(useless_attribute))]
+#[allow(unused_imports)]
+#[macro_use]
+extern crate gtmpl_derive;
 mod lexer;
 mod node;
 mod parse;
@@ -32,11 +34,10 @@ pub use template::Template;
 pub use exec::Context;
 
 #[doc(inline)]
-pub use funcs::Func;
+pub use gtmpl_value::Func;
 
-pub use serde_json::Value;
+pub use gtmpl_value::Value;
 
-use serde::Serialize;
 /// Provides simple basic templating given just a template sting and context.
 ///
 /// ## Example
@@ -44,8 +45,8 @@ use serde::Serialize;
 /// let output = gtmpl::template("Finally! Some {{ . }} for Rust", "gtmpl");
 /// assert_eq!(&output.unwrap(), "Finally! Some gtmpl for Rust");
 /// ```
-pub fn template<T: Serialize>(template_str: &str, context: T) -> Result<String, String> {
+pub fn template<T: Into<Value>>(template_str: &str, context: T) -> Result<String, String> {
     let mut tmpl = Template::default();
     tmpl.parse(template_str)?;
-    tmpl.render(Context::from(context)?)
+    tmpl.render(&Context::from(context)?)
 }

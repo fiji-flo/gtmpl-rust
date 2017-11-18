@@ -2,7 +2,7 @@ use std::any::Any;
 use std::char;
 use std::sync::Arc;
 
-use serde_json::Value;
+use gtmpl_value::Value;
 
 pub fn unquote_char(s: &str, quote: char) -> Option<char> {
     if s.len() < 2 || !s.starts_with(quote) || !s.ends_with(quote) {
@@ -114,27 +114,15 @@ fn extract_bytes_x(s: &str) -> Option<(String, usize)> {
 /// Returns
 pub fn is_true(val: &Arc<Any>) -> bool {
     if let Some(v) = val.downcast_ref::<Value>() {
-        if let Some(i) = v.as_i64() {
-            return i != 0i64;
-        }
-        if let Some(i) = v.as_u64() {
-            return i != 0u64;
-        }
-        if let Some(i) = v.as_f64() {
-            return i != 0f64;
-        }
-        if let Some(s) = v.as_str() {
-            return !s.is_empty();
-        }
-        if let Some(b) = v.as_bool() {
-            return b;
-        }
-        if let Some(a) = v.as_array() {
-            return !a.is_empty();
-        }
-        if let Some(o) = v.as_object() {
-            return !o.is_empty();
-        }
+        return match *v {
+            Value::Bool(ref b) => *b,
+            Value::String(ref s) => !s.is_empty(),
+            Value::Array(ref a) => !a.is_empty(),
+            Value::Object(ref o) => !o.is_empty(),
+            Value::Function(_) => true,
+            Value::Nil => false,
+            Value::Number(ref n) => n.as_u64().map(|u| u != 0).unwrap_or_else(|| true),
+        };
     }
 
     false

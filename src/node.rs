@@ -5,7 +5,7 @@ use itertools::Itertools;
 use lexer::ItemType;
 use utils::unquote_char;
 
-use serde_json::Value;
+use gtmpl_value::Value;
 
 macro_rules! nodes {
     ($($node:ident, $name:ident),*) => {
@@ -341,7 +341,7 @@ node!(
 );
 
 impl VariableNode {
-    pub fn new(tr: TreeId, pos: Pos, ident: String) -> VariableNode {
+    pub fn new(tr: TreeId, pos: Pos, ident: &str) -> VariableNode {
         VariableNode {
             typ: NodeType::Variable,
             tr,
@@ -404,7 +404,7 @@ node!(
 );
 
 impl FieldNode {
-    pub fn new(tr: TreeId, pos: Pos, ident: String) -> FieldNode {
+    pub fn new(tr: TreeId, pos: Pos, ident: &str) -> FieldNode {
         FieldNode {
             typ: NodeType::Field,
             tr,
@@ -517,9 +517,9 @@ impl NumberNode {
         tr: TreeId,
         pos: Pos,
         text: String,
-        item_typ: ItemType,
+        item_typ: &ItemType,
     ) -> Result<NumberNode, Error> {
-        match item_typ {
+        match *item_typ {
             ItemType::ItemCharConstant => {
                 unquote_char(&text, '\'')
                     .and_then(|c| {

@@ -11,7 +11,7 @@
 
 ```toml
 [dependencies]
-gtmpl = "0.1.2"
+gtmpl = "0.2.0"
 ```
 
 * [gtmpl at crates.io](https://crates.io/crate/gtmpl)
@@ -23,15 +23,8 @@ gtmpl = "0.1.2"
 This is work in progress. Currently the following features are not supported:
 
 * complex numbers
-* comparing different number types
-  * `eq 1 1.0` will be `false`
 * the following functions have not been implemented:
   * `html`, `js`, `call` and `printf`
-
-For now we use [serde_json](https://github.com/serde-rs/json)'s Value as internal
-data type. However, this can not support passing functions to the context. In a
-future release we will move to a custom data type that will be compatible with
-serde_json.
 
 ## Usage
 
@@ -49,6 +42,19 @@ fn basic_template_rendering() {
 
 For more examples please take a look at the
 [gtmpl documentation](https://docs.rs/crate/gtmpl).
+
+## Context
+
+We use [gtmpl_value](https://github.com/fiji-flo/gtmpl_value)'s Value as internal
+data type. [gtmpl_derive](https://github.com/fiji-flo/gtmpl_derive) provides a
+handy `derive` marco to generate the `From` implmentation for `Value`.
+
+See:
+
+* [gtmpl_value at crates.io](https://crates.io/crate/gtmpl_value)
+* [gtmpl_value documentation](https://docs.rs/crate/gtmpl_value)
+* [gtmpl_derive at crates.io](https://crates.io/crate/gtmpl_derive)
+* [gtmpl_derive documentation](https://docs.rs/crate/gtmpl_derive)
 
 ## Why do we need this?
 

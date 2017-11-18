@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use parse::{Tree, Parser, parse};
-use funcs::Func;
 use funcs::BUILTINS;
 use node::TreeId;
+
+use gtmpl_value::Func;
 
 /// The main template structure.
 #[derive(Default)]
@@ -47,7 +48,7 @@ impl<'a> Template<'a> {
     /// let mut tmpl = gtmpl::Template::default();
     /// tmpl.add_funcs(&funcs);
     /// tmpl.parse("{{ helloWorld }}").unwrap();
-    /// let output = tmpl.render(Context::empty());
+    /// let output = tmpl.render(&Context::empty());
     /// assert_eq!(&output.unwrap(), "Hello World!");
     /// ```
     pub fn add_funcs(&mut self, funcs: &'a HashMap<String, Func>) {

@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use lexer::{Item, ItemType, Lexer};
 use node::*;
 use utils::*;
-use funcs::Func;
+use gtmpl_value::Func;
 
 pub struct Parser<'a> {
     name: &'a str,
@@ -106,7 +106,7 @@ impl<'a> Parser<'a> {
 
     fn next_must(&mut self, context: &str) -> Result<Item, String> {
         self.next().ok_or_else(|| {
-            self.error_msg(format!("unexpected end in {}", context))
+            self.error_msg(&format!("unexpected end in {}", context))
         })
     }
 
@@ -116,7 +116,7 @@ impl<'a> Parser<'a> {
 
     fn next_non_space_must(&mut self, context: &str) -> Result<Item, String> {
         self.next_non_space().ok_or_else(|| {
-            self.error_msg(format!("unexpected end in {}", context))
+            self.error_msg(&format!("unexpected end in {}", context))
         })
     }
 
@@ -125,7 +125,7 @@ impl<'a> Parser<'a> {
             self.backup(t);
             return Ok(self.token.front().unwrap());
         }
-        self.error(format!("unexpected end in {}", context))
+        self.error(&format!("unexpected end in {}", context))
     }
 
     fn peek(&mut self) -> Option<&Item> {
@@ -141,7 +141,7 @@ impl<'a> Parser<'a> {
             self.backup(t);
             return Ok(self.token.front().unwrap());
         }
-        self.error(format!("unexpected end in {}", context))
+        self.error(&format!("unexpected end in {}", context))
     }
 
     fn start_parse(&mut self, name: String, id: TreeId, parse_name: &'a str) {
@@ -176,11 +176,11 @@ impl<'a> Parser<'a> {
         self.tree_set.insert(name, t);
     }
 
-    fn error<T>(&self, msg: String) -> Result<T, String> {
+    fn error<T>(&self, msg: &str) -> Result<T, String> {
         Err(self.error_msg(msg))
     }
 
-    fn error_msg(&self, msg: String) -> String {
+    fn error_msg(&self, msg: &str) -> String {
         let name = if let Some(t) = self.tree.as_ref() {
             &t.parse_name
         } else {
@@ -189,31 +189,27 @@ impl<'a> Parser<'a> {
         format!("template: {}:{}:{}", name, self.line, msg)
     }
 
-    fn expect(&mut self, expected: ItemType, context: &str) -> Result<Item, String> {
+    fn expect(&mut self, expected: &ItemType, context: &str) -> Result<Item, String> {
         let token = self.next_non_space_must(context)?;
-        if token.typ != expected {
+        if token.typ != *expected {
             return self.unexpected(&token, context);
         }
         Ok(token)
     }
 
     fn unexpected<T>(&self, token: &Item, context: &str) -> Result<T, String> {
-        self.error(format!("unexpected {} in {}", token, context))
+        self.error(&format!("unexpected {} in {}", token, context))
     }
 
     fn add_var(&mut self, name: String) -> Result<(), String> {
-        let mut tree = self.tree.take().ok_or_else(
-            || self.error_msg("no tree".to_owned()),
-        )?;
+        let mut tree = self.tree.take().ok_or_else(|| self.error_msg("no tree"))?;
         tree.vars.push(name);
         self.tree = Some(tree);
         Ok(())
     }
 
     fn add_to_tree_set(&mut self) -> Result<(), String> {
-        let tree = self.tree.take().ok_or_else(
-            || self.error_msg("no tree".to_owned()),
-        )?;
+        let tree = self.tree.take().ok_or_else(|| self.error_msg("no tree"))?;
         if let Some(t) = self.tree_set.get(tree.name.as_str()) {
             if let Some(ref r) = t.root {
                 match r.is_empty_tree() {
@@ -221,7 +217,7 @@ impl<'a> Parser<'a> {
                     Ok(false) => {
                         let err =
                             format!("template multiple definitions of template {}", &tree.name);
-                        return self.error(err);
+                        return self.error(&err);
                     }
                     Ok(true) => {}
                 }
@@ -237,11 +233,11 @@ impl<'a> Parser<'a> {
 
     fn parse(&mut self) -> Result<(), String> {
         if self.tree.is_none() {
-            return self.error("no tree".to_owned());
+            return self.error("no tree");
         }
         let id = self.tree_id;
         let mut t = match self.next() {
-            None => return self.error(format!("unable to peek for tree {}", id)),
+            None => return self.error(&format!("unable to peek for tree {}", id)),
             Some(t) => t,
         };
         self.tree.as_mut().map(|tree| {
@@ -254,7 +250,7 @@ impl<'a> Parser<'a> {
                     Some(ref item) if item.typ == ItemType::ItemDefine => {
                         self.parse_definition()?;
                         t = match self.next() {
-                            None => return self.error(format!("unable to peek for tree {}", id)),
+                            None => return self.error(&format!("unable to peek for tree {}", id)),
                             Some(t) => t,
                         };
                         continue;
@@ -270,8 +266,8 @@ impl<'a> Parser<'a> {
                 self.backup(t);
             }
             let node = match self.text_or_action() {
-                Ok(Nodes::Else(node)) => return self.error(format!("unexpected {}", node)),
-                Ok(Nodes::End(node)) => return self.error(format!("unexpected {}", node)),
+                Ok(Nodes::Else(node)) => return self.error(&format!("unexpected {}", node)),
+                Ok(Nodes::End(node)) => return self.error(&format!("unexpected {}", node)),
                 Ok(node) => node,
                 Err(e) => return Err(e),
             };
@@ -286,10 +282,10 @@ impl<'a> Parser<'a> {
                         _ => None,
                     })
                 })
-                .ok_or_else(|| self.error_msg(String::from("invalid root node")))?;
+                .ok_or_else(|| self.error_msg("invalid root node"))?;
 
             t = match self.next() {
-                None => return self.error(format!("unable to peek for tree {}", id)),
+                None => return self.error(&format!("unable to peek for tree {}", id)),
                 Some(t) => t,
             };
         }
@@ -303,7 +299,7 @@ impl<'a> Parser<'a> {
         let parse_name = self.name;
         let token = self.next_non_space_must(context)?;
         let name = self.parse_template_name(&token, context)?;
-        self.expect(ItemType::ItemRightDelim, "define end")?;
+        self.expect(&ItemType::ItemRightDelim, "define end")?;
         self.start_parse(name, id + 1, parse_name);
         let (list, end) = self.item_list()?;
         if *end.typ() != NodeType::End {
@@ -325,7 +321,7 @@ impl<'a> Parser<'a> {
                 _ => list.append(node),
             }
         }
-        self.error("unexpected EOF".to_owned())
+        self.error("unexpected EOF")
     }
 
     fn text_or_action(&mut self) -> Result<Nodes, String> {
@@ -337,7 +333,7 @@ impl<'a> Parser<'a> {
             }
             Some(ref item) if item.typ == ItemType::ItemLeftDelim => self.action(),
             Some(ref item) => self.unexpected(item, "input"),
-            _ => self.error(String::from("unexpected end of input")),
+            _ => self.error("unexpected end of input"),
         }
     }
 
@@ -381,12 +377,12 @@ impl<'a> Parser<'a> {
                 } else {
                     let (else_list, next) = self.item_list()?;
                     if *next.typ() != NodeType::End {
-                        return self.error(format!("expected end; found {}", next));
+                        return self.error(&format!("expected end; found {}", next));
                     }
                     Some(else_list)
                 }
             }
-            _ => return self.error(format!("expected end; found {}", next)),
+            _ => return self.error(&format!("expected end; found {}", next)),
 
         };
         self.tree.as_mut().map(|t| t.pop_vars(vars_len));
@@ -421,7 +417,7 @@ impl<'a> Parser<'a> {
     fn end_control(&mut self) -> Result<Nodes, String> {
         Ok(Nodes::End(EndNode::new(
             self.tree_id,
-            self.expect(ItemType::ItemRightDelim, "end")?.pos,
+            self.expect(&ItemType::ItemRightDelim, "end")?.pos,
         )))
     }
 
@@ -430,7 +426,7 @@ impl<'a> Parser<'a> {
             let peek = self.peek_non_space_must("else")?;
             return Ok(Nodes::Else(ElseNode::new(peek.pos, peek.line)));
         }
-        let token = self.expect(ItemType::ItemRightDelim, "else")?;
+        let token = self.expect(&ItemType::ItemRightDelim, "else")?;
         Ok(Nodes::Else(ElseNode::new(token.pos, token.line)))
     }
 
@@ -447,7 +443,7 @@ impl<'a> Parser<'a> {
         let (root, end) = self.item_list()?;
         self.tree.as_mut().map(|t| t.root = Some(Nodes::List(root)));
         if end.typ() != &NodeType::End {
-            return self.error(format!("unexpected {} in {}", end, context));
+            return self.error(&format!("unexpected {} in {}", end, context));
         }
         self.stop_parse()?;
         Ok(Nodes::Template(TemplateNode::new(
@@ -504,7 +500,7 @@ impl<'a> Parser<'a> {
                 if next.typ == ItemType::ItemColonEquals ||
                     (next.typ == ItemType::ItemChar && next.val == ",")
                 {
-                    let variable = VariableNode::new(self.tree_id, token.pos, token.val.clone());
+                    let variable = VariableNode::new(self.tree_id, token.pos, &token.val);
                     self.add_var(token.val.clone())?;
                     decl.push(variable);
                     if next.typ == ItemType::ItemChar && next.val == "," {
@@ -512,7 +508,7 @@ impl<'a> Parser<'a> {
                             token = self.next_non_space_must("variable")?;
                             continue;
                         }
-                        return self.error(format!("to many decalarations in {}", context));
+                        return self.error(&format!("to many decalarations in {}", context));
                     }
                 } else {
                     self.backup2(token, next);
@@ -555,7 +551,7 @@ impl<'a> Parser<'a> {
 
     fn check_pipeline(&mut self, pipe: &mut PipeNode, context: &str) -> Result<(), String> {
         if pipe.cmds.is_empty() {
-            return self.error(format!("missing value for {}", context));
+            return self.error(&format!("missing value for {}", context));
         }
         for (i, c) in pipe.cmds.iter().enumerate().skip(1) {
             match c.args.first() {
@@ -563,7 +559,7 @@ impl<'a> Parser<'a> {
                     match *n.typ() {
                         NodeType::Bool | NodeType::Dot | NodeType::Nil | NodeType::Number |
                         NodeType::String => {
-                            return self.error(format!(
+                            return self.error(&format!(
                                 "non executable command in pipeline stage {}",
                                 i + 2
                             ))
@@ -572,7 +568,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 None => {
-                    return self.error(format!(
+                    return self.error(&format!(
                         "non executable command in pipeline stage {}",
                         i + 2
                     ))
@@ -592,15 +588,15 @@ impl<'a> Parser<'a> {
             let token = self.next_must("command")?;
             match token.typ {
                 ItemType::ItemSpace => continue,
-                ItemType::ItemError => return self.error(format!("{}", token.val)),
+                ItemType::ItemError => return self.error(&token.val),
                 ItemType::ItemRightDelim | ItemType::ItemRightParen => self.backup(token),
                 ItemType::ItemPipe => {}
-                _ => return self.error(format!("unexpected {} in operand", token)),
+                _ => return self.error(&format!("unexpected {} in operand", token)),
             };
             break;
         }
         if cmd.args.is_empty() {
-            return self.error("empty command".to_owned());
+            return self.error("empty command");
         }
         Ok(cmd)
     }
@@ -616,7 +612,9 @@ impl<'a> Parser<'a> {
                     match typ {
                         NodeType::Bool | NodeType::String | NodeType::Number | NodeType::Nil |
                         NodeType::Dot => {
-                            return self.error(format!("unexpected . after term {}", n.to_string()));
+                            return self.error(
+                                &format!("unexpected . after term {}", n.to_string()),
+                            );
                         }
                         _ => {}
                     };
@@ -631,15 +629,17 @@ impl<'a> Parser<'a> {
                     }
                     let n = match typ {
                         NodeType::Field => {
-                            Nodes::Field(
-                                FieldNode::new(self.tree_id, chain.pos(), chain.to_string()),
-                            )
+                            Nodes::Field(FieldNode::new(
+                                self.tree_id,
+                                chain.pos(),
+                                &chain.to_string(),
+                            ))
                         }
                         NodeType::Variable => {
                             Nodes::Variable(VariableNode::new(
                                 self.tree_id,
                                 chain.pos(),
-                                chain.to_string(),
+                                &chain.to_string(),
                             ))
                         }
                         _ => Nodes::Chain(chain),
@@ -656,10 +656,10 @@ impl<'a> Parser<'a> {
     fn term(&mut self) -> Result<Option<Nodes>, String> {
         let token = self.next_non_space_must("token")?;
         let node = match token.typ {
-            ItemType::ItemError => return self.error(format!("{}", token.val)),
+            ItemType::ItemError => return self.error(&token.val),
             ItemType::ItemIdentifier => {
                 if !self.has_func(&token.val) {
-                    return self.error(format!("function {} not defined", token.val));
+                    return self.error(&format!("function {} not defined", token.val));
                 }
                 let mut node = IdentifierNode::new(token.val);
                 node.set_pos(token.pos);
@@ -669,24 +669,26 @@ impl<'a> Parser<'a> {
             ItemType::ItemDot => Nodes::Dot(DotNode::new(self.tree_id, token.pos)),
             ItemType::ItemNil => Nodes::Nil(NilNode::new(self.tree_id, token.pos)),
             ItemType::ItemVariable => {
-                Nodes::Variable(self.use_var(self.tree_id, token.pos, token.val)?)
+                Nodes::Variable(self.use_var(self.tree_id, token.pos, &token.val)?)
             }
-            ItemType::ItemField => Nodes::Field(FieldNode::new(self.tree_id, token.pos, token.val)),
+            ItemType::ItemField => Nodes::Field(
+                FieldNode::new(self.tree_id, token.pos, &token.val),
+            ),
             ItemType::ItemBool => {
                 Nodes::Bool(BoolNode::new(self.tree_id, token.pos, token.val == "true"))
             }
             ItemType::ItemCharConstant |
             ItemType::ItemNumber => {
-                match NumberNode::new(self.tree_id, token.pos, token.val, token.typ) {
+                match NumberNode::new(self.tree_id, token.pos, token.val, &token.typ) {
                     Ok(n) => Nodes::Number(n),
-                    Err(e) => return self.error(e.to_string()),
+                    Err(e) => return self.error(&e.to_string()),
                 }
             }
             ItemType::ItemLeftParen => {
                 let pipe = self.pipeline("parenthesized pipeline")?;
                 let next = self.next_must("parenthesized pipeline")?;
                 if next.typ != ItemType::ItemRightParen {
-                    return self.error(format!("unclosed right paren: unexpected {}", next));
+                    return self.error(&format!("unclosed right paren: unexpected {}", next));
                 }
                 Nodes::Pipe(pipe)
             }
@@ -694,7 +696,7 @@ impl<'a> Parser<'a> {
                 if let Some(s) = unquote_str(&token.val) {
                     Nodes::String(StringNode::new(self.tree_id, token.pos, token.val, s))
                 } else {
-                    return self.error(format!("unable to unqote string: {}", token.val));
+                    return self.error(&format!("unable to unqote string: {}", token.val));
                 }
             }
 
@@ -706,15 +708,15 @@ impl<'a> Parser<'a> {
         Ok(Some(node))
     }
 
-    fn use_var(&self, tree_id: TreeId, pos: Pos, name: String) -> Result<VariableNode, String> {
+    fn use_var(&self, tree_id: TreeId, pos: Pos, name: &str) -> Result<VariableNode, String> {
         self.tree
             .as_ref()
             .and_then(|t| {
-                t.vars.iter().find(|&v| v == &name).map(|_| {
-                    VariableNode::new(tree_id, pos, name.clone())
+                t.vars.iter().find(|&v| v == name).map(|_| {
+                    VariableNode::new(tree_id, pos, name)
                 })
             })
-            .ok_or_else(|| self.error_msg(format!("undefined variable {}", name)))
+            .ok_or_else(|| self.error_msg(&format!("undefined variable {}", name)))
     }
 
     fn parse_template_name(&self, token: &Item, context: &str) -> Result<String, String> {
@@ -754,6 +756,7 @@ mod tests_mocked {
     use std::sync::Arc;
     use super::*;
     use lexer::ItemType;
+    use gtmpl_value::Value;
 
     /*
        ItemText
@@ -907,7 +910,7 @@ mod tests_mocked {
         let t = t.unwrap();
         assert_eq!(t.typ(), &NodeType::Bool);
         if let Nodes::Bool(n) = t {
-            assert_eq!(n.value.as_bool(), Some(true));
+            assert_eq!(*n.value, Value::from(true));
         } else {
             assert!(false);
         }
@@ -923,7 +926,7 @@ mod tests_mocked {
         assert_eq!(t.typ(), &NodeType::Bool);
         assert_eq!(t.typ(), &NodeType::Bool);
         if let Nodes::Bool(n) = t {
-            assert_eq!(n.value.as_bool(), Some(false));
+            assert_eq!(*n.value, Value::from(false));
         } else {
             assert!(false);
         }
