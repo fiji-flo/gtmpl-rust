@@ -26,6 +26,8 @@ pub mod funcs;
 mod template;
 mod exec;
 mod utils;
+mod print_verb;
+mod printf;
 
 #[doc(inline)]
 pub use template::Template;
