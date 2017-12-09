@@ -9,8 +9,8 @@ use gtmpl_value::Value;
 /// Limitations:
 /// - float:
 ///   * `g`, `G`, and `b` are weired and not implement yet
-pub fn print(p: &FormatParams, typ: char, v: &Value) -> Result<String, String> {
-    match *v {
+pub fn print(p: &FormatParams, typ: char, val: &Value) -> Result<String, String> {
+    match *val {
         Value::Number(ref n) if n.as_u64().is_some() => {
             let u = n.as_u64().unwrap();
             Ok(match typ {
@@ -32,7 +32,7 @@ pub fn print(p: &FormatParams, typ: char, v: &Value) -> Result<String, String> {
                 'x' => printf_x(p, u),
                 'X' => printf_xx(p, u),
                 'U' => printf_generic(p, format!("U+{:X}", u)),
-                _ => return Err(format!("unable to format {} as %{}", v, typ)),
+                _ => return Err(format!("unable to format {} as %{}", val, typ)),
             })
         }
         Value::Number(ref n) if n.as_i64().is_some() => {
@@ -56,7 +56,7 @@ pub fn print(p: &FormatParams, typ: char, v: &Value) -> Result<String, String> {
                 'x' => printf_x(p, i),
                 'X' => printf_xx(p, i),
                 'U' => printf_generic(p, format!("U+{:X}", i)),
-                _ => return Err(format!("unable to format {} as %{}", v, typ)),
+                _ => return Err(format!("unable to format {} as %{}", val, typ)),
             })
         }
         Value::Number(ref n) if n.as_f64().is_some() => {
@@ -65,17 +65,17 @@ pub fn print(p: &FormatParams, typ: char, v: &Value) -> Result<String, String> {
                 'e' => printf_e(p, f),
                 'E' => printf_ee(p, f),
                 'f' | 'F' => printf_generic(p, f),
-                _ => return Err(format!("unable to format {} as %{}", v, typ)),
+                _ => return Err(format!("unable to format {} as %{}", val, typ)),
             })
         }
         Value::Bool(ref b) => {
             Ok(match typ {
                 'v' | 't' => printf_generic(p, b),
-                _ => return Err(format!("unable to format {} as %{}", v, typ)),
+                _ => return Err(format!("unable to format {} as %{}", val, typ)),
             })
         }
         Value::String(ref s) => {
-            return Ok(match typ {
+            Ok(match typ {
                 's' | 'v' => printf_generic(p, s),
                 'x' => printf_x(p, Hexer::from(s.as_str())),
                 'X' => printf_xx(p, Hexer::from(s.as_str())),
@@ -85,10 +85,10 @@ pub fn print(p: &FormatParams, typ: char, v: &Value) -> Result<String, String> {
                         .collect::<String>();
                     printf_generic(p, s)
                 }
-                _ => return Err(format!("unable to format {} as %{}", v, typ)),
+                _ => return Err(format!("unable to format {} as %{}", val, typ)),
             })
         }
-        _ => return Err(format!("unable to format {} as %{}", v, typ)),
+        _ => Err(format!("unable to format {} as %{}", val, typ)),
     }
 }
 
@@ -283,7 +283,7 @@ fn escape_char(c: char) -> String {
 }
 
 struct Hexer<'a> {
-    s: &'a str
+    s: &'a str,
 }
 
 impl<'a> From<&'a str> for Hexer<'a> {

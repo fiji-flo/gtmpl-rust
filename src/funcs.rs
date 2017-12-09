@@ -328,13 +328,13 @@ pub fn printf(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
         })
         .collect::<Result<Vec<_>, String>>()?;
     if vals.is_empty() {
-        return Err(format!("printf requires at least one argument"));
+        return Err("printf requires at least one argument".to_owned());
     }
-    if let &Value::String(ref s) = vals[0] {
+    if let Value::String(ref s) = *vals[0] {
         let s = sprintf(s, &vals[1..])?;
         Ok(varc!(s))
     } else {
-        Err(format!("printf requires a format string"))
+        Err("printf requires a format string".to_owned())
     }
 }
 

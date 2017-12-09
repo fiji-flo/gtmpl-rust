@@ -75,7 +75,7 @@ fn process_verb(
             index = i;
             i
         });
-        if s[pos..].starts_with("*") {
+        if s[pos..].starts_with('*') {
             pos += 1;
             let arg_num = arg_num.unwrap_or_else(|| {
                 let i = index;
@@ -91,17 +91,15 @@ fn process_verb(
                 params.width = width.abs() as usize;
             }
             after_index = false;
-        } else {
-            if let Some((width, till)) = parse_num(&s[pos..])? {
-                if after_index {
-                    return Err("width after index (e.g. %[3]2d)".to_owned());
-                }
-                pos += till;
-                params.width = width;
+        } else if let Some((width, till)) = parse_num(&s[pos..])? {
+            if after_index {
+                return Err("width after index (e.g. %[3]2d)".to_owned());
             }
+            pos += till;
+            params.width = width;
         }
 
-        if pos + 1 < s.len() && s[pos..].starts_with(".") {
+        if pos + 1 < s.len() && s[pos..].starts_with('.') {
             pos += 1;
             if after_index {
                 return Err("precision after index (e.g. %[3].2d)".to_owned());
@@ -113,7 +111,7 @@ fn process_verb(
                 index = i;
                 i
             });
-            if s[pos..].starts_with("*") {
+            if s[pos..].starts_with('*') {
                 pos += 1;
                 let arg_num = arg_num.unwrap_or_else(|| {
                     let i = index;
@@ -126,14 +124,12 @@ fn process_verb(
                     }
                     params.precision = Some(prec.abs() as usize);
                 }
-            } else {
-                if let Some((prec, till)) = parse_num(&s[pos..])? {
-                    if after_index {
-                        return Err("precision after index (e.g. %[3].2d)".to_owned());
-                    }
-                    pos += till;
-                    params.precision = Some(prec);
+            } else if let Some((prec, till)) = parse_num(&s[pos..])? {
+                if after_index {
+                    return Err("precision after index (e.g. %[3].2d)".to_owned());
                 }
+                pos += till;
+                params.precision = Some(prec);
             }
         }
     }
@@ -148,19 +144,18 @@ fn process_verb(
     };
 
     if arg_num < args.len() {
-        return print(&params, typ, &args[arg_num]).map(|s| (s, index));
+        return print(&params, typ, args[arg_num]).map(|s| (s, index));
     }
     Err(format!("unable to process verb: {}", s))
 }
 
 fn parse_index(s: &str) -> Result<Option<(usize, usize)>, String> {
-    if s.starts_with("[") {
-        let till = s.find("]").ok_or_else(|| format!("missing ] in {}", s))?;
-        s[1..till].parse::<usize>().map(|u| Some((u - 1, till + 1))).map_err(
-            |e| {
-                format!("unable to parse index: {}", e)
-            },
-        )
+    if s.starts_with('[') {
+        let till = s.find(']').ok_or_else(|| format!("missing ] in {}", s))?;
+        s[1..till]
+            .parse::<usize>()
+            .map(|u| Some((u - 1, till + 1)))
+            .map_err(|e| format!("unable to parse index: {}", e))
     } else {
         Ok(None)
     }
@@ -187,12 +182,9 @@ fn tokenize(s: &str) -> Result<Vec<FormatArg>, String> {
             _ => continue,
         };
 
-        match iter.peek() {
-            Some(&(_, '%')) => {
-                iter.next();
-                continue;
-            }
-            _ => {}
+        if let Some(&(_, '%')) = iter.peek() {
+            iter.next();
+            continue;
         }
 
         loop {
@@ -214,11 +206,13 @@ fn tokenize(s: &str) -> Result<Vec<FormatArg>, String> {
 }
 
 pub fn params_to_chars(params: &FormatParams) -> (char, char, char, char, char) {
-    (if params.sharp { '#' } else { '_' },
-     if params.zero { '0' } else { '_' },
-     if params.plus { '+' } else { '_' },
-     if params.minus { '-' } else { '_' },
-     if params.space { ' ' } else { '_' })
+    (
+        if params.sharp { '#' } else { '_' },
+        if params.zero { '0' } else { '_' },
+        if params.plus { '+' } else { '_' },
+        if params.minus { '-' } else { '_' },
+        if params.space { ' ' } else { '_' },
+    )
 }
 
 #[cfg(test)]
@@ -274,12 +268,18 @@ mod test {
 
     #[test]
     fn test_sprintf_index() {
-        let s = sprintf("%[1]v %v", &vec![&"foo".into(), &"bar".into(), &2000.into()]);
+        let s = sprintf(
+            "%[1]v %v",
+            &vec![&"foo".into(), &"bar".into(), &2000.into()],
+        );
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"foo bar");
 
-        let s = sprintf("%[2]v %v%[1]v %v%[1]v", &vec![&"!".into(), &"wtf".into(), &"golang".into()]);
+        let s = sprintf(
+            "%[2]v %v%[1]v %v%[1]v",
+            &vec![&"!".into(), &"wtf".into(), &"golang".into()],
+        );
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"wtf golang! wtf!");
