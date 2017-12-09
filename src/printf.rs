@@ -4,7 +4,7 @@ use gtmpl_value::{FromValue, Value};
 
 use print_verb::print;
 
-pub fn printf_to_format(s: &str, args: &[Value]) -> Result<String, String> {
+pub fn sprintf(s: &str, args: &[&Value]) -> Result<String, String> {
     let tokens = tokenize(s)?;
     let mut fmt = String::new();
     let mut i = 0;
@@ -28,19 +28,6 @@ struct FormatArg {
 
 static TYPS: &'static str = "vVtTbcdoqxXUeEfFgGsp";
 
-pub enum FormatWidth {
-    None,
-    Star,
-    Arg(usize),
-    Fixed(usize),
-}
-
-impl Default for FormatWidth {
-    fn default() -> FormatWidth {
-        FormatWidth::None
-    }
-}
-
 #[derive(Default)]
 pub struct FormatParams {
     pub sharp: bool,
@@ -48,15 +35,14 @@ pub struct FormatParams {
     pub plus: bool,
     pub minus: bool,
     pub space: bool,
-    pub width: FormatWidth,
-    pub precision: FormatWidth,
-    pub index: Option<usize>,
+    pub width: usize,
+    pub precision: Option<usize>,
 }
 
 fn process_verb(
     s: &str,
     typ: char,
-    args: &[Value],
+    args: &[&Value],
     mut index: usize,
 ) -> Result<(String, usize), String> {
     let mut params = FormatParams::default();
@@ -83,25 +69,26 @@ fn process_verb(
     }
     if complex {
         let mut after_index = false;
-        let arg_num = if let Some((i, till)) = parse_index(&s[pos..])? {
+        let arg_num = parse_index(&s[pos..])?.map(|(i, till)| {
             pos += till;
             after_index = true;
             index = i;
             i
-        } else {
-            let i = index;
-            index += 1;
-            i
-        };
+        });
         if s[pos..].starts_with("*") {
             pos += 1;
+            let arg_num = arg_num.unwrap_or_else(|| {
+                let i = index;
+                index += 1;
+                i
+            });
             if let Some(width) = args.get(arg_num).and_then(|v| i64::from_value(v)) {
                 if width < 0 {
                     params.minus = true;
                     // Golang does not pad with zeros to the right.
                     params.zero = false;
                 }
-                params.width = FormatWidth::Arg(width.abs() as usize);
+                params.width = width.abs() as usize;
             }
             after_index = false;
         } else {
@@ -110,7 +97,7 @@ fn process_verb(
                     return Err("width after index (e.g. %[3]2d)".to_owned());
                 }
                 pos += till;
-                params.width = FormatWidth::Fixed(width);
+                params.width = width;
             }
         }
 
@@ -120,32 +107,32 @@ fn process_verb(
                 return Err("precision after index (e.g. %[3].2d)".to_owned());
             }
 
-            let arg_num = if let Some((i, till)) = parse_index(&s[pos..])? {
+            let arg_num = parse_index(&s[pos..])?.map(|(i, till)| {
                 pos += till;
                 after_index = true;
                 index = i;
                 i
-            } else {
-                let i = index;
-                index += 1;
-                i
-            };
+            });
             if s[pos..].starts_with("*") {
                 pos += 1;
+                let arg_num = arg_num.unwrap_or_else(|| {
+                    let i = index;
+                    index += 1;
+                    i
+                });
                 if let Some(prec) = args.get(arg_num).and_then(|v| i64::from_value(v)) {
                     if prec < 0 {
-                        params.precision = FormatWidth::None;
+                        params.precision = None;
                     }
-                    params.precision = FormatWidth::Arg(prec.abs() as usize);
+                    params.precision = Some(prec.abs() as usize);
                 }
-                after_index = false;
             } else {
                 if let Some((prec, till)) = parse_num(&s[pos..])? {
                     if after_index {
                         return Err("precision after index (e.g. %[3].2d)".to_owned());
                     }
                     pos += till;
-                    params.precision = FormatWidth::Fixed(prec);
+                    params.precision = Some(prec);
                 }
             }
         }
@@ -169,7 +156,7 @@ fn process_verb(
 fn parse_index(s: &str) -> Result<Option<(usize, usize)>, String> {
     if s.starts_with("[") {
         let till = s.find("]").ok_or_else(|| format!("missing ] in {}", s))?;
-        s[1..till].parse().map(|u| Some((u, till + 1))).map_err(
+        s[1..till].parse::<usize>().map(|u| Some((u - 1, till + 1))).map_err(
             |e| {
                 format!("unable to parse index: {}", e)
             },
@@ -226,63 +213,91 @@ fn tokenize(s: &str) -> Result<Vec<FormatArg>, String> {
     Ok(args)
 }
 
-fn params_to_num(params: &FormatParams) -> u8 {
-    let mut v = 0;
-    if params.sharp {
-        v |= 1 << 0;
-    }
-    if params.zero {
-        v |= 1 << 1;
-    }
-    if params.plus {
-        v |= 1 << 2;
-    }
-    if params.minus {
-        v |= 1 << 3;
-    }
-    if params.space {
-        v |= 1 << 4;
-    }
-    v
-}
-
-fn fmt_simple(params: &FormatParams, typ: char, v: &Value) -> Result<String, String> {
-    let s = match params_to_num(params) {
-        i if (i & 4) == 4 => format!("{:+}", v),
-        _ => format!("{}", v),
-    };
-    Ok(s)
+pub fn params_to_chars(params: &FormatParams) -> (char, char, char, char, char) {
+    (if params.sharp { '#' } else { '_' },
+     if params.zero { '0' } else { '_' },
+     if params.plus { '+' } else { '_' },
+     if params.minus { '-' } else { '_' },
+     if params.space { ' ' } else { '_' })
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
 
-    fn test_printf_to_format() {
-        let s = printf_to_format("foo%v2000", &vec!["bar".into()]);
+    #[test]
+    fn test_printintf_to_format() {
+        let s = sprintf("foo%v2000", &vec![&"bar".into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"foobar2000");
 
-        let s = printf_to_format("%+0v", &vec![1.into()]);
+        let s = sprintf("%+0v", &vec![&1.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"+1");
     }
 
     #[test]
-    fn test_printf_to_format_number() {
-        let s = printf_to_format("foobar%d", &vec![2000.into()]);
+    fn test_sprintf_fancy() {
+        let s = sprintf("%+-#10c", &vec![&10000.into()]);
+        assert!(s.is_ok());
+        let s = s.unwrap();
+        assert_eq!(s, r"✐         ");
+
+        let s = sprintf("%+-#10q", &vec![&10000.into()]);
+        assert!(s.is_ok());
+        let s = s.unwrap();
+        assert_eq!(s, r"'\u2710'  ");
+    }
+
+    #[test]
+    fn test_sprintf_string_to_hex() {
+        let s = sprintf("%x", &vec![&"foobar2000".into()]);
+        assert!(s.is_ok());
+        let s = s.unwrap();
+        assert_eq!(s, r"666f6f62617232303030");
+
+        let s = sprintf("%X", &vec![&"foobar2000".into()]);
+        assert!(s.is_ok());
+        let s = s.unwrap();
+        assert_eq!(s, r"666F6F62617232303030");
+    }
+
+    #[test]
+    fn test_sprintf_string_prec() {
+        let s = sprintf("%.6s", &vec![&"foobar2000".into()]);
+        assert!(s.is_ok());
+        let s = s.unwrap();
+        assert_eq!(s, r"foobar");
+    }
+
+    #[test]
+    fn test_sprintf_index() {
+        let s = sprintf("%[1]v %v", &vec![&"foo".into(), &"bar".into(), &2000.into()]);
+        assert!(s.is_ok());
+        let s = s.unwrap();
+        assert_eq!(s, r"foo bar");
+
+        let s = sprintf("%[2]v %v%[1]v %v%[1]v", &vec![&"!".into(), &"wtf".into(), &"golang".into()]);
+        assert!(s.is_ok());
+        let s = s.unwrap();
+        assert_eq!(s, r"wtf golang! wtf!");
+    }
+
+    #[test]
+    fn test_sprintf_number() {
+        let s = sprintf("foobar%d", &vec![&2000.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"foobar2000");
 
-        let s = printf_to_format("%+0d", &vec![1.into()]);
+        let s = sprintf("%+0d", &vec![&1.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"+1");
 
-        let s = printf_to_format("%+0b", &vec![5.into()]);
+        let s = sprintf("%+0b", &vec![&5.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"+101");
@@ -320,7 +335,8 @@ mod test {
         let x = parse_index("[12]");
         assert!(x.is_ok());
         let x = x.unwrap();
-        assert_eq!(x, Some((12, 4)));
+        // Go starts with 1 in stead of 0
+        assert_eq!(x, Some((11, 4)));
 
         let x = parse_index("[12");
         assert!(x.is_err());

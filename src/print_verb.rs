@@ -1,172 +1,311 @@
 use std::char;
+use std::fmt;
 
-use printf::FormatParams;
+use printf::{params_to_chars, FormatParams};
 
 use gtmpl_value::Value;
 
+/// Print a verb like golang's printf.
+/// Limitations:
+/// - float:
+///   * `g`, `G`, and `b` are weired and not implement yet
 pub fn print(p: &FormatParams, typ: char, v: &Value) -> Result<String, String> {
     match *v {
         Value::Number(ref n) if n.as_u64().is_some() => {
             let u = n.as_u64().unwrap();
-            return Ok(match typ {
-                'b' => {
-                    if p.sharp && p.plus {
-                        format!("{:+#b}", u)
-                    } else if p.sharp {
-                        format!("{:#b}", u)
-                    } else if p.plus {
-                        format!("{:+b}", u)
-                    } else {
-                        format!("{:b}", u)
-                    }
-                }
+            Ok(match typ {
+                'b' => printf_b(p, u),
+                'd' | 'v' => printf_generic(p, u),
+                'o' => printf_o(p, u),
                 'c' => {
-                    format!(
-                        "{}",
-                        char::from_u32(u as u32).ok_or_else(|| {
-                            format!("{:X} is not a valid char", u)
-                        })?
-                    )
-                }
-                'd' => {
-                    if p.plus {
-                        format!("{:+}", u)
-                    } else {
-                        format!("{}", u)
-                    }
-                }
-                'o' => {
-                    if p.sharp && p.plus {
-                        format!("{:+#o}", u)
-                    } else if p.sharp {
-                        format!("{:#o}", u)
-                    } else if p.plus {
-                        format!("{:+o}", u)
-                    } else {
-                        format!("{:o}", u)
-                    }
+                    let c = char::from_u32(u as u32).ok_or_else(|| {
+                        format!("{:X} is not a valid char", u)
+                    })?;
+                    printf_generic(p, c)
                 }
                 'q' => {
-                    format!(
-                        "'{}'",
-                        char::from_u32(u as u32).ok_or_else(|| {
-                            format!("{:X} is not a valid char", u)
-                        })?
-                    )
+                    let c = char::from_u32(u as u32).ok_or_else(|| {
+                        format!("{:X} is not a valid char", u)
+                    })?;
+                    printf_generic(p, format!("'{}'", escape_char(c)))
                 }
-                'x' => {
-                    if p.sharp && p.plus {
-                        format!("{:+#x}", u)
-                    } else if p.sharp {
-                        format!("{:#x}", u)
-                    } else if p.plus {
-                        format!("{:+x}", u)
-                    } else {
-                        format!("{:x}", u)
-                    }
-                }
-                'X' => {
-                    if p.sharp && p.plus {
-                        format!("{:+#X}", u)
-                    } else if p.sharp {
-                        format!("{:#X}", u)
-                    } else if p.plus {
-                        format!("{:+X}", u)
-                    } else {
-                        format!("{:X}", u)
-                    }
-                }
-                'U' => format!("U+{:X}", u),
+                'x' => printf_x(p, u),
+                'X' => printf_xx(p, u),
+                'U' => printf_generic(p, format!("U+{:X}", u)),
                 _ => return Err(format!("unable to format {} as %{}", v, typ)),
-            });
+            })
         }
         Value::Number(ref n) if n.as_i64().is_some() => {
             let i = n.as_i64().unwrap();
-            return Ok(match typ {
-                'b' => {
-                    if p.sharp && p.plus {
-                        format!("{:+#b}", i)
-                    } else if p.sharp {
-                        format!("{:#b}", i)
-                    } else if p.plus {
-                        format!("{:+b}", i)
-                    } else {
-                        format!("{:b}", i)
-                    }
-                }
+            Ok(match typ {
+                'b' => printf_b(p, i),
+                'd' => printf_generic(p, i),
+                'o' => printf_o(p, i),
                 'c' => {
-                    format!(
-                        "{}",
-                        char::from_u32(i as u32).ok_or_else(|| {
-                            format!("{:X} is not a valid char", i)
-                        })?
-                    )
-                }
-                'd' => {
-                    if p.plus {
-                        format!("{:+}", i)
-                    } else {
-                        format!("{}", i)
-                    }
-                }
-                'o' => {
-                    if p.sharp && p.plus {
-                        format!("{:+#o}", i)
-                    } else if p.sharp {
-                        format!("{:#o}", i)
-                    } else if p.plus {
-                        format!("{:+o}", i)
-                    } else {
-                        format!("{:o}", i)
-                    }
+                    let c = char::from_u32(i as u32).ok_or_else(|| {
+                        format!("{:X} is not a valid char", i)
+                    })?;
+                    printf_generic(p, c)
                 }
                 'q' => {
-                    format!(
-                        "'{}'",
-                        char::from_u32(i as u32).ok_or_else(|| {
-                            format!("{:X} is not a valid char", i)
-                        })?
-                    )
+                    let c = char::from_u32(i as u32).ok_or_else(|| {
+                        format!("{:X} is not a valid char", i)
+                    })?;
+                    printf_generic(p, format!("'{}'", escape_char(c)))
                 }
-                'x' => {
-                    if p.sharp && p.plus {
-                        format!("{:+#x}", i)
-                    } else if p.sharp {
-                        format!("{:#x}", i)
-                    } else if p.plus {
-                        format!("{:+x}", i)
-                    } else {
-                        format!("{:x}", i)
-                    }
-                }
-                'X' => {
-                    if p.sharp && p.plus {
-                        format!("{:+#X}", i)
-                    } else if p.sharp {
-                        format!("{:#X}", i)
-                    } else if p.plus {
-                        format!("{:+X}", i)
-                    } else {
-                        format!("{:X}", i)
-                    }
-                }
-                'U' => format!("U+{:X}", i),
+                'x' => printf_x(p, i),
+                'X' => printf_xx(p, i),
+                'U' => printf_generic(p, format!("U+{:X}", i)),
                 _ => return Err(format!("unable to format {} as %{}", v, typ)),
-            });
+            })
         }
         Value::Number(ref n) if n.as_f64().is_some() => {
             let f = n.as_f64().unwrap();
-            return Ok(match typ {
-                'b' => format!("{}", f),
-                'e' => format!("{}", f),
-                'E' => format!("{}", f),
-                'f' => format!("{}", f),
-                'F' => format!("{}", f),
-                'g' => format!("{}", f),
-                'G' => format!("{}", f),
+            Ok(match typ {
+                'e' => printf_e(p, f),
+                'E' => printf_ee(p, f),
+                'f' | 'F' => printf_generic(p, f),
                 _ => return Err(format!("unable to format {} as %{}", v, typ)),
-            });
+            })
+        }
+        Value::Bool(ref b) => {
+            Ok(match typ {
+                'v' | 't' => printf_generic(p, b),
+                _ => return Err(format!("unable to format {} as %{}", v, typ)),
+            })
+        }
+        Value::String(ref s) => {
+            return Ok(match typ {
+                's' | 'v' => printf_generic(p, s),
+                'x' => printf_x(p, Hexer::from(s.as_str())),
+                'X' => printf_xx(p, Hexer::from(s.as_str())),
+                'q' => {
+                    let s = s.chars()
+                        .map(|c| c.escape_default().to_string())
+                        .collect::<String>();
+                    printf_generic(p, s)
+                }
+                _ => return Err(format!("unable to format {} as %{}", v, typ)),
+            })
         }
         _ => return Err(format!("unable to format {} as %{}", v, typ)),
+    }
+}
+
+fn printf_b<B: fmt::Binary>(p: &FormatParams, u: B) -> String {
+    match params_to_chars(p) {
+        ('#', '_', '+', '_', _) => format!("{:+#width$b}", u, width = p.width),
+        ('_', '_', '+', '_', _) => format!("{:+width$b}", u, width = p.width),
+        ('#', '_', '_', '_', _) => format!("{:#width$b}", u, width = p.width),
+        ('#', '0', '+', '_', _) => format!("{:+#0width$b}", u, width = p.width),
+        ('_', '0', '+', '_', _) => format!("{:+0width$b}", u, width = p.width),
+        ('#', '0', '_', '_', _) => format!("{:#0width$b}", u, width = p.width),
+        ('#', '_', '+', '-', _) => format!("{:<+#width$b}", u, width = p.width),
+        ('_', '_', '+', '-', _) => format!("{:<+width$b}", u, width = p.width),
+        ('#', '_', '_', '-', _) => format!("{:<#width$b}", u, width = p.width),
+        ('#', '0', '+', '-', _) => format!("{:<+#0width$b}", u, width = p.width),
+        ('_', '0', '+', '-', _) => format!("{:<+0width$b}", u, width = p.width),
+        ('#', '0', '_', '-', _) => format!("{:<#0width$b}", u, width = p.width),
+        (_, _, _, _, _) => format!("{:width$b}", u, width = p.width),
+    }
+}
+
+fn printf_o<B: fmt::Octal>(p: &FormatParams, u: B) -> String {
+    match params_to_chars(p) {
+        ('#', '_', '+', '_', _) => format!("{:+#width$o}", u, width = p.width),
+        ('_', '_', '+', '_', _) => format!("{:+width$o}", u, width = p.width),
+        ('#', '_', '_', '_', _) => format!("{:#width$o}", u, width = p.width),
+        ('#', '0', '+', '_', _) => format!("{:+#0width$o}", u, width = p.width),
+        ('_', '0', '+', '_', _) => format!("{:+0width$o}", u, width = p.width),
+        ('#', '0', '_', '_', _) => format!("{:#0width$o}", u, width = p.width),
+        ('#', '_', '+', '-', _) => format!("{:<+#width$o}", u, width = p.width),
+        ('_', '_', '+', '-', _) => format!("{:<+width$o}", u, width = p.width),
+        ('#', '_', '_', '-', _) => format!("{:<#width$o}", u, width = p.width),
+        ('#', '0', '+', '-', _) => format!("{:<+#0width$o}", u, width = p.width),
+        ('_', '0', '+', '-', _) => format!("{:<+0width$o}", u, width = p.width),
+        ('#', '0', '_', '-', _) => format!("{:<#0width$o}", u, width = p.width),
+        (_, _, _, _, _) => format!("{:width$o}", u, width = p.width),
+    }
+}
+
+fn printf_x<B: fmt::LowerHex>(p: &FormatParams, u: B) -> String {
+    match params_to_chars(p) {
+        ('#', '_', '+', '_', _) => format!("{:+#width$x}", u, width = p.width),
+        ('_', '_', '+', '_', _) => format!("{:+width$x}", u, width = p.width),
+        ('#', '_', '_', '_', _) => format!("{:#width$x}", u, width = p.width),
+        ('#', '0', '+', '_', _) => format!("{:+#0width$x}", u, width = p.width),
+        ('_', '0', '+', '_', _) => format!("{:+0width$x}", u, width = p.width),
+        ('#', '0', '_', '_', _) => format!("{:#0width$x}", u, width = p.width),
+        ('#', '_', '+', '-', _) => format!("{:<+#width$x}", u, width = p.width),
+        ('_', '_', '+', '-', _) => format!("{:<+width$x}", u, width = p.width),
+        ('#', '_', '_', '-', _) => format!("{:<#width$x}", u, width = p.width),
+        ('#', '0', '+', '-', _) => format!("{:<+#0width$x}", u, width = p.width),
+        ('_', '0', '+', '-', _) => format!("{:<+0width$x}", u, width = p.width),
+        ('#', '0', '_', '-', _) => format!("{:<#0width$x}", u, width = p.width),
+        (_, _, _, _, _) => format!("{:width$x}", u, width = p.width),
+    }
+}
+
+fn printf_xx<B: fmt::UpperHex>(p: &FormatParams, u: B) -> String {
+    match params_to_chars(p) {
+        ('#', '_', '+', '_', _) => format!("{:+#width$X}", u, width = p.width),
+        ('_', '_', '+', '_', _) => format!("{:+width$X}", u, width = p.width),
+        ('#', '_', '_', '_', _) => format!("{:#width$X}", u, width = p.width),
+        ('#', '0', '+', '_', _) => format!("{:+#0width$X}", u, width = p.width),
+        ('_', '0', '+', '_', _) => format!("{:+0width$X}", u, width = p.width),
+        ('#', '0', '_', '_', _) => format!("{:#0width$X}", u, width = p.width),
+        ('#', '_', '+', '-', _) => format!("{:<+#width$X}", u, width = p.width),
+        ('_', '_', '+', '-', _) => format!("{:<+width$X}", u, width = p.width),
+        ('#', '_', '_', '-', _) => format!("{:<#width$X}", u, width = p.width),
+        ('#', '0', '+', '-', _) => format!("{:<+#0width$X}", u, width = p.width),
+        ('_', '0', '+', '-', _) => format!("{:<+0width$X}", u, width = p.width),
+        ('#', '0', '_', '-', _) => format!("{:<#0width$X}", u, width = p.width),
+        (_, _, _, _, _) => format!("{:width$X}", u, width = p.width),
+    }
+}
+
+
+fn printf_generic<D: fmt::Display>(p: &FormatParams, c: D) -> String {
+    if let Some(pr) = p.precision {
+        match params_to_chars(p) {
+            ('#', '_', '+', '_', _) => format!("{:+#width$.pr$}", c, width = p.width, pr = pr),
+            ('_', '_', '+', '_', _) => format!("{:+width$.pr$}", c, width = p.width, pr = pr),
+            ('#', '_', '_', '_', _) => format!("{:#width$.pr$}", c, width = p.width, pr = pr),
+            ('#', '0', '+', '_', _) => format!("{:+#0width$.pr$}", c, width = p.width, pr = pr),
+            ('_', '0', '+', '_', _) => format!("{:+0width$.pr$}", c, width = p.width, pr = pr),
+            ('#', '0', '_', '_', _) => format!("{:#0width$.pr$}", c, width = p.width, pr = pr),
+            ('#', '_', '+', '-', _) => format!("{:<+#width$.pr$}", c, width = p.width, pr = pr),
+            ('_', '_', '+', '-', _) => format!("{:<+width$.pr$}", c, width = p.width, pr = pr),
+            ('#', '_', '_', '-', _) => format!("{:<#width$.pr$}", c, width = p.width, pr = pr),
+            ('#', '0', '+', '-', _) => format!("{:<+#0width$.pr$}", c, width = p.width, pr = pr),
+            ('_', '0', '+', '-', _) => format!("{:<+0width$.pr$}", c, width = p.width, pr = pr),
+            ('#', '0', '_', '-', _) => format!("{:<#0width$.pr$}", c, width = p.width, pr = pr),
+            (_, _, _, _, _) => format!("{:width$.pr$}", c, width = p.width, pr = pr),
+        }
+    } else {
+        match params_to_chars(p) {
+            ('#', '_', '+', '_', _) => format!("{:+#width$}", c, width = p.width),
+            ('_', '_', '+', '_', _) => format!("{:+width$}", c, width = p.width),
+            ('#', '_', '_', '_', _) => format!("{:#width$}", c, width = p.width),
+            ('#', '0', '+', '_', _) => format!("{:+#0width$}", c, width = p.width),
+            ('_', '0', '+', '_', _) => format!("{:+0width$}", c, width = p.width),
+            ('#', '0', '_', '_', _) => format!("{:#0width$}", c, width = p.width),
+            ('#', '_', '+', '-', _) => format!("{:<+#width$}", c, width = p.width),
+            ('_', '_', '+', '-', _) => format!("{:<+width$}", c, width = p.width),
+            ('#', '_', '_', '-', _) => format!("{:<#width$}", c, width = p.width),
+            ('#', '0', '+', '-', _) => format!("{:<+#0width$}", c, width = p.width),
+            ('_', '0', '+', '-', _) => format!("{:<+0width$}", c, width = p.width),
+            ('#', '0', '_', '-', _) => format!("{:<#0width$}", c, width = p.width),
+            (_, _, _, _, _) => format!("{:width$}", c, width = p.width),
+        }
+    }
+
+}
+
+fn printf_e<E: fmt::LowerExp>(p: &FormatParams, f: E) -> String {
+    if let Some(pr) = p.precision {
+        match params_to_chars(p) {
+            ('#', '_', '+', '_', _) => format!("{:+#width$.pr$e}", f, width = p.width, pr = pr),
+            ('_', '_', '+', '_', _) => format!("{:+width$.pr$e}", f, width = p.width, pr = pr),
+            ('#', '_', '_', '_', _) => format!("{:#width$.pr$e}", f, width = p.width, pr = pr),
+            ('#', '0', '+', '_', _) => format!("{:+#0width$.pr$e}", f, width = p.width, pr = pr),
+            ('_', '0', '+', '_', _) => format!("{:+0width$.pr$e}", f, width = p.width, pr = pr),
+            ('#', '0', '_', '_', _) => format!("{:#0width$.pr$e}", f, width = p.width, pr = pr),
+            ('#', '_', '+', '-', _) => format!("{:<+#width$.pr$e}", f, width = p.width, pr = pr),
+            ('_', '_', '+', '-', _) => format!("{:<+width$.pr$e}", f, width = p.width, pr = pr),
+            ('#', '_', '_', '-', _) => format!("{:<#width$.pr$e}", f, width = p.width, pr = pr),
+            ('#', '0', '+', '-', _) => format!("{:<+#0width$.pr$e}", f, width = p.width, pr = pr),
+            ('_', '0', '+', '-', _) => format!("{:<+0width$.pr$e}", f, width = p.width, pr = pr),
+            ('#', '0', '_', '-', _) => format!("{:<#0width$.pr$e}", f, width = p.width, pr = pr),
+            (_, _, _, _, _) => format!("{:width$.pr$e}", f, width = p.width, pr = pr),
+        }
+    } else {
+        match params_to_chars(p) {
+            ('#', '_', '+', '_', _) => format!("{:+#width$e}", f, width = p.width),
+            ('_', '_', '+', '_', _) => format!("{:+width$e}", f, width = p.width),
+            ('#', '_', '_', '_', _) => format!("{:#width$e}", f, width = p.width),
+            ('#', '0', '+', '_', _) => format!("{:+#0width$e}", f, width = p.width),
+            ('_', '0', '+', '_', _) => format!("{:+0width$e}", f, width = p.width),
+            ('#', '0', '_', '_', _) => format!("{:#0width$e}", f, width = p.width),
+            ('#', '_', '+', '-', _) => format!("{:<+#width$e}", f, width = p.width),
+            ('_', '_', '+', '-', _) => format!("{:<+width$e}", f, width = p.width),
+            ('#', '_', '_', '-', _) => format!("{:<#width$e}", f, width = p.width),
+            ('#', '0', '+', '-', _) => format!("{:<+#0width$e}", f, width = p.width),
+            ('_', '0', '+', '-', _) => format!("{:<+0width$e}", f, width = p.width),
+            ('#', '0', '_', '-', _) => format!("{:<#0width$e}", f, width = p.width),
+            (_, _, _, _, _) => format!("{:width$e}", f, width = p.width),
+        }
+    }
+}
+
+fn printf_ee<E: fmt::UpperExp>(p: &FormatParams, f: E) -> String {
+    if let Some(pr) = p.precision {
+        match params_to_chars(p) {
+            ('#', '_', '+', '_', _) => format!("{:+#width$.pr$E}", f, width = p.width, pr = pr),
+            ('_', '_', '+', '_', _) => format!("{:+width$.pr$E}", f, width = p.width, pr = pr),
+            ('#', '_', '_', '_', _) => format!("{:#width$.pr$E}", f, width = p.width, pr = pr),
+            ('#', '0', '+', '_', _) => format!("{:+#0width$.pr$E}", f, width = p.width, pr = pr),
+            ('_', '0', '+', '_', _) => format!("{:+0width$.pr$E}", f, width = p.width, pr = pr),
+            ('#', '0', '_', '_', _) => format!("{:#0width$.pr$E}", f, width = p.width, pr = pr),
+            ('#', '_', '+', '-', _) => format!("{:<+#width$.pr$E}", f, width = p.width, pr = pr),
+            ('_', '_', '+', '-', _) => format!("{:<+width$.pr$E}", f, width = p.width, pr = pr),
+            ('#', '_', '_', '-', _) => format!("{:<#width$.pr$E}", f, width = p.width, pr = pr),
+            ('#', '0', '+', '-', _) => format!("{:<+#0width$.pr$E}", f, width = p.width, pr = pr),
+            ('_', '0', '+', '-', _) => format!("{:<+0width$.pr$E}", f, width = p.width, pr = pr),
+            ('#', '0', '_', '-', _) => format!("{:<#0width$.pr$E}", f, width = p.width, pr = pr),
+            (_, _, _, _, _) => format!("{:width$.pr$E}", f, width = p.width, pr = pr),
+        }
+    } else {
+        match params_to_chars(p) {
+            ('#', '_', '+', '_', _) => format!("{:+#width$E}", f, width = p.width),
+            ('_', '_', '+', '_', _) => format!("{:+width$E}", f, width = p.width),
+            ('#', '_', '_', '_', _) => format!("{:#width$E}", f, width = p.width),
+            ('#', '0', '+', '_', _) => format!("{:+#0width$E}", f, width = p.width),
+            ('_', '0', '+', '_', _) => format!("{:+0width$E}", f, width = p.width),
+            ('#', '0', '_', '_', _) => format!("{:#0width$E}", f, width = p.width),
+            ('#', '_', '+', '-', _) => format!("{:<+#width$E}", f, width = p.width),
+            ('_', '_', '+', '-', _) => format!("{:<+width$E}", f, width = p.width),
+            ('#', '_', '_', '-', _) => format!("{:<#width$E}", f, width = p.width),
+            ('#', '0', '+', '-', _) => format!("{:<+#0width$E}", f, width = p.width),
+            ('_', '0', '+', '-', _) => format!("{:<+0width$E}", f, width = p.width),
+            ('#', '0', '_', '-', _) => format!("{:<#0width$E}", f, width = p.width),
+            (_, _, _, _, _) => format!("{:width$E}", f, width = p.width),
+        }
+    }
+}
+
+fn escape_char(c: char) -> String {
+    let mut s = c.escape_default().to_string();
+    if s.starts_with(r"\u") {
+        s = s.replace("{", "").replace("}", "");
+    }
+    s
+}
+
+struct Hexer<'a> {
+    s: &'a str
+}
+
+impl<'a> From<&'a str> for Hexer<'a> {
+    fn from(s: &'a str) -> Self {
+        Hexer { s }
+    }
+}
+
+impl<'a> fmt::UpperHex for Hexer<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for u in self.s.as_bytes() {
+            write!(f, "{:X}", u)?
+        }
+        Ok(())
+    }
+}
+
+impl<'a> fmt::LowerHex for Hexer<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for u in self.s.as_bytes() {
+            write!(f, "{:x}", u)?
+        }
+        Ok(())
     }
 }
