@@ -312,6 +312,10 @@ pub fn println(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
 }
 
 /// An implementation of golang's fmt.Sprintf
+/// Limitations:
+/// - float:
+///   * `g`, `G`, and `b` are weired and not implement yet
+/// - pretty sure there are more
 ///
 /// # Example
 /// ```

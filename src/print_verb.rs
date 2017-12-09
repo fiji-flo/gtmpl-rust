@@ -6,9 +6,6 @@ use printf::{params_to_chars, FormatParams};
 use gtmpl_value::Value;
 
 /// Print a verb like golang's printf.
-/// Limitations:
-/// - float:
-///   * `g`, `G`, and `b` are weired and not implement yet
 pub fn print(p: &FormatParams, typ: char, val: &Value) -> Result<String, String> {
     match *val {
         Value::Number(ref n) if n.as_u64().is_some() => {
