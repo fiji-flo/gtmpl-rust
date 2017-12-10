@@ -11,6 +11,7 @@ extern crate percent_encoding;
 use self::percent_encoding::{DEFAULT_ENCODE_SET, utf8_percent_encode};
 
 use utils::is_true;
+use printf::sprintf;
 
 lazy_static! {
     /// Map of all builtin function.
@@ -29,7 +30,9 @@ lazy_static! {
         m.insert("urlquery".to_owned(), urlquery as Func);
         m.insert("print".to_owned(), print as Func);
         m.insert("println".to_owned(), println as Func);
+        m.insert("printf".to_owned(), printf as Func);
         m.insert("index".to_owned(), index as Func);
+        m.insert("call".to_owned(), call as Func);
         m
     };
 }
@@ -227,6 +230,45 @@ pub fn len(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     Ok(varc!(len))
 }
 
+/// Returns the result of calling the first argument, which
+///	must be a function, with the remaining arguments as parameters.
+///
+/// # Example
+/// ```
+/// #[macro_use]
+/// extern crate gtmpl;
+/// extern crate gtmpl_value;
+/// use gtmpl_value::Function;
+/// use gtmpl::{template, Value};
+///
+/// fn main() {
+///     gtmpl_fn!(
+///     fn add(a: u64, b: u64) -> Result<u64, String> {
+///         Ok(a + b)
+///     });
+///     let equal = template(r#"{{ call . 1 2 }}"#, Value::Function(Function { f: add }));
+///     assert_eq!(&equal.unwrap(), "3");
+/// }
+/// ```
+pub fn call(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
+    let vals: Vec<&Value> = args.iter()
+        .map(|arg| {
+            arg.downcast_ref::<Value>().ok_or_else(|| {
+                String::from("print requires arguemnts of type Value")
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    if vals.is_empty() {
+        Err(String::from("call requires at least on argument"))
+    } else if let Value::Function(ref f) = *vals[0] {
+        (f.f)(&args[1..])
+    } else {
+        Err(String::from(
+            "call requires the first argument to be a function",
+        ))
+    }
+}
+
 /// An implementation of golang's fmt.Sprint
 ///
 /// Golang's Sprint formats using the default formats for its operands and returns the
@@ -307,6 +349,37 @@ pub fn println(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
         }
     };
     Ok(varc!(s))
+}
+
+/// An implementation of golang's fmt.Sprintf
+/// Limitations:
+/// - float:
+///   * `g`, `G`, and `b` are weired and not implement yet
+/// - pretty sure there are more
+///
+/// # Example
+/// ```
+/// use gtmpl::template;
+/// let equal = template(r#"{{ printf "%v %s %v" "Hello" . "!" }}"#, "world");
+/// assert_eq!(&equal.unwrap(), "Hello world !");
+/// ```
+pub fn printf(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
+    let vals: Vec<&Value> = args.iter()
+        .map(|arg| {
+            arg.downcast_ref::<Value>().ok_or_else(|| {
+                String::from("print requires arguemnts of type Value")
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    if vals.is_empty() {
+        return Err("printf requires at least one argument".to_owned());
+    }
+    if let Value::String(ref s) = *vals[0] {
+        let s = sprintf(s, &vals[1..])?;
+        Ok(varc!(s))
+    } else {
+        Err("printf requires a format string".to_owned())
+    }
 }
 
 /// Returns the result of indexing its first argument by the
