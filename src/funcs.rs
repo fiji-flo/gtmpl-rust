@@ -32,6 +32,7 @@ lazy_static! {
         m.insert("println".to_owned(), println as Func);
         m.insert("printf".to_owned(), printf as Func);
         m.insert("index".to_owned(), index as Func);
+        m.insert("call".to_owned(), call as Func);
         m
     };
 }
@@ -227,6 +228,45 @@ pub fn len(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     };
 
     Ok(varc!(len))
+}
+
+/// Returns the result of calling the first argument, which
+///	must be a function, with the remaining arguments as parameters.
+///
+/// # Example
+/// ```
+/// #[macro_use]
+/// extern crate gtmpl;
+/// extern crate gtmpl_value;
+/// use gtmpl_value::Function;
+/// use gtmpl::{template, Value};
+///
+/// fn main() {
+///     gtmpl_fn!(
+///     fn add(a: u64, b: u64) -> Result<u64, String> {
+///         Ok(a + b)
+///     });
+///     let equal = template(r#"{{ call . 1 2 }}"#, Value::Function(Function { f: add }));
+///     assert_eq!(&equal.unwrap(), "3");
+/// }
+/// ```
+pub fn call(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
+    let vals: Vec<&Value> = args.iter()
+        .map(|arg| {
+            arg.downcast_ref::<Value>().ok_or_else(|| {
+                String::from("print requires arguemnts of type Value")
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    if vals.is_empty() {
+        Err(String::from("call requires at least on argument"))
+    } else if let Value::Function(ref f) = *vals[0] {
+        (f.f)(&args[1..])
+    } else {
+        Err(String::from(
+            "call requires the first argument to be a function",
+        ))
+    }
 }
 
 /// An implementation of golang's fmt.Sprint

@@ -11,7 +11,7 @@
 
 ```toml
 [dependencies]
-gtmpl = "0.2.0"
+gtmpl = "0.2.2"
 ```
 
 * [gtmpl at crates.io](https://crates.io/crate/gtmpl)
@@ -24,7 +24,8 @@ This is work in progress. Currently the following features are not supported:
 
 * complex numbers
 * the following functions have not been implemented:
-  * `html`, `js`, `call` and `printf`
+  * `html`, `js`
+* `printf` is not yet fully stable, but should support all *sane* input
 
 ## Usage
 
