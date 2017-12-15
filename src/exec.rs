@@ -238,8 +238,8 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             .funcs
             .iter()
             .rev()
-            .find(|map| map.contains_key(name))
-            .and_then(|map| map.get(name))
+            .find(|&&(n, _)| n == name)
+            .map(|&(_, f)| f)
             .ok_or_else(|| format!("{} is not a defined function", name))?;
         self.eval_call(ctx, function, args, fin)
     }
@@ -247,7 +247,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
     fn eval_call(
         &mut self,
         ctx: &Context,
-        function: &Func,
+        function: Func,
         args: &[Nodes],
         fin: &Option<Arc<Any>>,
     ) -> Result<Arc<Any>, String> {

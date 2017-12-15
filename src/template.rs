@@ -11,7 +11,7 @@ use gtmpl_value::Func;
 pub struct Template<'a> {
     pub name: &'a str,
     pub text: &'a str,
-    pub funcs: Vec<&'a HashMap<String, Func>>,
+    pub funcs: Vec<(&'a str, Func)>,
     pub tree_ids: HashMap<TreeId, String>,
     pub tree_set: HashMap<String, Tree<'a>>,
 }
@@ -26,6 +26,30 @@ impl<'a> Template<'a> {
             tree_ids: HashMap::default(),
             tree_set: HashMap::default(),
         }
+    }
+
+    /// Adds a single custom function to the template.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use std::any::Any;
+    /// use std::sync::Arc;
+    ///
+    /// use gtmpl::{Context, Func, Value};
+    ///
+    /// fn hello_world(_args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
+    ///   Ok(Arc::new(Value::from("Hello World!")) as Arc<Any>)
+    /// }
+    ///
+    /// let mut tmpl = gtmpl::Template::default();
+    /// tmpl.add_func("helloWorld", hello_world);
+    /// tmpl.parse("{{ helloWorld }}").unwrap();
+    /// let output = tmpl.render(&Context::empty());
+    /// assert_eq!(&output.unwrap(), "Hello World!");
+    /// ```
+    pub fn add_func(&mut self, name: &'a str, func: Func) {
+        self.funcs.push((name, func));
     }
 
     /// Adds custom functions to the template.
@@ -43,16 +67,15 @@ impl<'a> Template<'a> {
     ///   Ok(Arc::new(Value::from("Hello World!")) as Arc<Any>)
     /// }
     ///
-    /// let mut funcs = HashMap::new();
-    /// funcs.insert(String::from("helloWorld"), hello_world as Func);
+    /// let funcs = vec![("helloWorld", hello_world as Func)];
     /// let mut tmpl = gtmpl::Template::default();
     /// tmpl.add_funcs(&funcs);
     /// tmpl.parse("{{ helloWorld }}").unwrap();
     /// let output = tmpl.render(&Context::empty());
     /// assert_eq!(&output.unwrap(), "Hello World!");
     /// ```
-    pub fn add_funcs(&mut self, funcs: &'a HashMap<String, Func>) {
-        self.funcs.push(funcs);
+    pub fn add_funcs(&mut self, funcs: &[(&'a str, Func)]) {
+        self.funcs.extend(funcs);
     }
 
     /// Parse the given `text` as template body.
@@ -64,7 +87,7 @@ impl<'a> Template<'a> {
     /// tmpl.parse("Hello World!").unwrap();
     /// ```
     pub fn parse(&mut self, text: &'a str) -> Result<(), String> {
-        let mut funcs = vec![&BUILTINS as &HashMap<String, Func>];
+        let mut funcs = Vec::from(BUILTINS);
         funcs.extend(&self.funcs);
         let parser = parse(self.name, text, funcs)?;
         match parser {

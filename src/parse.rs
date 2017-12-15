@@ -8,7 +8,7 @@ use gtmpl_value::Func;
 pub struct Parser<'a> {
     name: &'a str,
     text: &'a str,
-    pub funcs: Vec<&'a HashMap<String, Func>>,
+    pub funcs: Vec<(&'a str, Func)>,
     lex: Option<Lexer>,
     line: usize,
     token: VecDeque<Item>,
@@ -68,7 +68,7 @@ impl<'a> Tree<'a> {
 pub fn parse<'a>(
     name: &'a str,
     text: &'a str,
-    funcs: Vec<&'a HashMap<String, Func>>,
+    funcs: Vec<(&'a str, Func)>,
 ) -> Result<Parser<'a>, String> {
     let mut p = Parser::new(name);
     p.text = text;
@@ -228,7 +228,7 @@ impl<'a> Parser<'a> {
     }
 
     fn has_func(&self, name: &str) -> bool {
-        self.funcs.iter().any(|map| map.contains_key(name))
+        self.funcs.iter().any(|&(f, _)| f == name)
     }
 
     fn parse(&mut self) -> Result<(), String> {
@@ -787,7 +787,7 @@ mod tests_mocked {
         make_parser_with_funcs(s, Vec::new())
     }
 
-    fn make_parser_with_funcs<'a>(s: &str, funcs: Vec<&'a HashMap<String, Func>>) -> Parser<'a> {
+    fn make_parser_with_funcs<'a>(s: &str, funcs: Vec<(&'a str, Func)>) -> Parser<'a> {
         let lex = Lexer::new(s.to_owned());
         Parser {
             name: "foo",
@@ -878,13 +878,11 @@ mod tests_mocked {
         let mut p = make_parser_with(r#"{{ if eq .foo "bar" }} 2000 {{ end }}"#);
         let r = p.parse_tree();
         assert_eq!(r.err().unwrap(), "template: foo:2:function eq not defined");
-        let mut funcs_map: HashMap<String, Func> = HashMap::new();
-        funcs_map.insert("eq".to_owned(), eq_mock);
-        let funcs = vec![&funcs_map];
+        let funcs = vec![("eq", eq_mock as Func)];
         let mut p = make_parser_with_funcs(r#"{{ if eq .foo "bar" }} 2000 {{ end }}"#, funcs);
         let r = p.parse_tree();
         assert!(r.is_ok());
-        let funcs = vec![&funcs_map];
+        let funcs = vec![("eq", eq_mock as Func)];
         let mut p = make_parser_with_funcs(r#"{{ if eq 1 2 }} 2000 {{ end }}"#, funcs);
         let r = p.parse_tree();
         assert!(r.is_ok());

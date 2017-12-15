@@ -38,6 +38,9 @@ pub use exec::Context;
 #[doc(inline)]
 pub use gtmpl_value::Func;
 
+#[doc(inline)]
+pub use gtmpl_value::from_value;
+
 pub use gtmpl_value::Value;
 
 /// Provides simple basic templating given just a template sting and context.

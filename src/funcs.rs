@@ -1,6 +1,5 @@
 //! Builtin functions.
 use std::any::Any;
-use std::collections::HashMap;
 use std::cmp::Ordering;
 use std::fmt::Write;
 use std::sync::Arc;
@@ -13,29 +12,24 @@ use self::percent_encoding::{DEFAULT_ENCODE_SET, utf8_percent_encode};
 use utils::is_true;
 use printf::sprintf;
 
-lazy_static! {
-    /// Map of all builtin function.
-    pub static ref BUILTINS: HashMap<String, Func> = {
-        let mut m = HashMap::new();
-        m.insert("eq".to_owned(), eq as Func);
-        m.insert("ne".to_owned(), ne as Func);
-        m.insert("lt".to_owned(), lt as Func);
-        m.insert("le".to_owned(), le as Func);
-        m.insert("gt".to_owned(), gt as Func);
-        m.insert("ge".to_owned(), ge as Func);
-        m.insert("len".to_owned(), len as Func);
-        m.insert("and".to_owned(), and as Func);
-        m.insert("or".to_owned(), or as Func);
-        m.insert("not".to_owned(), not as Func);
-        m.insert("urlquery".to_owned(), urlquery as Func);
-        m.insert("print".to_owned(), print as Func);
-        m.insert("println".to_owned(), println as Func);
-        m.insert("printf".to_owned(), printf as Func);
-        m.insert("index".to_owned(), index as Func);
-        m.insert("call".to_owned(), call as Func);
-        m
-    };
-}
+pub static BUILTINS: &[(&'static str, Func)] = &[
+    ("eq", eq as Func),
+    ("ne", ne as Func),
+    ("lt", lt as Func),
+    ("le", le as Func),
+    ("gt", gt as Func),
+    ("ge", ge as Func),
+    ("len", len as Func),
+    ("and", and as Func),
+    ("or", or as Func),
+    ("not", not as Func),
+    ("urlquery", urlquery as Func),
+    ("print", print as Func),
+    ("println", println as Func),
+    ("printf", printf as Func),
+    ("index", index as Func),
+    ("call", call as Func),
+];
 
 macro_rules! varc(
     ($x:expr) => { Arc::new(Value::from($x)) }
@@ -54,7 +48,7 @@ macro_rules! gtmpl_fn {
             fn inner() -> Result<$otyp, String> {
                 $($body)*
             }
-            Ok(Arc::new(Value::from(inner()?)))
+            Ok(Arc::new($crate::Value::from(inner()?)))
         }
     };
     (
@@ -68,14 +62,14 @@ macro_rules! gtmpl_fn {
                 return Err(String::from("at least one argument required"));
             }
             let x = &args[0];
-            let $arg0 = x.downcast_ref::<::gtmpl_value::Value>()
+            let $arg0 = x.downcast_ref::<$crate::Value>()
                 .ok_or_else(|| "unable to downcast".to_owned())?;
-            let $arg0: $typ0 = ::gtmpl_value::from_value($arg0)
+            let $arg0: $typ0 = $crate::from_value($arg0)
                 .ok_or_else(|| "unable to convert from Value".to_owned())?;
             fn inner($arg0 : $typ0) -> Result<$otyp, String> {
                 $($body)*
             }
-            let ret: ::gtmpl_value::Value = inner($arg0)?.into();
+            let ret: $crate::Value = inner($arg0)?.into();
             Ok(::std::sync::Arc::new(ret))
         }
     };
@@ -92,20 +86,20 @@ macro_rules! gtmpl_fn {
                 return Err(String::from("at least one argument required"));
             }
             let x = &args[0];
-            let $arg0 = x.downcast_ref::<::gtmpl_value::Value>()
+            let $arg0 = x.downcast_ref::<$crate::Value>()
                 .ok_or_else(|| "unable to downcast".to_owned())?;
-            let $arg0: $typ0 = ::gtmpl_value::from_value($arg0)
+            let $arg0: $typ0 = $crate::from_value($arg0)
                 .ok_or_else(|| "unable to convert from Value".to_owned())?;
             $(args = &args[1..];
               let x = &args[0];
-              let $arg = x.downcast_ref::<::gtmpl_value::Value>()
+              let $arg = x.downcast_ref::<$crate::Value>()
               .ok_or_else(|| "unable to downcast".to_owned())?;
-              let $arg: $typ = ::gtmpl_value::from_value($arg)
+              let $arg: $typ = $crate::from_value($arg)
                 .ok_or_else(|| "unable to convert from Value".to_owned())?;)*;
             fn inner($arg0 : $typ0, $($arg : $typ,)*) -> Result<$otyp, String> {
                 $($body)*
             }
-            let ret: ::gtmpl_value::Value = inner($arg0, $($arg),*)?.into();
+            let ret: $crate::Value = inner($arg0, $($arg),*)?.into();
             Ok(::std::sync::Arc::new(ret))
         }
     }
@@ -606,6 +600,7 @@ fn cmp(left: &Value, right: &Value) -> Option<Ordering> {
 #[cfg(test)]
 mod tests_mocked {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_eq() {
@@ -794,7 +789,11 @@ mod tests_mocked {
     #[test]
     fn test_builtins() {
         let vals: Vec<Arc<Any>> = vec![varc!("foo".to_owned()), varc!("foo".to_owned())];
-        let builtin_eq = BUILTINS.get("eq").unwrap();
+        let builtin_eq = BUILTINS
+            .iter()
+            .find(|&&(n, _)| n == "eq")
+            .map(|&(_, f)| f)
+            .unwrap();
         let ret = builtin_eq(&vals).unwrap();
         let ret_ = ret.downcast_ref::<Value>();
         assert_eq!(ret_, Some(&Value::Bool(true)));
