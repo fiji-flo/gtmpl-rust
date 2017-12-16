@@ -119,8 +119,9 @@ pub fn is_true(val: &Arc<Any>) -> bool {
             Value::String(ref s) => !s.is_empty(),
             Value::Array(ref a) => !a.is_empty(),
             Value::Object(ref o) => !o.is_empty(),
+            Value::Map(ref m) => !m.is_empty(),
             Value::Function(_) => true,
-            Value::Nil => false,
+            Value::NoValue | Value::Nil => false,
             Value::Number(ref n) => n.as_u64().map(|u| u != 0).unwrap_or_else(|| true),
         };
     }

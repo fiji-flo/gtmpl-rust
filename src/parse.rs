@@ -8,7 +8,7 @@ use gtmpl_value::Func;
 pub struct Parser<'a> {
     name: &'a str,
     text: &'a str,
-    pub funcs: Vec<(&'a str, Func)>,
+    pub funcs: HashMap<&'a str, Func>,
     lex: Option<Lexer>,
     line: usize,
     token: VecDeque<Item>,
@@ -34,7 +34,7 @@ impl<'a> Parser<'a> {
         Parser {
             name,
             text: "",
-            funcs: Vec::new(),
+            funcs: HashMap::new(),
             lex: None,
             line: 0,
             token: VecDeque::new(),
@@ -68,7 +68,7 @@ impl<'a> Tree<'a> {
 pub fn parse<'a>(
     name: &'a str,
     text: &'a str,
-    funcs: Vec<(&'a str, Func)>,
+    funcs: HashMap<&'a str, Func>,
 ) -> Result<Parser<'a>, String> {
     let mut p = Parser::new(name);
     p.text = text;
@@ -228,7 +228,7 @@ impl<'a> Parser<'a> {
     }
 
     fn has_func(&self, name: &str) -> bool {
-        self.funcs.iter().any(|&(f, _)| f == name)
+        self.funcs.contains_key(name)
     }
 
     fn parse(&mut self) -> Result<(), String> {
@@ -784,15 +784,15 @@ mod tests_mocked {
     }
 
     fn make_parser_with<'a>(s: &str) -> Parser<'a> {
-        make_parser_with_funcs(s, Vec::new())
+        make_parser_with_funcs(s, &[])
     }
 
-    fn make_parser_with_funcs<'a>(s: &str, funcs: Vec<(&'a str, Func)>) -> Parser<'a> {
+    fn make_parser_with_funcs<'a>(s: &str, funcs: &[(&'a str, Func)]) -> Parser<'a> {
         let lex = Lexer::new(s.to_owned());
         Parser {
             name: "foo",
             text: "nope",
-            funcs,
+            funcs: funcs.iter().map(|x| *x).collect(),
             lex: Some(lex),
             line: 0,
             token: VecDeque::new(),
@@ -878,11 +878,11 @@ mod tests_mocked {
         let mut p = make_parser_with(r#"{{ if eq .foo "bar" }} 2000 {{ end }}"#);
         let r = p.parse_tree();
         assert_eq!(r.err().unwrap(), "template: foo:2:function eq not defined");
-        let funcs = vec![("eq", eq_mock as Func)];
+        let funcs = &[("eq", eq_mock as Func)];
         let mut p = make_parser_with_funcs(r#"{{ if eq .foo "bar" }} 2000 {{ end }}"#, funcs);
         let r = p.parse_tree();
         assert!(r.is_ok());
-        let funcs = vec![("eq", eq_mock as Func)];
+        let funcs = &[("eq", eq_mock as Func)];
         let mut p = make_parser_with_funcs(r#"{{ if eq 1 2 }} 2000 {{ end }}"#, funcs);
         let r = p.parse_tree();
         assert!(r.is_ok());

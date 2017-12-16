@@ -11,7 +11,7 @@ use gtmpl_value::Func;
 pub struct Template<'a> {
     pub name: &'a str,
     pub text: &'a str,
-    pub funcs: Vec<(&'a str, Func)>,
+    pub funcs: HashMap<&'a str, Func>,
     pub tree_ids: HashMap<TreeId, String>,
     pub tree_set: HashMap<String, Tree<'a>>,
 }
@@ -22,7 +22,7 @@ impl<'a> Template<'a> {
         Template {
             name: name,
             text: "",
-            funcs: Vec::default(),
+            funcs: HashMap::default(),
             tree_ids: HashMap::default(),
             tree_set: HashMap::default(),
         }
@@ -49,7 +49,7 @@ impl<'a> Template<'a> {
     /// assert_eq!(&output.unwrap(), "Hello World!");
     /// ```
     pub fn add_func(&mut self, name: &'a str, func: Func) {
-        self.funcs.push((name, func));
+        self.funcs.insert(name, func);
     }
 
     /// Adds custom functions to the template.
@@ -75,7 +75,7 @@ impl<'a> Template<'a> {
     /// assert_eq!(&output.unwrap(), "Hello World!");
     /// ```
     pub fn add_funcs(&mut self, funcs: &[(&'a str, Func)]) {
-        self.funcs.extend(funcs);
+        self.funcs.extend(funcs.iter().cloned());
     }
 
     /// Parse the given `text` as template body.
@@ -87,7 +87,8 @@ impl<'a> Template<'a> {
     /// tmpl.parse("Hello World!").unwrap();
     /// ```
     pub fn parse(&mut self, text: &'a str) -> Result<(), String> {
-        let mut funcs = Vec::from(BUILTINS);
+        let mut funcs = HashMap::new();
+        funcs.extend(BUILTINS.iter().cloned());
         funcs.extend(&self.funcs);
         let parser = parse(self.name, text, funcs)?;
         match parser {

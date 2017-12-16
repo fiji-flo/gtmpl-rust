@@ -451,7 +451,7 @@ impl LexerStateMachine {
                         State::LexNumber
                     }
                     _ if c.is_whitespace() => State::LexSpace,
-                    _ if c.is_alphanumeric() => {
+                    _ if c.is_alphanumeric() || c == '_' => {
                         self.backup();
                         State::LexIdentifier
                     }
@@ -476,7 +476,7 @@ impl LexerStateMachine {
     }
 
     fn lex_identifier(&mut self) -> State {
-        let c = self.skip_while(|c| c.is_alphanumeric()).next();
+        let c = self.skip_while(|c| c.is_alphanumeric() || *c == '_').next();
         self.backup();
         if !self.at_terminator() {
             return self.errorf(&format!("bad character {}", c.unwrap_or_default()));
@@ -507,7 +507,7 @@ impl LexerStateMachine {
             });
             return State::LexInsideAction;
         }
-        let c = self.skip_while(|c| c.is_alphanumeric()).next();
+        let c = self.skip_while(|c| c.is_alphanumeric() || *c == '_').next();
         self.backup();
 
         if !self.at_terminator() {
@@ -667,6 +667,16 @@ mod tests {
         let s_ = items.into_iter().map(|i| i.val).join("");
         assert_eq!(s_, s);
     }
+
+    #[test]
+    fn test_underscore() {
+        let s = r#"something {{ .foo_bar }}"#;
+        let l = Lexer::new(s.to_owned());
+        let items = l.collect::<Vec<_>>();
+        let s_ = items.into_iter().map(|i| i.val).join("");
+        assert_eq!(s_, s);
+    }
+
 
     #[test]
     fn test_trim() {

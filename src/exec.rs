@@ -63,7 +63,7 @@ macro_rules! print_val {
 }
 
 impl<'a, 'b> Template<'a> {
-    pub fn execute<T: Write>(&mut self, writer: &'b mut T, data: &Context) -> Result<(), String> {
+    pub fn execute<T: Write>(&self, writer: &'b mut T, data: &Context) -> Result<(), String> {
         let mut vars: VecDeque<VecDeque<Variable>> = VecDeque::new();
         let mut dot = VecDeque::new();
         dot.push_back(Variable {
@@ -92,7 +92,7 @@ impl<'a, 'b> Template<'a> {
         Ok(())
     }
 
-    pub fn render(&mut self, data: &Context) -> Result<String, String> {
+    pub fn render(&self, data: &Context) -> Result<String, String> {
         let mut w: Vec<u8> = vec![];
         self.execute(&mut w, data)?;
         String::from_utf8(w).map_err(|e| format!("unable to contert output into utf8: {}", e))
@@ -234,20 +234,16 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         fin: &Option<Arc<Any>>,
     ) -> Result<Arc<Any>, String> {
         let name = &ident.ident;
-        let function = self.template
-            .funcs
-            .iter()
-            .rev()
-            .find(|&&(n, _)| n == name)
-            .map(|&(_, f)| f)
-            .ok_or_else(|| format!("{} is not a defined function", name))?;
+        let function = self.template.funcs.get(name.as_str()).ok_or_else(|| {
+            format!("{} is not a defined function", name)
+        })?;
         self.eval_call(ctx, function, args, fin)
     }
 
     fn eval_call(
         &mut self,
         ctx: &Context,
-        function: Func,
+        function: &Func,
         args: &[Nodes],
         fin: &Option<Arc<Any>>,
     ) -> Result<Arc<Any>, String> {
@@ -346,11 +342,21 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                     field_name
                 ));
             }
-            if let Value::Object(ref o) = *val {
-                return o.get(field_name)
-                    .map(|v| Arc::new(v.clone()) as Arc<Any>)
-                    .ok_or_else(|| format!("no field {} for {}", field_name, val));
-            }
+            return match *val {
+                Value::Object(ref o) => {
+                    o.get(field_name)
+                        .map(|v| Arc::new(v.clone()) as Arc<Any>)
+                        .ok_or_else(|| format!("no field {} for {}", field_name, val))
+                }
+                Value::Map(ref o) => {
+                    Ok(
+                        o.get(field_name)
+                            .map(|v| Arc::new(v.clone()) as Arc<Any>)
+                            .unwrap_or_else(|| Arc::new(Value::NoValue) as Arc<Any>),
+                    )
+                }
+                _ => Err(String::from("only maps and objects have fields")),
+            };
         }
 
         Err(String::from("only basic fields are supported"))
@@ -431,7 +437,8 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         }
         if let Some(value) = val.downcast_ref::<Value>() {
             match *value {
-                Value::Object(ref map) => {
+                Value::Object(ref map) |
+                Value::Map(ref map) => {
                     for (k, v) in map.clone() {
                         self.one_iteration(k.clone(), Arc::new(v), range)?;
                     }
@@ -567,6 +574,31 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "1");
     }
+
+    #[test]
+    fn test_novalue() {
+        #[derive(Gtmpl)]
+        struct Foo {
+            foo: u8,
+        }
+        let foo = Foo { foo: 1 };
+        let data = Context::from(foo).unwrap();
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::default();
+        assert!(t.parse(r#"{{.foobar}}"#).is_ok());
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_err());
+
+        let map: HashMap<String, u64> = [("foo".to_owned(), 23u64)].iter().cloned().collect();
+        let data = Context::from(map).unwrap();
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::default();
+        assert!(t.parse(r#"{{.foo2}}"#).is_ok());
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), Value::NoValue.to_string());
+    }
+
 
     #[test]
     fn test_dot_value() {

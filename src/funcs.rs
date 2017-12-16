@@ -414,11 +414,16 @@ fn get_item<'a>(col: &'a Value, key: &Value) -> Result<&'a Value, String> {
                 None
             }
         }
-        (&Value::Object(ref o), &Value::Number(ref n)) => o.get(&n.to_string()),
-        (&Value::Object(ref o), &Value::String(ref s)) => o.get(s),
+        (&Value::Object(ref o), &Value::Number(ref n)) |
+        (&Value::Map(ref o), &Value::Number(ref n)) => o.get(&n.to_string()),
+        (&Value::Object(ref o), &Value::String(ref s)) |
+        (&Value::Map(ref o), &Value::String(ref s)) => o.get(s),
         _ => None,
     };
-    ret.ok_or_else(|| format!("unabled to get {} in {}", key, col))
+    match *col {
+        Value::Map(_) => Ok(ret.unwrap_or_else(|| &Value::NoValue)),
+        _ => ret.ok_or_else(|| format!("unabled to get {} in {}", key, col)),
+    }
 }
 
 #[doc = "
@@ -784,6 +789,14 @@ mod tests_mocked {
         let ret = index(&vals).unwrap();
         let ret_ = ret.downcast_ref::<Value>();
         assert_eq!(ret_, Some(&Value::from("bar")));
+
+        let mut o = HashMap::new();
+        o.insert(String::from("foo"), String::from("bar"));
+        let col = Arc::new(Value::from(o));
+        let vals: Vec<Arc<Any>> = vec![col, varc!("foo2")];
+        let ret = index(&vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::NoValue));
     }
 
     #[test]
