@@ -57,7 +57,9 @@ macro_rules! gtmpl_fn {
         { $($body:tt)* }
     ) => {
         $(#[$outer])*
-        pub fn $name(args: &[::std::sync::Arc<::std::any::Any>]) -> Result<::std::sync::Arc<::std::any::Any>, String> {
+        pub fn $name(
+            args: &[::std::sync::Arc<::std::any::Any>]
+        ) -> Result<::std::sync::Arc<::std::any::Any>, String> {
             if args.is_empty() {
                 return Err(String::from("at least one argument required"));
             }
@@ -79,7 +81,9 @@ macro_rules! gtmpl_fn {
         { $($body:tt)* }
     ) => {
         $(#[$outer])*
-        pub fn $name(args: &[::std::sync::Arc<::std::any::Any>]) -> Result<::std::sync::Arc<::std::any::Any>, String> {
+        pub fn $name(
+            args: &[::std::sync::Arc<::std::any::Any>]
+        ) -> Result<::std::sync::Arc<::std::any::Any>, String> {
             #[allow(unused_mut)]
             let mut args = args;
             if args.is_empty() {

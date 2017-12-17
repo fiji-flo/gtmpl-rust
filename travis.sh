@@ -21,7 +21,14 @@ channel() {
     fi
 }
 
-if [ -n "${CLIPPY}" ]; then
+if [ -n "${NIGHTLY}" ]; then
+    if [ -n "${TRAVIS}" ] && ! cargo install rustfmt-nightly --debug --force; then
+        echo "COULD NOT COMPILE RUSTFMT, IGNORING FMT"
+        exit
+    fi
+
+    cargo fmt -- --write-mode diff
+
     # cached installation will not work on a later nightly
     if [ -n "${TRAVIS}" ] && ! cargo install clippy --debug --force; then
         echo "COULD NOT COMPILE CLIPPY, IGNORING CLIPPY TESTS"
