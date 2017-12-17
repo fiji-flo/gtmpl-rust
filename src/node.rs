@@ -93,11 +93,9 @@ nodes!(
     Template
 );
 
-
 pub type Pos = usize;
 
 pub type TreeId = usize;
-
 
 pub trait Node: Display {
     fn typ(&self) -> &NodeType;
@@ -136,13 +134,12 @@ impl Nodes {
         match *self {
             Nodes::List(ref n) => n.is_empty_tree(),
             Nodes::Text(ref n) => Ok(n.text.is_empty()),
-            Nodes::Action(_) |
-            Nodes::If(_) |
-            Nodes::Range(_) |
-            Nodes::Template(_) |
-            Nodes::With(_) => Ok(false),
+            Nodes::Action(_)
+            | Nodes::If(_)
+            | Nodes::Range(_)
+            | Nodes::Template(_)
+            | Nodes::With(_) => Ok(false),
             _ => Err(format!("unknown node: {}", self)),
-
         }
     }
 }
@@ -188,11 +185,7 @@ impl Display for ListNode {
     }
 }
 
-node!(
-    TextNode {
-        text: String
-    }
-);
+node!(TextNode { text: String });
 
 impl TextNode {
     pub fn new(tr: TreeId, pos: Pos, text: String) -> TextNode {
@@ -236,17 +229,12 @@ impl PipeNode {
 
 impl Display for PipeNode {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "{} := ", self.decl.iter().join(", ")).and_then(
-            |_| write!(f, "{}", self.cmds.iter().join(" | ")),
-        )
+        write!(f, "{} := ", self.decl.iter().join(", "))
+            .and_then(|_| write!(f, "{}", self.cmds.iter().join(" | ")))
     }
 }
 
-node!(
-    ActionNode {
-        pipe: PipeNode
-    }
-);
+node!(ActionNode { pipe: PipeNode });
 
 impl ActionNode {
     pub fn new(tr: TreeId, pos: Pos, pipe: PipeNode) -> ActionNode {
@@ -301,11 +289,7 @@ impl Display for CommandNode {
     }
 }
 
-node!(
-    IdentifierNode {
-        ident: String
-    }
-);
+node!(IdentifierNode { ident: String });
 
 impl IdentifierNode {
     pub fn new(ident: String) -> IdentifierNode {
@@ -357,9 +341,7 @@ impl Display for VariableNode {
     }
 }
 
-node!(
-    DotNode {}
-);
+node!(DotNode {});
 
 impl DotNode {
     pub fn new(tr: TreeId, pos: Pos) -> DotNode {
@@ -377,9 +359,7 @@ impl Display for DotNode {
     }
 }
 
-node!(
-    NilNode {}
-);
+node!(NilNode {});
 
 impl Display for NilNode {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
@@ -411,10 +391,12 @@ impl FieldNode {
             pos,
             ident: ident[..]
                 .split('.')
-                .filter_map(|s| if s.is_empty() {
-                    None
-                } else {
-                    Some(s.to_owned())
+                .filter_map(|s| {
+                    if s.is_empty() {
+                        None
+                    } else {
+                        Some(s.to_owned())
+                    }
                 })
                 .collect(),
         }
@@ -455,8 +437,7 @@ impl Display for ChainNode {
         if let Err(e) = match self.node {
             // Handle PipeNode.
             _ => write!(f, "{}", self.node),
-        }
-        {
+        } {
             return Err(e);
         }
         for field in &self.field {
@@ -520,23 +501,21 @@ impl NumberNode {
         item_typ: &ItemType,
     ) -> Result<NumberNode, Error> {
         match *item_typ {
-            ItemType::ItemCharConstant => {
-                unquote_char(&text, '\'')
-                    .and_then(|c| {
-                        Some(NumberNode {
-                            typ: NodeType::Number,
-                            tr,
-                            pos,
-                            is_i64: true,
-                            is_u64: true,
-                            is_f64: true,
-                            text,
-                            number_typ: NumberType::Char,
-                            value: Arc::new(Value::from(c as u64)),
-                        })
+            ItemType::ItemCharConstant => unquote_char(&text, '\'')
+                .and_then(|c| {
+                    Some(NumberNode {
+                        typ: NodeType::Number,
+                        tr,
+                        pos,
+                        is_i64: true,
+                        is_u64: true,
+                        is_f64: true,
+                        text,
+                        number_typ: NumberType::Char,
+                        value: Arc::new(Value::from(c as u64)),
                     })
-                    .ok_or(Error)
-            }
+                })
+                .ok_or(Error),
             _ => {
                 let mut number_typ = NumberType::Float;
 
@@ -569,8 +548,7 @@ impl NumberNode {
                         if text.contains(|c| match c {
                             '.' | 'e' | 'E' => true,
                             _ => false,
-                        })
-                        {
+                        }) {
                             (f, true)
                         } else {
                             (f, false)
@@ -644,9 +622,7 @@ impl Display for StringNode {
     }
 }
 
-node!(
-    EndNode {}
-);
+node!(EndNode {});
 
 impl EndNode {
     pub fn new(tr: TreeId, pos: Pos) -> EndNode {
@@ -664,9 +640,7 @@ impl Display for EndNode {
     }
 }
 
-node!(
-    ElseNode {}
-);
+node!(ElseNode {});
 
 impl ElseNode {
     pub fn new(tr: TreeId, pos: Pos) -> ElseNode {
@@ -760,8 +734,11 @@ impl Display for BranchNode {
             }
         };
         if let Some(ref else_list) = self.else_list {
-            return write!(f, "{{{{{} {}}}}}{}{{{{else}}}}{}{{{{end}}}}",
-                          name, self.pipe, self.list, else_list);
+            return write!(
+                f,
+                "{{{{{} {}}}}}{}{{{{else}}}}{}{{{{end}}}}",
+                name, self.pipe, self.list, else_list
+            );
         }
         write!(f, "{{{{{} {}}}}}{}{{{{end}}}}", name, self.pipe, self.list)
     }

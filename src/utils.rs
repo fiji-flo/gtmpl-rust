@@ -66,9 +66,9 @@ fn unqote(raw: &str) -> Option<(String, usize)> {
 }
 
 fn get_char(s: &str) -> Option<(String, usize)> {
-    s.char_indices().next().map(|(i, c)| {
-        (c.to_string(), i + c.len_utf8())
-    })
+    s.char_indices()
+        .next()
+        .map(|(i, c)| (c.to_string(), i + c.len_utf8()))
 }
 
 fn extract_bytes_u32(s: &str) -> Option<(String, usize)> {
@@ -119,15 +119,15 @@ pub fn is_true(val: &Arc<Any>) -> bool {
             Value::String(ref s) => !s.is_empty(),
             Value::Array(ref a) => !a.is_empty(),
             Value::Object(ref o) => !o.is_empty(),
+            Value::Map(ref m) => !m.is_empty(),
             Value::Function(_) => true,
-            Value::Nil => false,
+            Value::NoValue | Value::Nil => false,
             Value::Number(ref n) => n.as_u64().map(|u| u != 0).unwrap_or_else(|| true),
         };
     }
 
     false
 }
-
 
 #[cfg(test)]
 mod tests {

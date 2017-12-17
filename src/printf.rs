@@ -57,7 +57,6 @@ fn process_verb(
                 params.minus = true;
                 // Golang does not pad with zeros to the right.
                 params.zero = false;
-
             }
             ' ' => params.space = true,
             _ => {
@@ -164,9 +163,10 @@ fn parse_index(s: &str) -> Result<Option<(usize, usize)>, String> {
 fn parse_num(s: &str) -> Result<Option<(usize, usize)>, String> {
     let end = s.find(|c: char| !c.is_digit(10)).unwrap_or_else(|| s.len());
     if end > 0 {
-        s[..end].parse().map(|u| Some((u, end))).map_err(|e| {
-            format!("unable to parse width: {}", e)
-        })
+        s[..end]
+            .parse()
+            .map(|u| Some((u, end)))
+            .map_err(|e| format!("unable to parse width: {}", e))
     } else {
         Ok(None)
     }
@@ -302,7 +302,6 @@ mod test {
         let s = s.unwrap();
         assert_eq!(s, r"+101");
     }
-
 
     #[test]
     fn test_tokenize() {

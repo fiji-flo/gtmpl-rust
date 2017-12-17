@@ -1,6 +1,5 @@
 //! Builtin functions.
 use std::any::Any;
-use std::collections::HashMap;
 use std::cmp::Ordering;
 use std::fmt::Write;
 use std::sync::Arc;
@@ -8,34 +7,29 @@ use std::sync::Arc;
 use gtmpl_value::{Func, Value};
 
 extern crate percent_encoding;
-use self::percent_encoding::{DEFAULT_ENCODE_SET, utf8_percent_encode};
+use self::percent_encoding::{utf8_percent_encode, DEFAULT_ENCODE_SET};
 
 use utils::is_true;
 use printf::sprintf;
 
-lazy_static! {
-    /// Map of all builtin function.
-    pub static ref BUILTINS: HashMap<String, Func> = {
-        let mut m = HashMap::new();
-        m.insert("eq".to_owned(), eq as Func);
-        m.insert("ne".to_owned(), ne as Func);
-        m.insert("lt".to_owned(), lt as Func);
-        m.insert("le".to_owned(), le as Func);
-        m.insert("gt".to_owned(), gt as Func);
-        m.insert("ge".to_owned(), ge as Func);
-        m.insert("len".to_owned(), len as Func);
-        m.insert("and".to_owned(), and as Func);
-        m.insert("or".to_owned(), or as Func);
-        m.insert("not".to_owned(), not as Func);
-        m.insert("urlquery".to_owned(), urlquery as Func);
-        m.insert("print".to_owned(), print as Func);
-        m.insert("println".to_owned(), println as Func);
-        m.insert("printf".to_owned(), printf as Func);
-        m.insert("index".to_owned(), index as Func);
-        m.insert("call".to_owned(), call as Func);
-        m
-    };
-}
+pub static BUILTINS: &[(&'static str, Func)] = &[
+    ("eq", eq as Func),
+    ("ne", ne as Func),
+    ("lt", lt as Func),
+    ("le", le as Func),
+    ("gt", gt as Func),
+    ("ge", ge as Func),
+    ("len", len as Func),
+    ("and", and as Func),
+    ("or", or as Func),
+    ("not", not as Func),
+    ("urlquery", urlquery as Func),
+    ("print", print as Func),
+    ("println", println as Func),
+    ("printf", printf as Func),
+    ("index", index as Func),
+    ("call", call as Func),
+];
 
 macro_rules! varc(
     ($x:expr) => { Arc::new(Value::from($x)) }
@@ -54,7 +48,7 @@ macro_rules! gtmpl_fn {
             fn inner() -> Result<$otyp, String> {
                 $($body)*
             }
-            Ok(Arc::new(Value::from(inner()?)))
+            Ok(Arc::new($crate::Value::from(inner()?)))
         }
     };
     (
@@ -63,19 +57,21 @@ macro_rules! gtmpl_fn {
         { $($body:tt)* }
     ) => {
         $(#[$outer])*
-        pub fn $name(args: &[::std::sync::Arc<::std::any::Any>]) -> Result<::std::sync::Arc<::std::any::Any>, String> {
+        pub fn $name(
+            args: &[::std::sync::Arc<::std::any::Any>]
+        ) -> Result<::std::sync::Arc<::std::any::Any>, String> {
             if args.is_empty() {
                 return Err(String::from("at least one argument required"));
             }
             let x = &args[0];
-            let $arg0 = x.downcast_ref::<::gtmpl_value::Value>()
+            let $arg0 = x.downcast_ref::<$crate::Value>()
                 .ok_or_else(|| "unable to downcast".to_owned())?;
-            let $arg0: $typ0 = ::gtmpl_value::from_value($arg0)
+            let $arg0: $typ0 = $crate::from_value($arg0)
                 .ok_or_else(|| "unable to convert from Value".to_owned())?;
             fn inner($arg0 : $typ0) -> Result<$otyp, String> {
                 $($body)*
             }
-            let ret: ::gtmpl_value::Value = inner($arg0)?.into();
+            let ret: $crate::Value = inner($arg0)?.into();
             Ok(::std::sync::Arc::new(ret))
         }
     };
@@ -85,27 +81,29 @@ macro_rules! gtmpl_fn {
         { $($body:tt)* }
     ) => {
         $(#[$outer])*
-        pub fn $name(args: &[::std::sync::Arc<::std::any::Any>]) -> Result<::std::sync::Arc<::std::any::Any>, String> {
+        pub fn $name(
+            args: &[::std::sync::Arc<::std::any::Any>]
+        ) -> Result<::std::sync::Arc<::std::any::Any>, String> {
             #[allow(unused_mut)]
             let mut args = args;
             if args.is_empty() {
                 return Err(String::from("at least one argument required"));
             }
             let x = &args[0];
-            let $arg0 = x.downcast_ref::<::gtmpl_value::Value>()
+            let $arg0 = x.downcast_ref::<$crate::Value>()
                 .ok_or_else(|| "unable to downcast".to_owned())?;
-            let $arg0: $typ0 = ::gtmpl_value::from_value($arg0)
+            let $arg0: $typ0 = $crate::from_value($arg0)
                 .ok_or_else(|| "unable to convert from Value".to_owned())?;
             $(args = &args[1..];
               let x = &args[0];
-              let $arg = x.downcast_ref::<::gtmpl_value::Value>()
+              let $arg = x.downcast_ref::<$crate::Value>()
               .ok_or_else(|| "unable to downcast".to_owned())?;
-              let $arg: $typ = ::gtmpl_value::from_value($arg)
+              let $arg: $typ = $crate::from_value($arg)
                 .ok_or_else(|| "unable to convert from Value".to_owned())?;)*;
             fn inner($arg0 : $typ0, $($arg : $typ,)*) -> Result<$otyp, String> {
                 $($body)*
             }
-            let ret: ::gtmpl_value::Value = inner($arg0, $($arg),*)?.into();
+            let ret: $crate::Value = inner($arg0, $($arg),*)?.into();
             Ok(::std::sync::Arc::new(ret))
         }
     }
@@ -154,11 +152,10 @@ pub fn or(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
             return Ok(Arc::clone(arg));
         }
     }
-    args.into_iter().last().map(|a| Arc::clone(a)).ok_or_else(
-        || {
-            String::from("and needs at least one argument")
-        },
-    )
+    args.into_iter()
+        .last()
+        .map(|a| Arc::clone(a))
+        .ok_or_else(|| String::from("and needs at least one argument"))
 }
 
 /// Returns the boolean AND of its arguments by returning the
@@ -178,11 +175,10 @@ pub fn and(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
             return Ok(Arc::clone(arg));
         }
     }
-    args.into_iter().last().map(|a| Arc::clone(a)).ok_or_else(
-        || {
-            String::from("and needs at least one argument")
-        },
-    )
+    args.into_iter()
+        .last()
+        .map(|a| Arc::clone(a))
+        .ok_or_else(|| String::from("and needs at least one argument"))
 }
 
 /// Returns the boolean negation of its single argument.
@@ -253,9 +249,8 @@ pub fn len(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
 pub fn call(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     let vals: Vec<&Value> = args.iter()
         .map(|arg| {
-            arg.downcast_ref::<Value>().ok_or_else(|| {
-                String::from("print requires arguemnts of type Value")
-            })
+            arg.downcast_ref::<Value>()
+                .ok_or_else(|| String::from("print requires arguemnts of type Value"))
         })
         .collect::<Result<Vec<_>, String>>()?;
     if vals.is_empty() {
@@ -283,9 +278,8 @@ pub fn call(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
 pub fn print(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     let vals: Vec<&Value> = args.iter()
         .map(|arg| {
-            arg.downcast_ref::<Value>().ok_or_else(|| {
-                String::from("print requires arguemnts of type Value")
-            })
+            arg.downcast_ref::<Value>()
+                .ok_or_else(|| String::from("print requires arguemnts of type Value"))
         })
         .collect::<Result<Vec<_>, String>>()?;
     let mut no_space = true;
@@ -320,9 +314,8 @@ pub fn print(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
 pub fn println(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     let vals: Vec<&Value> = args.iter()
         .map(|arg| {
-            arg.downcast_ref::<Value>().ok_or_else(|| {
-                String::from("print requires arguemnts of type Value")
-            })
+            arg.downcast_ref::<Value>()
+                .ok_or_else(|| String::from("print requires arguemnts of type Value"))
         })
         .collect::<Result<Vec<_>, String>>()?;
     let mut iter = vals.iter();
@@ -366,9 +359,8 @@ pub fn println(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
 pub fn printf(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     let vals: Vec<&Value> = args.iter()
         .map(|arg| {
-            arg.downcast_ref::<Value>().ok_or_else(|| {
-                String::from("print requires arguemnts of type Value")
-            })
+            arg.downcast_ref::<Value>()
+                .ok_or_else(|| String::from("print requires arguemnts of type Value"))
         })
         .collect::<Result<Vec<_>, String>>()?;
     if vals.is_empty() {
@@ -397,9 +389,9 @@ pub fn index(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     if args.len() < 2 {
         return Err(String::from("index requires at least 2 arugments"));
     }
-    let mut col = args[0].downcast_ref::<Value>().ok_or_else(|| {
-        String::from("index arguments must be of type Value")
-    })?;
+    let mut col = args[0]
+        .downcast_ref::<Value>()
+        .ok_or_else(|| String::from("index arguments must be of type Value"))?;
     for val in &args[1..] {
         if let Some(k) = val.downcast_ref::<Value>() {
             col = get_item(col, k)?;
@@ -420,11 +412,16 @@ fn get_item<'a>(col: &'a Value, key: &Value) -> Result<&'a Value, String> {
                 None
             }
         }
-        (&Value::Object(ref o), &Value::Number(ref n)) => o.get(&n.to_string()),
-        (&Value::Object(ref o), &Value::String(ref s)) => o.get(s),
+        (&Value::Object(ref o), &Value::Number(ref n))
+        | (&Value::Map(ref o), &Value::Number(ref n)) => o.get(&n.to_string()),
+        (&Value::Object(ref o), &Value::String(ref s))
+        | (&Value::Map(ref o), &Value::String(ref s)) => o.get(s),
         _ => None,
     };
-    ret.ok_or_else(|| format!("unabled to get {} in {}", key, col))
+    match *col {
+        Value::Map(_) => Ok(ret.unwrap_or_else(|| &Value::NoValue)),
+        _ => ret.ok_or_else(|| format!("unabled to get {} in {}", key, col)),
+    }
 }
 
 #[doc = "
@@ -442,9 +439,9 @@ pub fn urlquery(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     if args.len() != 1 {
         return Err(String::from("urlquery requires one argument"));
     }
-    let val = args[0].downcast_ref::<Value>().ok_or_else(|| {
-        String::from("unable to downcast")
-    })?;
+    let val = args[0]
+        .downcast_ref::<Value>()
+        .ok_or_else(|| String::from("unable to downcast"))?;
 
     match *val {
         Value::String(ref s) => Ok(varc!(
@@ -471,11 +468,10 @@ pub fn eq(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     let unpack = || String::from("Arguments need to be of type Value.");
     let first = args[0].downcast_ref::<Value>().ok_or_else(unpack)?;
     Ok(Arc::new(Value::from(
-        args.iter().skip(1).map(|x| x.downcast_ref::<Value>()).all(
-            |x| {
-                x.map(|x| x == first).unwrap_or(false)
-            },
-        ),
+        args.iter()
+            .skip(1)
+            .map(|x| x.downcast_ref::<Value>())
+            .all(|x| x.map(|x| x == first).unwrap_or(false)),
     )))
 }
 
@@ -536,7 +532,6 @@ le(a: ref Value, b: ref Value) -> Result<Value, String> {
     };
     Ok(Value::from(ret))
 });
-
 
 gn!(
 #[doc="
@@ -602,10 +597,10 @@ fn cmp(left: &Value, right: &Value) -> Option<Ordering> {
     }
 }
 
-
 #[cfg(test)]
 mod tests_mocked {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_eq() {
@@ -789,12 +784,24 @@ mod tests_mocked {
         let ret = index(&vals).unwrap();
         let ret_ = ret.downcast_ref::<Value>();
         assert_eq!(ret_, Some(&Value::from("bar")));
+
+        let mut o = HashMap::new();
+        o.insert(String::from("foo"), String::from("bar"));
+        let col = Arc::new(Value::from(o));
+        let vals: Vec<Arc<Any>> = vec![col, varc!("foo2")];
+        let ret = index(&vals).unwrap();
+        let ret_ = ret.downcast_ref::<Value>();
+        assert_eq!(ret_, Some(&Value::NoValue));
     }
 
     #[test]
     fn test_builtins() {
         let vals: Vec<Arc<Any>> = vec![varc!("foo".to_owned()), varc!("foo".to_owned())];
-        let builtin_eq = BUILTINS.get("eq").unwrap();
+        let builtin_eq = BUILTINS
+            .iter()
+            .find(|&&(n, _)| n == "eq")
+            .map(|&(_, f)| f)
+            .unwrap();
         let ret = builtin_eq(&vals).unwrap();
         let ret_ = ret.downcast_ref::<Value>();
         assert_eq!(ret_, Some(&Value::Bool(true)));

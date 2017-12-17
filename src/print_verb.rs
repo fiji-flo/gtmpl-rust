@@ -15,15 +15,13 @@ pub fn print(p: &FormatParams, typ: char, val: &Value) -> Result<String, String>
                 'd' | 'v' => printf_generic(p, u),
                 'o' => printf_o(p, u),
                 'c' => {
-                    let c = char::from_u32(u as u32).ok_or_else(|| {
-                        format!("{:X} is not a valid char", u)
-                    })?;
+                    let c = char::from_u32(u as u32)
+                        .ok_or_else(|| format!("{:X} is not a valid char", u))?;
                     printf_generic(p, c)
                 }
                 'q' => {
-                    let c = char::from_u32(u as u32).ok_or_else(|| {
-                        format!("{:X} is not a valid char", u)
-                    })?;
+                    let c = char::from_u32(u as u32)
+                        .ok_or_else(|| format!("{:X} is not a valid char", u))?;
                     printf_generic(p, format!("'{}'", escape_char(c)))
                 }
                 'x' => printf_x(p, u),
@@ -39,15 +37,13 @@ pub fn print(p: &FormatParams, typ: char, val: &Value) -> Result<String, String>
                 'd' => printf_generic(p, i),
                 'o' => printf_o(p, i),
                 'c' => {
-                    let c = char::from_u32(i as u32).ok_or_else(|| {
-                        format!("{:X} is not a valid char", i)
-                    })?;
+                    let c = char::from_u32(i as u32)
+                        .ok_or_else(|| format!("{:X} is not a valid char", i))?;
                     printf_generic(p, c)
                 }
                 'q' => {
-                    let c = char::from_u32(i as u32).ok_or_else(|| {
-                        format!("{:X} is not a valid char", i)
-                    })?;
+                    let c = char::from_u32(i as u32)
+                        .ok_or_else(|| format!("{:X} is not a valid char", i))?;
                     printf_generic(p, format!("'{}'", escape_char(c)))
                 }
                 'x' => printf_x(p, i),
@@ -65,26 +61,22 @@ pub fn print(p: &FormatParams, typ: char, val: &Value) -> Result<String, String>
                 _ => return Err(format!("unable to format {} as %{}", val, typ)),
             })
         }
-        Value::Bool(ref b) => {
-            Ok(match typ {
-                'v' | 't' => printf_generic(p, b),
-                _ => return Err(format!("unable to format {} as %{}", val, typ)),
-            })
-        }
-        Value::String(ref s) => {
-            Ok(match typ {
-                's' | 'v' => printf_generic(p, s),
-                'x' => printf_x(p, Hexer::from(s.as_str())),
-                'X' => printf_xx(p, Hexer::from(s.as_str())),
-                'q' => {
-                    let s = s.chars()
-                        .map(|c| c.escape_default().to_string())
-                        .collect::<String>();
-                    printf_generic(p, s)
-                }
-                _ => return Err(format!("unable to format {} as %{}", val, typ)),
-            })
-        }
+        Value::Bool(ref b) => Ok(match typ {
+            'v' | 't' => printf_generic(p, b),
+            _ => return Err(format!("unable to format {} as %{}", val, typ)),
+        }),
+        Value::String(ref s) => Ok(match typ {
+            's' | 'v' => printf_generic(p, s),
+            'x' => printf_x(p, Hexer::from(s.as_str())),
+            'X' => printf_xx(p, Hexer::from(s.as_str())),
+            'q' => {
+                let s = s.chars()
+                    .map(|c| c.escape_default().to_string())
+                    .collect::<String>();
+                printf_generic(p, s)
+            }
+            _ => return Err(format!("unable to format {} as %{}", val, typ)),
+        }),
         _ => Err(format!("unable to format {} as %{}", val, typ)),
     }
 }
@@ -161,7 +153,6 @@ fn printf_xx<B: fmt::UpperHex>(p: &FormatParams, u: B) -> String {
     }
 }
 
-
 fn printf_generic<D: fmt::Display>(p: &FormatParams, c: D) -> String {
     if let Some(pr) = p.precision {
         match params_to_chars(p) {
@@ -196,7 +187,6 @@ fn printf_generic<D: fmt::Display>(p: &FormatParams, c: D) -> String {
             (_, _, _, _, _) => format!("{:width$}", c, width = p.width),
         }
     }
-
 }
 
 fn printf_e<E: fmt::LowerExp>(p: &FormatParams, f: E) -> String {

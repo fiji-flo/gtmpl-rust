@@ -10,6 +10,6 @@ rust:
 matrix:
   include:
     - rust: nightly
-      env: CLIPPY=true
+      env: NIGHTLY=true
 
 script: ./travis.sh

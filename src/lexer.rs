@@ -31,42 +31,40 @@ lazy_static! {
     };
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
-#[derive(PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ItemType {
-    ItemError, // error occurred; value is text of error
-    ItemBool, // boolean constant
-    ItemChar, // printable ASCII character; grab bag for comma etc.
+    ItemError,        // error occurred; value is text of error
+    ItemBool,         // boolean constant
+    ItemChar,         // printable ASCII character; grab bag for comma etc.
     ItemCharConstant, // character constant
-    ItemComplex, // complex constant (1+2i); imaginary is just a number
-    ItemColonEquals, // colon-equals (':=') introducing a declaration
+    ItemComplex,      // complex constant (1+2i); imaginary is just a number
+    ItemColonEquals,  // colon-equals (':=') introducing a declaration
     ItemEOF,
-    ItemField, // alphanumeric identifier starting with '.'
+    ItemField,      // alphanumeric identifier starting with '.'
     ItemIdentifier, // alphanumeric identifier not starting with '.'
-    ItemLeftDelim, // left action delimiter
-    ItemLeftParen, // '(' inside action
-    ItemNumber, // simple number, including imaginary
-    ItemPipe, // pipe symbol
-    ItemRawString, // raw quoted string (includes quotes)
+    ItemLeftDelim,  // left action delimiter
+    ItemLeftParen,  // '(' inside action
+    ItemNumber,     // simple number, including imaginary
+    ItemPipe,       // pipe symbol
+    ItemRawString,  // raw quoted string (includes quotes)
     ItemRightDelim, // right action delimiter
     ItemRightParen, // ')' inside action
-    ItemSpace, // run of spaces separating arguments
-    ItemString, // quoted string (includes quotes)
-    ItemText, // plain text
-    ItemVariable, // variable starting with '$', such as '$' or  '$1' or '$hello'
+    ItemSpace,      // run of spaces separating arguments
+    ItemString,     // quoted string (includes quotes)
+    ItemText,       // plain text
+    ItemVariable,   // variable starting with '$', such as '$' or  '$1' or '$hello'
     // Keywords, appear after all the rest.
-    ItemKeyword, // used only to delimit the keywords
-    ItemBlock, // block keyword
-    ItemDot, // the cursor, spelled '.'
-    ItemDefine, // define keyword
-    ItemElse, // else keyword
-    ItemEnd, // end keyword
-    ItemIf, // if keyword
-    ItemNil, // the untyped nil constant, easiest to treat as a keyword
-    ItemRange, // range keyword
+    ItemKeyword,  // used only to delimit the keywords
+    ItemBlock,    // block keyword
+    ItemDot,      // the cursor, spelled '.'
+    ItemDefine,   // define keyword
+    ItemElse,     // else keyword
+    ItemEnd,      // end keyword
+    ItemIf,       // if keyword
+    ItemNil,      // the untyped nil constant, easiest to treat as a keyword
+    ItemRange,    // range keyword
     ItemTemplate, // template keyword
-    ItemWith, // with keyword
+    ItemWith,     // with keyword
 }
 
 #[derive(Debug)]
@@ -99,20 +97,20 @@ impl fmt::Display for Item {
 }
 
 pub struct Lexer {
-    last_pos: Pos, // position of most recent item returned by nextItem
+    last_pos: Pos,                  // position of most recent item returned by nextItem
     items_receiver: Receiver<Item>, // channel of scanned items
-    finished: bool, // flag if lexer is finished
+    finished: bool,                 // flag if lexer is finished
 }
 
 struct LexerStateMachine {
-    input: String, // the string being scanned
-    state: State, // the next lexing function to enter
-    pos: Pos, // current position in the input
-    start: Pos, // start position of this item
-    width: Pos, // width of last rune read from input
+    input: String,              // the string being scanned
+    state: State,               // the next lexing function to enter
+    pos: Pos,                   // current position in the input
+    start: Pos,                 // start position of this item
+    width: Pos,                 // width of last rune read from input
     items_sender: Sender<Item>, // channel of scanned items
-    paren_depth: usize, // nesting depth of ( ) exprs
-    line: usize, // 1+number of newlines seen
+    paren_depth: usize,         // nesting depth of ( ) exprs
+    line: usize,                // 1+number of newlines seen
 }
 
 #[derive(Debug)]
@@ -234,8 +232,8 @@ impl LexerStateMachine {
 
     fn backup(&mut self) {
         self.pos -= 1;
-        if self.width == 1 &&
-            self.input[self.pos..]
+        if self.width == 1
+            && self.input[self.pos..]
                 .chars()
                 .next()
                 .and_then(|c| if c == '\n' { Some(()) } else { None })
@@ -254,8 +252,10 @@ impl LexerStateMachine {
     fn emit(&mut self, t: ItemType) {
         let s = &self.input[self.start..self.pos];
         let lines = match t {
-            ItemType::ItemText | ItemType::ItemRawString | ItemType::ItemLeftDelim |
-            ItemType::ItemRightDelim => 1,
+            ItemType::ItemText
+            | ItemType::ItemRawString
+            | ItemType::ItemLeftDelim
+            | ItemType::ItemRightDelim => 1,
             _ => s.chars().filter(|c| *c == '\n').count(),
         };
         self.items_sender
@@ -424,34 +424,30 @@ impl LexerStateMachine {
                         self.paren_depth -= 1;
                         State::LexInsideAction
                     }
-                    ':' => {
-                        match self.next() {
-                            Some('=') => {
-                                self.emit(ItemType::ItemColonEquals);
-                                State::LexInsideAction
-                            }
-                            _ => self.errorf("expected :="),
+                    ':' => match self.next() {
+                        Some('=') => {
+                            self.emit(ItemType::ItemColonEquals);
+                            State::LexInsideAction
                         }
-                    }
+                        _ => self.errorf("expected :="),
+                    },
                     '|' => {
                         self.emit(ItemType::ItemPipe);
                         State::LexInsideAction
                     }
-                    '.' => {
-                        match self.input[self.pos..].chars().next() {
-                            Some('0'...'9') => {
-                                self.backup();
-                                State::LexNumber
-                            }
-                            _ => State::LexField,
+                    '.' => match self.input[self.pos..].chars().next() {
+                        Some('0'...'9') => {
+                            self.backup();
+                            State::LexNumber
                         }
-                    }
+                        _ => State::LexField,
+                    },
                     '+' | '-' | '0'...'9' => {
                         self.backup();
                         State::LexNumber
                     }
                     _ if c.is_whitespace() => State::LexSpace,
-                    _ if c.is_alphanumeric() => {
+                    _ if c.is_alphanumeric() || c == '_' => {
                         self.backup();
                         State::LexIdentifier
                     }
@@ -476,7 +472,7 @@ impl LexerStateMachine {
     }
 
     fn lex_identifier(&mut self) -> State {
-        let c = self.skip_while(|c| c.is_alphanumeric()).next();
+        let c = self.skip_while(|c| c.is_alphanumeric() || *c == '_').next();
         self.backup();
         if !self.at_terminator() {
             return self.errorf(&format!("bad character {}", c.unwrap_or_default()));
@@ -507,7 +503,7 @@ impl LexerStateMachine {
             });
             return State::LexInsideAction;
         }
-        let c = self.skip_while(|c| c.is_alphanumeric()).next();
+        let c = self.skip_while(|c| c.is_alphanumeric() || *c == '_').next();
         self.backup();
 
         if !self.at_terminator() {
@@ -637,7 +633,6 @@ fn ltrim_len(s: &str) -> usize {
     s.find(|c: char| !c.is_whitespace()).unwrap_or(l)
 }
 
-
 #[cfg(test)]
 mod tests {
     extern crate itertools;
@@ -662,6 +657,15 @@ mod tests {
     #[test]
     fn test_input() {
         let s = r#"something {{ .foo }}"#;
+        let l = Lexer::new(s.to_owned());
+        let items = l.collect::<Vec<_>>();
+        let s_ = items.into_iter().map(|i| i.val).join("");
+        assert_eq!(s_, s);
+    }
+
+    #[test]
+    fn test_underscore() {
+        let s = r#"something {{ .foo_bar }}"#;
         let l = Lexer::new(s.to_owned());
         let items = l.collect::<Vec<_>>();
         let s_ = items.into_iter().map(|i| i.val).join("");

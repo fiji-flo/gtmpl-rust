@@ -35,7 +35,9 @@ struct Nothing {}
 
 impl Context {
     pub fn empty() -> Context {
-        Context { dot: Arc::new(Nothing {}) }
+        Context {
+            dot: Arc::new(Nothing {}),
+        }
     }
 
     pub fn from<T>(value: T) -> Result<Context, String>
@@ -43,7 +45,9 @@ impl Context {
         T: Into<Value>,
     {
         let serialized = Value::from(value);
-        Ok(Context { dot: Arc::new(serialized) })
+        Ok(Context {
+            dot: Arc::new(serialized),
+        })
     }
 
     pub fn from_any(value: Arc<Any>) -> Context {
@@ -63,7 +67,7 @@ macro_rules! print_val {
 }
 
 impl<'a, 'b> Template<'a> {
-    pub fn execute<T: Write>(&mut self, writer: &'b mut T, data: &Context) -> Result<(), String> {
+    pub fn execute<T: Write>(&self, writer: &'b mut T, data: &Context) -> Result<(), String> {
         let mut vars: VecDeque<VecDeque<Variable>> = VecDeque::new();
         let mut dot = VecDeque::new();
         dot.push_back(Variable {
@@ -84,15 +88,13 @@ impl<'a, 'b> Template<'a> {
             .get(&1usize)
             .and_then(|name| self.tree_set.get(name))
             .and_then(|tree| tree.root.as_ref())
-            .ok_or_else(|| {
-                format!("{} is an incomplete or empty template", self.name)
-            })?;
+            .ok_or_else(|| format!("{} is an incomplete or empty template", self.name))?;
         state.walk(data, root)?;
 
         Ok(())
     }
 
-    pub fn render(&mut self, data: &Context) -> Result<String, String> {
+    pub fn render(&self, data: &Context) -> Result<String, String> {
         let mut w: Vec<u8> = vec![];
         self.execute(&mut w, data)?;
         String::from_utf8(w).map_err(|e| format!("unable to contert output into utf8: {}", e))
@@ -121,7 +123,6 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             }
         }
         Err(format!("variable {} not found", key))
-
     }
 
     fn walk_list(&mut self, ctx: &Context, node: &'a ListNode) -> Result<(), String> {
@@ -182,9 +183,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             val = Some(self.eval_command(ctx, cmd, &val)?);
             // TODO
         }
-        let val = val.ok_or_else(
-            || format!("error evaluating pipeline {}", pipe),
-        )?;
+        let val = val.ok_or_else(|| format!("error evaluating pipeline {}", pipe))?;
         for var in &pipe.decl {
             self.vars
                 .back_mut()
@@ -205,9 +204,9 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         cmd: &CommandNode,
         val: &Option<Arc<Any>>,
     ) -> Result<Arc<Any>, String> {
-        let first_word = &cmd.args.first().ok_or_else(|| {
-            format!("no arguments for command node: {}", cmd)
-        })?;
+        let first_word = &cmd.args
+            .first()
+            .ok_or_else(|| format!("no arguments for command node: {}", cmd))?;
 
         match *(*first_word) {
             Nodes::Field(ref n) => return self.eval_field_node(ctx, n, &cmd.args, val),
@@ -236,10 +235,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         let name = &ident.ident;
         let function = self.template
             .funcs
-            .iter()
-            .rev()
-            .find(|map| map.contains_key(name))
-            .and_then(|map| map.get(name))
+            .get(name.as_str())
             .ok_or_else(|| format!("{} is not a defined function", name))?;
         self.eval_call(ctx, function, args, fin)
     }
@@ -294,7 +290,6 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             Nodes::Number(ref n) => Ok(Arc::clone(&n.value) as Arc<Any>),
             _ => Err(format!("cant handle {} as arg", node)),
         }
-
     }
 
     fn eval_field_node(
@@ -321,12 +316,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         // TODO clean shit up
         let mut r: Arc<Any> = Arc::new(0);
         for (i, id) in ident.iter().enumerate().take(n - 1) {
-            r = self.eval_field(
-                if i == 0 { receiver } else { &r },
-                id,
-                &[],
-                &None,
-            )?;
+            r = self.eval_field(if i == 0 { receiver } else { &r }, id, &[], &None)?;
         }
         self.eval_field(if n == 1 { receiver } else { &r }, &ident[n - 1], args, fin)
     }
@@ -346,11 +336,15 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                     field_name
                 ));
             }
-            if let Value::Object(ref o) = *val {
-                return o.get(field_name)
+            return match *val {
+                Value::Object(ref o) => o.get(field_name)
                     .map(|v| Arc::new(v.clone()) as Arc<Any>)
-                    .ok_or_else(|| format!("no field {} for {}", field_name, val));
-            }
+                    .ok_or_else(|| format!("no field {} for {}", field_name, val)),
+                Value::Map(ref o) => Ok(o.get(field_name)
+                    .map(|v| Arc::new(v.clone()) as Arc<Any>)
+                    .unwrap_or_else(|| Arc::new(Value::NoValue) as Arc<Any>)),
+                _ => Err(String::from("only maps and objects have fields")),
+            };
         }
 
         Err(String::from("only basic fields are supported"))
@@ -373,8 +367,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
     // Walks an `if` or `with` node. They behave the same, except that `wtih` sets dot.
     fn walk_if_or_with(&mut self, node: &'a Nodes, ctx: &Context) -> Result<(), String> {
         let pipe = match *node {
-            Nodes::If(ref n) |
-            Nodes::With(ref n) => &n.pipe,
+            Nodes::If(ref n) | Nodes::With(ref n) => &n.pipe,
             _ => return Err(format!("expected if or with node, got {}", node)),
         };
         let val = self.eval_pipeline(ctx, pipe)?;
@@ -390,8 +383,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             }
         } else {
             match *node {
-                Nodes::If(ref n) |
-                Nodes::With(ref n) => {
+                Nodes::If(ref n) | Nodes::With(ref n) => {
                     if let Some(ref otherwise) = n.else_list {
                         self.walk_list(ctx, otherwise)?;
                     }
@@ -431,11 +423,9 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         }
         if let Some(value) = val.downcast_ref::<Value>() {
             match *value {
-                Value::Object(ref map) => {
-                    for (k, v) in map.clone() {
-                        self.one_iteration(k.clone(), Arc::new(v), range)?;
-                    }
-                }
+                Value::Object(ref map) | Value::Map(ref map) => for (k, v) in map.clone() {
+                    self.one_iteration(k.clone(), Arc::new(v), range)?;
+                },
                 _ => return Err(format!("invalid range: {:?}", value)),
             }
         }
@@ -569,6 +559,30 @@ mod tests_mocked {
     }
 
     #[test]
+    fn test_novalue() {
+        #[derive(Gtmpl)]
+        struct Foo {
+            foo: u8,
+        }
+        let foo = Foo { foo: 1 };
+        let data = Context::from(foo).unwrap();
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::default();
+        assert!(t.parse(r#"{{.foobar}}"#).is_ok());
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_err());
+
+        let map: HashMap<String, u64> = [("foo".to_owned(), 23u64)].iter().cloned().collect();
+        let data = Context::from(map).unwrap();
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::default();
+        assert!(t.parse(r#"{{.foo2}}"#).is_ok());
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), Value::NoValue.to_string());
+    }
+
+    #[test]
     fn test_dot_value() {
         #[derive(Gtmpl, Clone)]
         struct Foo {
@@ -602,7 +616,9 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
 
-        let bar = Bar { bar: Foo { foo: 1 } };
+        let bar = Bar {
+            bar: Foo { foo: 1 },
+        };
         let data = Context::from(bar).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
@@ -614,7 +630,9 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
 
-        let bar = Bar { bar: Foo { foo: 0 } };
+        let bar = Bar {
+            bar: Foo { foo: 0 },
+        };
         let data = Context::from(bar).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
