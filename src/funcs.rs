@@ -7,7 +7,7 @@ use std::sync::Arc;
 use gtmpl_value::{Func, Value};
 
 extern crate percent_encoding;
-use self::percent_encoding::{DEFAULT_ENCODE_SET, utf8_percent_encode};
+use self::percent_encoding::{utf8_percent_encode, DEFAULT_ENCODE_SET};
 
 use utils::is_true;
 use printf::sprintf;
@@ -148,11 +148,10 @@ pub fn or(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
             return Ok(Arc::clone(arg));
         }
     }
-    args.into_iter().last().map(|a| Arc::clone(a)).ok_or_else(
-        || {
-            String::from("and needs at least one argument")
-        },
-    )
+    args.into_iter()
+        .last()
+        .map(|a| Arc::clone(a))
+        .ok_or_else(|| String::from("and needs at least one argument"))
 }
 
 /// Returns the boolean AND of its arguments by returning the
@@ -172,11 +171,10 @@ pub fn and(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
             return Ok(Arc::clone(arg));
         }
     }
-    args.into_iter().last().map(|a| Arc::clone(a)).ok_or_else(
-        || {
-            String::from("and needs at least one argument")
-        },
-    )
+    args.into_iter()
+        .last()
+        .map(|a| Arc::clone(a))
+        .ok_or_else(|| String::from("and needs at least one argument"))
 }
 
 /// Returns the boolean negation of its single argument.
@@ -247,9 +245,8 @@ pub fn len(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
 pub fn call(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     let vals: Vec<&Value> = args.iter()
         .map(|arg| {
-            arg.downcast_ref::<Value>().ok_or_else(|| {
-                String::from("print requires arguemnts of type Value")
-            })
+            arg.downcast_ref::<Value>()
+                .ok_or_else(|| String::from("print requires arguemnts of type Value"))
         })
         .collect::<Result<Vec<_>, String>>()?;
     if vals.is_empty() {
@@ -277,9 +274,8 @@ pub fn call(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
 pub fn print(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     let vals: Vec<&Value> = args.iter()
         .map(|arg| {
-            arg.downcast_ref::<Value>().ok_or_else(|| {
-                String::from("print requires arguemnts of type Value")
-            })
+            arg.downcast_ref::<Value>()
+                .ok_or_else(|| String::from("print requires arguemnts of type Value"))
         })
         .collect::<Result<Vec<_>, String>>()?;
     let mut no_space = true;
@@ -314,9 +310,8 @@ pub fn print(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
 pub fn println(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     let vals: Vec<&Value> = args.iter()
         .map(|arg| {
-            arg.downcast_ref::<Value>().ok_or_else(|| {
-                String::from("print requires arguemnts of type Value")
-            })
+            arg.downcast_ref::<Value>()
+                .ok_or_else(|| String::from("print requires arguemnts of type Value"))
         })
         .collect::<Result<Vec<_>, String>>()?;
     let mut iter = vals.iter();
@@ -360,9 +355,8 @@ pub fn println(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
 pub fn printf(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     let vals: Vec<&Value> = args.iter()
         .map(|arg| {
-            arg.downcast_ref::<Value>().ok_or_else(|| {
-                String::from("print requires arguemnts of type Value")
-            })
+            arg.downcast_ref::<Value>()
+                .ok_or_else(|| String::from("print requires arguemnts of type Value"))
         })
         .collect::<Result<Vec<_>, String>>()?;
     if vals.is_empty() {
@@ -391,9 +385,9 @@ pub fn index(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     if args.len() < 2 {
         return Err(String::from("index requires at least 2 arugments"));
     }
-    let mut col = args[0].downcast_ref::<Value>().ok_or_else(|| {
-        String::from("index arguments must be of type Value")
-    })?;
+    let mut col = args[0]
+        .downcast_ref::<Value>()
+        .ok_or_else(|| String::from("index arguments must be of type Value"))?;
     for val in &args[1..] {
         if let Some(k) = val.downcast_ref::<Value>() {
             col = get_item(col, k)?;
@@ -414,10 +408,10 @@ fn get_item<'a>(col: &'a Value, key: &Value) -> Result<&'a Value, String> {
                 None
             }
         }
-        (&Value::Object(ref o), &Value::Number(ref n)) |
-        (&Value::Map(ref o), &Value::Number(ref n)) => o.get(&n.to_string()),
-        (&Value::Object(ref o), &Value::String(ref s)) |
-        (&Value::Map(ref o), &Value::String(ref s)) => o.get(s),
+        (&Value::Object(ref o), &Value::Number(ref n))
+        | (&Value::Map(ref o), &Value::Number(ref n)) => o.get(&n.to_string()),
+        (&Value::Object(ref o), &Value::String(ref s))
+        | (&Value::Map(ref o), &Value::String(ref s)) => o.get(s),
         _ => None,
     };
     match *col {
@@ -441,9 +435,9 @@ pub fn urlquery(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     if args.len() != 1 {
         return Err(String::from("urlquery requires one argument"));
     }
-    let val = args[0].downcast_ref::<Value>().ok_or_else(|| {
-        String::from("unable to downcast")
-    })?;
+    let val = args[0]
+        .downcast_ref::<Value>()
+        .ok_or_else(|| String::from("unable to downcast"))?;
 
     match *val {
         Value::String(ref s) => Ok(varc!(
@@ -470,11 +464,10 @@ pub fn eq(args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
     let unpack = || String::from("Arguments need to be of type Value.");
     let first = args[0].downcast_ref::<Value>().ok_or_else(unpack)?;
     Ok(Arc::new(Value::from(
-        args.iter().skip(1).map(|x| x.downcast_ref::<Value>()).all(
-            |x| {
-                x.map(|x| x == first).unwrap_or(false)
-            },
-        ),
+        args.iter()
+            .skip(1)
+            .map(|x| x.downcast_ref::<Value>())
+            .all(|x| x.map(|x| x == first).unwrap_or(false)),
     )))
 }
 
@@ -535,7 +528,6 @@ le(a: ref Value, b: ref Value) -> Result<Value, String> {
     };
     Ok(Value::from(ret))
 });
-
 
 gn!(
 #[doc="
@@ -600,7 +592,6 @@ fn cmp(left: &Value, right: &Value) -> Option<Ordering> {
         _ => None,
     }
 }
-
 
 #[cfg(test)]
 mod tests_mocked {

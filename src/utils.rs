@@ -66,9 +66,9 @@ fn unqote(raw: &str) -> Option<(String, usize)> {
 }
 
 fn get_char(s: &str) -> Option<(String, usize)> {
-    s.char_indices().next().map(|(i, c)| {
-        (c.to_string(), i + c.len_utf8())
-    })
+    s.char_indices()
+        .next()
+        .map(|(i, c)| (c.to_string(), i + c.len_utf8()))
 }
 
 fn extract_bytes_u32(s: &str) -> Option<(String, usize)> {
@@ -128,7 +128,6 @@ pub fn is_true(val: &Arc<Any>) -> bool {
 
     false
 }
-
 
 #[cfg(test)]
 mod tests {

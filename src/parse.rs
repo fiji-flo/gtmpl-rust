@@ -105,9 +105,8 @@ impl<'a> Parser<'a> {
     }
 
     fn next_must(&mut self, context: &str) -> Result<Item, String> {
-        self.next().ok_or_else(|| {
-            self.error_msg(&format!("unexpected end in {}", context))
-        })
+        self.next()
+            .ok_or_else(|| self.error_msg(&format!("unexpected end in {}", context)))
     }
 
     fn next_non_space(&mut self) -> Option<Item> {
@@ -115,9 +114,8 @@ impl<'a> Parser<'a> {
     }
 
     fn next_non_space_must(&mut self, context: &str) -> Result<Item, String> {
-        self.next_non_space().ok_or_else(|| {
-            self.error_msg(&format!("unexpected end in {}", context))
-        })
+        self.next_non_space()
+            .ok_or_else(|| self.error_msg(&format!("unexpected end in {}", context)))
     }
 
     fn peek_non_space_must(&mut self, context: &str) -> Result<&Item, String> {
@@ -240,9 +238,9 @@ impl<'a> Parser<'a> {
             None => return self.error(&format!("unable to peek for tree {}", id)),
             Some(t) => t,
         };
-        self.tree.as_mut().map(|tree| {
-            tree.root = Some(Nodes::List(ListNode::new(id, t.pos)))
-        });
+        self.tree
+            .as_mut()
+            .map(|tree| tree.root = Some(Nodes::List(ListNode::new(id, t.pos))));
         while t.typ != ItemType::ItemEOF {
             if t.typ == ItemType::ItemLeftDelim {
                 let nns = self.next_non_space();
@@ -326,11 +324,11 @@ impl<'a> Parser<'a> {
 
     fn text_or_action(&mut self) -> Result<Nodes, String> {
         match self.next_non_space() {
-            Some(ref item) if item.typ == ItemType::ItemText => {
-                Ok(Nodes::Text(
-                    TextNode::new(self.tree_id, item.pos, item.val.clone()),
-                ))
-            }
+            Some(ref item) if item.typ == ItemType::ItemText => Ok(Nodes::Text(TextNode::new(
+                self.tree_id,
+                item.pos,
+                item.val.clone(),
+            ))),
             Some(ref item) if item.typ == ItemType::ItemLeftDelim => self.action(),
             Some(ref item) => self.unexpected(item, "input"),
             _ => self.error("unexpected end of input"),
@@ -383,7 +381,6 @@ impl<'a> Parser<'a> {
                 }
             }
             _ => return self.error(&format!("expected end; found {}", next)),
-
         };
         self.tree.as_mut().map(|t| t.pop_vars(vars_len));
         Ok((pipe.pos(), pipe, list, else_list))
@@ -391,9 +388,13 @@ impl<'a> Parser<'a> {
 
     fn if_control(&mut self) -> Result<Nodes, String> {
         let (pos, pipe, list, else_list) = self.parse_control(true, "if")?;
-        Ok(Nodes::If(
-            IfNode::new_if(self.tree_id, pos, pipe, list, else_list),
-        ))
+        Ok(Nodes::If(IfNode::new_if(
+            self.tree_id,
+            pos,
+            pipe,
+            list,
+            else_list,
+        )))
     }
 
     fn range_control(&mut self) -> Result<Nodes, String> {
@@ -409,9 +410,13 @@ impl<'a> Parser<'a> {
 
     fn with_control(&mut self) -> Result<Nodes, String> {
         let (pos, pipe, list, else_list) = self.parse_control(false, "with")?;
-        Ok(Nodes::With(
-            WithNode::new_with(self.tree_id, pos, pipe, list, else_list),
-        ))
+        Ok(Nodes::With(WithNode::new_with(
+            self.tree_id,
+            pos,
+            pipe,
+            list,
+            else_list,
+        )))
     }
 
     fn end_control(&mut self) -> Result<Nodes, String> {
@@ -459,9 +464,8 @@ impl<'a> Parser<'a> {
         let context = "template clause";
         let token = self.next_non_space_must(context)?;
         let name = self.parse_template_name(&token, context)?;
-        let next = self.next_non_space().ok_or_else(
-            || String::from("unexpected end"),
-        )?;
+        let next = self.next_non_space()
+            .ok_or_else(|| String::from("unexpected end"))?;
         let pipe = if next.typ != ItemType::ItemRightDelim {
             self.backup(next);
             Some(self.pipeline(context)?)
@@ -487,8 +491,8 @@ impl<'a> Parser<'a> {
                 let token_after_var = self.next_must("variable")?;
                 let next = if token_after_var.typ == ItemType::ItemSpace {
                     let next = self.next_non_space_must("variable")?;
-                    if next.typ != ItemType::ItemColonEquals &&
-                        !(next.typ == ItemType::ItemChar && next.val == ",")
+                    if next.typ != ItemType::ItemColonEquals
+                        && !(next.typ == ItemType::ItemChar && next.val == ",")
                     {
                         self.backup3(token, token_after_var, next);
                         break;
@@ -497,8 +501,8 @@ impl<'a> Parser<'a> {
                 } else {
                     token_after_var
                 };
-                if next.typ == ItemType::ItemColonEquals ||
-                    (next.typ == ItemType::ItemChar && next.val == ",")
+                if next.typ == ItemType::ItemColonEquals
+                    || (next.typ == ItemType::ItemChar && next.val == ",")
                 {
                     let variable = VariableNode::new(self.tree_id, token.pos, &token.val);
                     self.add_var(token.val.clone())?;
@@ -529,17 +533,17 @@ impl<'a> Parser<'a> {
                     }
                     return Ok(pipe);
                 }
-                ItemType::ItemBool |
-                ItemType::ItemCharConstant |
-                ItemType::ItemDot |
-                ItemType::ItemField |
-                ItemType::ItemIdentifier |
-                ItemType::ItemNumber |
-                ItemType::ItemNil |
-                ItemType::ItemRawString |
-                ItemType::ItemString |
-                ItemType::ItemVariable |
-                ItemType::ItemLeftParen => {
+                ItemType::ItemBool
+                | ItemType::ItemCharConstant
+                | ItemType::ItemDot
+                | ItemType::ItemField
+                | ItemType::ItemIdentifier
+                | ItemType::ItemNumber
+                | ItemType::ItemNil
+                | ItemType::ItemRawString
+                | ItemType::ItemString
+                | ItemType::ItemVariable
+                | ItemType::ItemLeftParen => {
                     self.backup(token);
                     pipe.append(self.command()?);
                 }
@@ -555,18 +559,19 @@ impl<'a> Parser<'a> {
         }
         for (i, c) in pipe.cmds.iter().enumerate().skip(1) {
             match c.args.first() {
-                Some(n) => {
-                    match *n.typ() {
-                        NodeType::Bool | NodeType::Dot | NodeType::Nil | NodeType::Number |
-                        NodeType::String => {
-                            return self.error(&format!(
-                                "non executable command in pipeline stage {}",
-                                i + 2
-                            ))
-                        }
-                        _ => {}
+                Some(n) => match *n.typ() {
+                    NodeType::Bool
+                    | NodeType::Dot
+                    | NodeType::Nil
+                    | NodeType::Number
+                    | NodeType::String => {
+                        return self.error(&format!(
+                            "non executable command in pipeline stage {}",
+                            i + 2
+                        ))
                     }
-                }
+                    _ => {}
+                },
                 None => {
                     return self.error(&format!(
                         "non executable command in pipeline stage {}",
@@ -610,11 +615,15 @@ impl<'a> Parser<'a> {
                 if next.typ == ItemType::ItemField {
                     let typ = n.typ().clone();
                     match typ {
-                        NodeType::Bool | NodeType::String | NodeType::Number | NodeType::Nil |
-                        NodeType::Dot => {
-                            return self.error(
-                                &format!("unexpected . after term {}", n.to_string()),
-                            );
+                        NodeType::Bool
+                        | NodeType::String
+                        | NodeType::Number
+                        | NodeType::Nil
+                        | NodeType::Dot => {
+                            return self.error(&format!(
+                                "unexpected . after term {}",
+                                n.to_string()
+                            ));
                         }
                         _ => {}
                     };
@@ -628,20 +637,16 @@ impl<'a> Parser<'a> {
                         chain.add(field.val);
                     }
                     let n = match typ {
-                        NodeType::Field => {
-                            Nodes::Field(FieldNode::new(
-                                self.tree_id,
-                                chain.pos(),
-                                &chain.to_string(),
-                            ))
-                        }
-                        NodeType::Variable => {
-                            Nodes::Variable(VariableNode::new(
-                                self.tree_id,
-                                chain.pos(),
-                                &chain.to_string(),
-                            ))
-                        }
+                        NodeType::Field => Nodes::Field(FieldNode::new(
+                            self.tree_id,
+                            chain.pos(),
+                            &chain.to_string(),
+                        )),
+                        NodeType::Variable => Nodes::Variable(VariableNode::new(
+                            self.tree_id,
+                            chain.pos(),
+                            &chain.to_string(),
+                        )),
                         _ => Nodes::Chain(chain),
                     };
                     Ok(Some(n))
@@ -671,14 +676,13 @@ impl<'a> Parser<'a> {
             ItemType::ItemVariable => {
                 Nodes::Variable(self.use_var(self.tree_id, token.pos, &token.val)?)
             }
-            ItemType::ItemField => Nodes::Field(
-                FieldNode::new(self.tree_id, token.pos, &token.val),
-            ),
+            ItemType::ItemField => {
+                Nodes::Field(FieldNode::new(self.tree_id, token.pos, &token.val))
+            }
             ItemType::ItemBool => {
                 Nodes::Bool(BoolNode::new(self.tree_id, token.pos, token.val == "true"))
             }
-            ItemType::ItemCharConstant |
-            ItemType::ItemNumber => {
+            ItemType::ItemCharConstant | ItemType::ItemNumber => {
                 match NumberNode::new(self.tree_id, token.pos, token.val, &token.typ) {
                     Ok(n) => Nodes::Number(n),
                     Err(e) => return self.error(&e.to_string()),
@@ -712,20 +716,18 @@ impl<'a> Parser<'a> {
         self.tree
             .as_ref()
             .and_then(|t| {
-                t.vars.iter().find(|&v| v == name).map(|_| {
-                    VariableNode::new(tree_id, pos, name)
-                })
+                t.vars
+                    .iter()
+                    .find(|&v| v == name)
+                    .map(|_| VariableNode::new(tree_id, pos, name))
             })
             .ok_or_else(|| self.error_msg(&format!("undefined variable {}", name)))
     }
 
     fn parse_template_name(&self, token: &Item, context: &str) -> Result<String, String> {
         match token.typ {
-            ItemType::ItemString | ItemType::ItemRawString => {
-                unquote_str(&token.val).ok_or_else(|| {
-                    format!("unable to parse string: {}", token.val)
-                })
-            }
+            ItemType::ItemString | ItemType::ItemRawString => unquote_str(&token.val)
+                .ok_or_else(|| format!("unable to parse string: {}", token.val)),
             _ => self.unexpected(token, context),
         }
     }
@@ -842,7 +844,6 @@ mod tests_mocked {
         assert_eq!(t2.typ, ItemType::ItemIf);
         assert_eq!(t.last().and_then(|n| Some(n.typ)), Some(ItemType::ItemEOF));
     }
-
 
     #[test]
     fn test_next_non_space() {

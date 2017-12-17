@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use parse::{Tree, Parser, parse};
+use parse::{parse, Parser, Tree};
 use funcs::BUILTINS;
 use node::TreeId;
 
