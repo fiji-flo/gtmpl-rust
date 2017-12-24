@@ -5,9 +5,7 @@ use gtmpl::{Context, Template};
 fn simple_define() {
     let mut template = Template::default();
     template
-        .parse(
-            r#"{{ define "tmpl"}} some {{ end -}} there is {{- template "tmpl" -}} template"#,
-        )
+        .parse(r#"{{ define "tmpl"}} some {{ end -}} there is {{- template "tmpl" -}} template"#)
         .unwrap();
 
     let context = Context::empty();
