@@ -11,7 +11,7 @@
 
 ```toml
 [dependencies]
-gtmpl = "0.3.0"
+gtmpl = "0.3"
 ```
 
 * [gtmpl at crates.io](https://crates.io/crate/gtmpl)
