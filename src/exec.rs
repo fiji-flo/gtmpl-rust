@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::sync::Arc;
 use std::io::Write;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 use template::Template;
 use utils::is_true;
@@ -396,7 +396,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
 
     fn one_iteration(
         &mut self,
-        key: String,
+        key: Value,
         val: Arc<Any>,
         range: &'a RangeNode,
     ) -> Result<(), String> {
@@ -416,15 +416,13 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
 
     fn walk_range(&mut self, ctx: &Context, range: &'a RangeNode) -> Result<(), String> {
         let val = self.eval_pipeline(ctx, &range.pipe)?;
-        if let Some(map) = val.downcast_ref::<HashMap<String, Arc<Any>>>() {
-            for (k, v) in map {
-                self.one_iteration(k.clone(), Arc::clone(v), range)?;
-            }
-        }
         if let Some(value) = val.downcast_ref::<Value>() {
             match *value {
                 Value::Object(ref map) | Value::Map(ref map) => for (k, v) in map.clone() {
-                    self.one_iteration(k.clone(), Arc::new(v), range)?;
+                    self.one_iteration(Value::from(k), Arc::new(v), range)?;
+                },
+                Value::Array(ref vec) => for (k, v) in vec.iter().enumerate() {
+                    self.one_iteration(Value::from(k), Arc::new(v.clone()), range)?;
                 },
                 _ => return Err(format!("invalid range: {:?}", value)),
             }
@@ -470,6 +468,7 @@ fn not_a_function(args: &[Nodes], val: &Option<Arc<Any>>) -> Result<(), String> 
 #[cfg(test)]
 mod tests_mocked {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn simple_template() {
@@ -583,6 +582,22 @@ mod tests_mocked {
     }
 
     #[test]
+    fn test_dollar_dot() {
+        #[derive(Gtmpl, Clone)]
+        struct Foo {
+            foo: u8,
+        }
+        let data = Context::from(Foo { foo: 1u8 }).unwrap();
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::default();
+        println!("{:?}", t.parse(r#"{{$.foo}}"#));
+        assert!(t.parse(r#"{{$.foo}}"#).is_ok());
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "1");
+    }
+
+    #[test]
     fn test_dot_value() {
         #[derive(Gtmpl, Clone)]
         struct Foo {
@@ -682,6 +697,16 @@ mod tests_mocked {
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(to_sorted_string(w), "12");
+
+        let vec = vec!["foo", "bar", "2000"];
+        let data = Context::from(vec).unwrap();
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::default();
+        assert!(t.parse(r#"{{ range . -}} {{.}} {{- end }}"#).is_ok());
+        let out = t.execute(&mut w, &data);
+        println!("{:?}", out);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "foobar2000");
     }
 
     #[test]

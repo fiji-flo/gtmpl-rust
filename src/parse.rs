@@ -713,6 +713,9 @@ impl<'a> Parser<'a> {
     }
 
     fn use_var(&self, tree_id: TreeId, pos: Pos, name: &str) -> Result<VariableNode, String> {
+        if name == "$" {
+            return Ok(VariableNode::new(tree_id, pos, name));
+        }
         self.tree
             .as_ref()
             .and_then(|t| {
