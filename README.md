@@ -1,11 +1,11 @@
-# gtmpl-rust &emsp; [![Build Status]][travis] [![Latest Version]][crates.io]
-[Build Status]: https://travis-ci.org/fiji-flo/gtmpl-rust.svg?branch=master
+# gtmpl-rust – The Golang Templating Language for Rust
+[![Travis Build Status]][travis] [![Appveyor Build Status]][appveyor] [![Latest Version]][crates.io]
+[Travis Build Status]: https://travis-ci.org/fiji-flo/gtmpl-rust.svg?branch=master
 [travis]: https://travis-ci.org/fiji-flo/gtmpl-rust
 [Latest Version]: https://img.shields.io/crates/v/gtmpl.svg
 [crates.io]: https://crates.io/crates/gtmpl
-
-
-**The Golang Templating Language for Rust**
+[Appveyor Build status]: https://ci.appveyor.com/api/projects/status/drir5474smj6c4e7?svg=true
+[appveyor]: https://ci.appveyor.com/project/fiji-flo/gtmpl-rust
 
 ---
 
@@ -57,6 +57,25 @@ fn main() {
     });
     let equal = template(r#"{{ call . 1 2 }}"#, Value::Function(Function { f: add }));
     assert_eq!(&equal.unwrap(), "3");
+}
+```
+
+Passing a struct as context:
+```rust
+#[macro_use]
+extern crate gtmpl;
+extern crate gtmpl_derive;
+extern crate gtmpl_value;
+
+#[derive(Gtmpl)]
+struct Foo {
+    bar: u8
+}
+
+fn main() {
+    let foo = Foo { bar: 42 };
+    let output = gtmpl::template("The answer is: {{ .bar }}", foo);
+    assert_eq!(&output.unwrap(), "The answer is: 42");
 }
 ```
 
