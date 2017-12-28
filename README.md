@@ -10,7 +10,7 @@
 ---
 
 [gtmpl-rust] provides the [Golang text/template] system for Rust. This enables
-seamless intergration of Rust application into the world of devops tools around
+seamless integration of Rust application into the world of devops tools around
 [kubernetes], [docker] and whatnot.
 
 ## Getting Started
@@ -31,7 +31,7 @@ It's not perfect, yet. Help and feedback is more than welcome.
 
 ## Some Examples
 
-Baisc template:
+Basic template:
 ```rust
 extern crate gtmpl;
 use gtmpl;
@@ -72,7 +72,7 @@ This is work in progress. Currently the following features are not supported:
 ## Context
 
 We use [gtmpl_value]'s Value as internal data type. [gtmpl_derive] provides a
-handy `derive` marco to generate the `From` implmentation for `Value`.
+handy `derive` macro to generate the `From` implementation for `Value`.
 
 See:
 
@@ -90,11 +90,12 @@ usually isn't something one is looking forward to. Most people avoid it
 completely. However, it's really useful for automation if you're looking for
 something more lightweight than a full blown DSL.
 
-The main motivation for this is to make it easier to write dev-ops tools in Rust
+The main motivation for this is to make it easier to write devops tools in Rust
 that feel native. [docker] and [helm] ([kubernetes]) use golang templating and
 it feels more native if tooling around them uses the same.
 
 [gtmpl-rust]: https://github.com/fiji-flo/gtmpl-rust
+[Golang text/template]: https://golang.org/pkg/text/template/
 [kubernetes]: https://kubernetes.io
 [helm]: https://github.com/kubernetes/helm/blob/master/docs/chart_best_practices/templates.md
 [docker]: https://docker.com
