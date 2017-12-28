@@ -1,10 +1,14 @@
 # gtmpl-rust – The Golang Templating Language for Rust
-[![Travis Build Status]][travis] [![Appveyor Build Status]][appveyor] [![Latest Version]][crates.io]
+
+[![Travis Build Status]][travis]
+[![Appveyor Build Status]][appveyor]
+[![Latest Version]][crates.io]
+
 [Travis Build Status]: https://travis-ci.org/fiji-flo/gtmpl-rust.svg?branch=master
 [travis]: https://travis-ci.org/fiji-flo/gtmpl-rust
 [Latest Version]: https://img.shields.io/crates/v/gtmpl.svg
 [crates.io]: https://crates.io/crates/gtmpl
-[Appveyor Build status]: https://ci.appveyor.com/api/projects/status/drir5474smj6c4e7?svg=true
+[Appveyor Build Status]: https://ci.appveyor.com/api/projects/status/drir5474smj6c4e7?svg=true
 [appveyor]: https://ci.appveyor.com/project/fiji-flo/gtmpl-rust
 
 ---
