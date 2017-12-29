@@ -1,4 +1,4 @@
-# gtmpl-rust – The Golang Templating Language for Rust
+# gtmpl-rust – Golang Templates for Rust
 
 [![Travis Build Status]][travis]
 [![Appveyor Build Status]][appveyor]
@@ -13,7 +13,7 @@
 
 ---
 
-[gtmpl-rust] provides the [Golang text/template] system for Rust. This enables
+[gtmpl-rust] provides the [Golang text/template] engine for Rust. This enables
 seamless integration of Rust application into the world of devops tools around
 [kubernetes], [docker] and whatnot.
 
@@ -22,7 +22,7 @@ seamless integration of Rust application into the world of devops tools around
 Add the following dependency to your Cargo manifest…
 ```toml
 [dependencies]
-gtmpl = "0.3"
+gtmpl = "0.3.3"
 ```
 
 and look at the docs:
@@ -68,6 +68,7 @@ Passing a struct as context:
 ```rust
 #[macro_use]
 extern crate gtmpl;
+#[macro_use]
 extern crate gtmpl_derive;
 extern crate gtmpl_value;
 
@@ -114,7 +115,7 @@ completely. However, it's really useful for automation if you're looking for
 something more lightweight than a full blown DSL.
 
 The main motivation for this is to make it easier to write devops tools in Rust
-that feel native. [docker] and [helm] ([kubernetes]) use golang templating and
+that feel native. [docker] and [helm] ([kubernetes]) use golang templates and
 it feels more native if tooling around them uses the same.
 
 [gtmpl-rust]: https://github.com/fiji-flo/gtmpl-rust
