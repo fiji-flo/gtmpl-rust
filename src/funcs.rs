@@ -29,7 +29,7 @@ pub static BUILTINS: &[(&'static str, Func)] = &[
     ("call", call as Func),
 ];
 
-macro_rules! varc(
+macro_rules! val(
     ($x:expr) => { Value::from($x) }
 );
 
@@ -181,7 +181,7 @@ pub fn not(args: &[Value]) -> Result<Value, String> {
     if args.len() != 1 {
         Err(String::from("not requires a single argument"))
     } else {
-        Ok(varc!(!is_true(&args[0])))
+        Ok(val!(!is_true(&args[0])))
     }
 }
 
@@ -207,7 +207,7 @@ pub fn len(args: &[Value]) -> Result<Value, String> {
         }
     };
 
-    Ok(varc!(len))
+    Ok(val!(len))
 }
 
 /// Returns the result of calling the first argument, which
@@ -269,7 +269,7 @@ pub fn print(args: &[Value]) -> Result<Value, String> {
             no_space = false;
         }
     }
-    Ok(varc!(s))
+    Ok(val!(s))
 }
 
 /// An implementation of golang's fmt.Sprintln
@@ -307,7 +307,7 @@ pub fn println(args: &[Value]) -> Result<Value, String> {
             result
         }
     };
-    Ok(varc!(s))
+    Ok(val!(s))
 }
 
 /// An implementation of golang's fmt.Sprintf
@@ -328,7 +328,7 @@ pub fn printf(args: &[Value]) -> Result<Value, String> {
     }
     if let Value::String(ref s) = args[0] {
         let s = sprintf(s, &args[1..])?;
-        Ok(varc!(s))
+        Ok(val!(s))
     } else {
         Err("printf requires a format string".to_owned())
     }
@@ -393,7 +393,7 @@ pub fn urlquery(args: &[Value]) -> Result<Value, String> {
     }
     let val = &args[0];
     match *val {
-        Value::String(ref s) => Ok(varc!(
+        Value::String(ref s) => Ok(val!(
             utf8_percent_encode(s, DEFAULT_ENCODE_SET).to_string()
         )),
         _ => Err(String::from("Arguments need to be of type String")),
@@ -544,137 +544,158 @@ mod tests_mocked {
     use std::collections::HashMap;
 
     #[test]
+    fn test_macro() {
+        gtmpl_fn!(
+            fn f1(i: i64) -> Result<i64, String> {
+                Ok(i + 1)
+            }
+        );
+        let vals: Vec<Value> = vec![val!(1i64)];
+        let ret = f1(&vals);
+        assert_eq!(ret, Ok(Value::from(2i64)));
+
+        gtmpl_fn!(
+            fn f3(i: i64, j: i64, k: i64) -> Result<i64, String> {
+                Ok(i +j + k)
+            }
+        );
+        let vals: Vec<Value> = vec![val!(1i64), val!(2i64), val!(3i64)];
+        let ret = f3(&vals);
+        assert_eq!(ret, Ok(Value::from(6i64)));
+    }
+
+    #[test]
     fn test_eq() {
-        let vals: Vec<Value> = vec![varc!("foo".to_owned()), varc!("foo".to_owned())];
+        let vals: Vec<Value> = vec![val!("foo".to_owned()), val!("foo".to_owned())];
         let ret = eq(&vals);
         assert_eq!(ret, Ok(Value::Bool(true)));
-        let vals: Vec<Value> = vec![varc!(1u32), varc!(1u32), varc!(1i8)];
+        let vals: Vec<Value> = vec![val!(1u32), val!(1u32), val!(1i8)];
         let ret = eq(&vals);
         assert_eq!(ret, Ok(Value::Bool(true)));
-        let vals: Vec<Value> = vec![varc!(false), varc!(false), varc!(false)];
+        let vals: Vec<Value> = vec![val!(false), val!(false), val!(false)];
         let ret = eq(&vals);
         assert_eq!(ret, Ok(Value::Bool(true)));
     }
 
     #[test]
     fn test_and() {
-        let vals: Vec<Value> = vec![varc!(0i32), varc!(1u8)];
+        let vals: Vec<Value> = vec![val!(0i32), val!(1u8)];
         let ret = and(&vals);
         assert_eq!(ret, Ok(Value::from(0i32)));
 
-        let vals: Vec<Value> = vec![varc!(1i32), varc!(2u8)];
+        let vals: Vec<Value> = vec![val!(1i32), val!(2u8)];
         let ret = and(&vals);
         assert_eq!(ret, Ok(Value::from(2u8)));
     }
 
     #[test]
     fn test_or() {
-        let vals: Vec<Value> = vec![varc!(0i32), varc!(1u8)];
+        let vals: Vec<Value> = vec![val!(0i32), val!(1u8)];
         let ret = or(&vals);
         assert_eq!(ret, Ok(Value::from(1u8)));
 
-        let vals: Vec<Value> = vec![varc!(0i32), varc!(0u8)];
+        let vals: Vec<Value> = vec![val!(0i32), val!(0u8)];
         let ret = or(&vals);
         assert_eq!(ret, Ok(Value::from(0u8)));
     }
 
     #[test]
     fn test_ne() {
-        let vals: Vec<Value> = vec![varc!(0i32), varc!(1u8)];
+        let vals: Vec<Value> = vec![val!(0i32), val!(1u8)];
         let ret = ne(&vals);
         assert_eq!(ret, Ok(Value::from(true)));
 
-        let vals: Vec<Value> = vec![varc!(0i32), varc!(0u8)];
+        let vals: Vec<Value> = vec![val!(0i32), val!(0u8)];
         let ret = ne(&vals);
         assert_eq!(ret, Ok(Value::from(false)));
 
-        let vals: Vec<Value> = vec![varc!("foo"), varc!("bar")];
+        let vals: Vec<Value> = vec![val!("foo"), val!("bar")];
         let ret = ne(&vals);
         assert_eq!(ret, Ok(Value::from(true)));
 
-        let vals: Vec<Value> = vec![varc!("foo"), varc!("foo")];
+        let vals: Vec<Value> = vec![val!("foo"), val!("foo")];
         let ret = ne(&vals);
         assert_eq!(ret, Ok(Value::from(false)));
     }
 
     #[test]
     fn test_lt() {
-        let vals: Vec<Value> = vec![varc!(-1i32), varc!(1u8)];
+        let vals: Vec<Value> = vec![val!(-1i32), val!(1u8)];
         let ret = lt(&vals);
         assert_eq!(ret, Ok(Value::from(true)));
 
-        let vals: Vec<Value> = vec![varc!(0i32), varc!(0u8)];
+        let vals: Vec<Value> = vec![val!(0i32), val!(0u8)];
         let ret = lt(&vals);
         assert_eq!(ret, Ok(Value::from(false)));
 
-        let vals: Vec<Value> = vec![varc!(1i32), varc!(0u8)];
+        let vals: Vec<Value> = vec![val!(1i32), val!(0u8)];
         let ret = lt(&vals);
         assert_eq!(ret, Ok(Value::from(false)));
     }
 
     #[test]
     fn test_le() {
-        let vals: Vec<Value> = vec![varc!(-1i32), varc!(1u8)];
+        let vals: Vec<Value> = vec![val!(-1i32), val!(1u8)];
         let ret = le(&vals);
         assert_eq!(ret, Ok(Value::from(true)));
 
-        let vals: Vec<Value> = vec![varc!(0i32), varc!(0u8)];
+        let vals: Vec<Value> = vec![val!(0i32), val!(0u8)];
         let ret = le(&vals);
         assert_eq!(ret, Ok(Value::from(true)));
 
-        let vals: Vec<Value> = vec![varc!(1i32), varc!(0u8)];
+        let vals: Vec<Value> = vec![val!(1i32), val!(0u8)];
         let ret = le(&vals);
         assert_eq!(ret, Ok(Value::from(false)));
     }
 
     #[test]
     fn test_gt() {
-        let vals: Vec<Value> = vec![varc!(-1i32), varc!(1u8)];
+        let vals: Vec<Value> = vec![val!(-1i32), val!(1u8)];
         let ret = gt(&vals);
         assert_eq!(ret, Ok(Value::from(false)));
 
-        let vals: Vec<Value> = vec![varc!(0i32), varc!(0u8)];
+        let vals: Vec<Value> = vec![val!(0i32), val!(0u8)];
         let ret = gt(&vals);
         assert_eq!(ret, Ok(Value::from(false)));
 
-        let vals: Vec<Value> = vec![varc!(1i32), varc!(0u8)];
+        let vals: Vec<Value> = vec![val!(1i32), val!(0u8)];
         let ret = gt(&vals);
         assert_eq!(ret, Ok(Value::from(true)));
     }
 
     #[test]
     fn test_ge() {
-        let vals: Vec<Value> = vec![varc!(-1i32), varc!(1u8)];
+        let vals: Vec<Value> = vec![val!(-1i32), val!(1u8)];
         let ret = ge(&vals);
         assert_eq!(ret, Ok(Value::from(false)));
 
-        let vals: Vec<Value> = vec![varc!(0i32), varc!(0u8)];
+        let vals: Vec<Value> = vec![val!(0i32), val!(0u8)];
         let ret = ge(&vals);
         assert_eq!(ret, Ok(Value::from(true)));
 
-        let vals: Vec<Value> = vec![varc!(1i32), varc!(0u8)];
+        let vals: Vec<Value> = vec![val!(1i32), val!(0u8)];
         let ret = ge(&vals);
         assert_eq!(ret, Ok(Value::from(true)));
     }
 
     #[test]
     fn test_print() {
-        let vals: Vec<Value> = vec![varc!("foo"), varc!(1u8)];
+        let vals: Vec<Value> = vec![val!("foo"), val!(1u8)];
         let ret = print(&vals);
         assert_eq!(ret, Ok(Value::from("foo1")));
 
-        let vals: Vec<Value> = vec![varc!("foo"), varc!(1u8), varc!(2)];
+        let vals: Vec<Value> = vec![val!("foo"), val!(1u8), val!(2)];
         let ret = print(&vals);
         assert_eq!(ret, Ok(Value::from("foo1 2")));
 
-        let vals: Vec<Value> = vec![varc!(true), varc!(1), varc!("foo"), varc!(2)];
+        let vals: Vec<Value> = vec![val!(true), val!(1), val!("foo"), val!(2)];
         let ret = print(&vals);
         assert_eq!(ret, Ok(Value::from("true 1foo2")));
     }
 
     #[test]
     fn test_println() {
-        let vals: Vec<Value> = vec![varc!("foo"), varc!(1u8)];
+        let vals: Vec<Value> = vec![val!("foo"), val!(1u8)];
         let ret = println(&vals);
         assert_eq!(ret, Ok(Value::from("foo 1\n")));
 
@@ -685,28 +706,28 @@ mod tests_mocked {
 
     #[test]
     fn test_index() {
-        let vals: Vec<Value> = vec![varc!(vec![vec![1, 2], vec![3, 4]]), varc!(1), varc!(0)];
+        let vals: Vec<Value> = vec![val!(vec![vec![1, 2], vec![3, 4]]), val!(1), val!(0)];
         let ret = index(&vals);
         assert_eq!(ret, Ok(Value::from(3)));
 
         let mut o = HashMap::new();
         o.insert(String::from("foo"), vec![String::from("bar")]);
         let col = Value::from(o);
-        let vals: Vec<Value> = vec![col, varc!("foo"), varc!(0)];
+        let vals: Vec<Value> = vec![col, val!("foo"), val!(0)];
         let ret = index(&vals);
         assert_eq!(ret, Ok(Value::from("bar")));
 
         let mut o = HashMap::new();
         o.insert(String::from("foo"), String::from("bar"));
         let col = Value::from(o);
-        let vals: Vec<Value> = vec![col, varc!("foo2")];
+        let vals: Vec<Value> = vec![col, val!("foo2")];
         let ret = index(&vals);
         assert_eq!(ret, Ok(Value::NoValue));
     }
 
     #[test]
     fn test_builtins() {
-        let vals: Vec<Value> = vec![varc!("foo".to_owned()), varc!("foo".to_owned())];
+        let vals: Vec<Value> = vec![val!("foo".to_owned()), val!("foo".to_owned())];
         let builtin_eq = BUILTINS
             .iter()
             .find(|&&(n, _)| n == "eq")
@@ -723,7 +744,7 @@ mod tests_mocked {
                 Ok(a + b)
             }
         );
-        let vals: Vec<Value> = vec![varc!(1u32), varc!(2u32)];
+        let vals: Vec<Value> = vec![val!(1u32), val!(2u32)];
         let ret = add(&vals);
         assert_eq!(ret, Ok(Value::from(3u32)));
 
@@ -732,7 +753,7 @@ mod tests_mocked {
                 Ok(s.starts_with(&prefix))
             }
         );
-        let vals: Vec<Value> = vec![varc!("foobar"), varc!("foo")];
+        let vals: Vec<Value> = vec![val!("foobar"), val!("foo")];
         let ret = has_prefix(&vals);
         assert_eq!(ret, Ok(Value::from(true)));
     }
