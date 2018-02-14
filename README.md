@@ -26,7 +26,7 @@ gtmpl = "0.4.0"
 ```
 
 and look at the docs:
-* [gtmpl at crates.io](https://crates.io/crate/gtmpl)
+* [gtmpl at crates.io](https://crates.io/crates/gtmpl)
 * [gtmpl documentation](https://docs.rs/crate/gtmpl)
 * [golang documentation](https://golang.org/pkg/text/template/)
 
