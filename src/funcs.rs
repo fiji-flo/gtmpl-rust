@@ -393,9 +393,7 @@ pub fn urlquery(args: &[Value]) -> Result<Value, String> {
     }
     let val = &args[0];
     match *val {
-        Value::String(ref s) => Ok(val!(
-            utf8_percent_encode(s, DEFAULT_ENCODE_SET).to_string()
-        )),
+        Value::String(ref s) => Ok(val!(utf8_percent_encode(s, DEFAULT_ENCODE_SET).to_string())),
         _ => Err(String::from("Arguments need to be of type String")),
     }
 }
