@@ -4,7 +4,7 @@ use gtmpl_value::{FromValue, Value};
 
 use print_verb::print;
 
-pub fn sprintf(s: &str, args: &[&Value]) -> Result<String, String> {
+pub fn sprintf(s: &str, args: &[Value]) -> Result<String, String> {
     let tokens = tokenize(s)?;
     let mut fmt = String::new();
     let mut i = 0;
@@ -42,7 +42,7 @@ pub struct FormatParams {
 fn process_verb(
     s: &str,
     typ: char,
-    args: &[&Value],
+    args: &[Value],
     mut index: usize,
 ) -> Result<(String, usize), String> {
     let mut params = FormatParams::default();
@@ -143,7 +143,7 @@ fn process_verb(
     };
 
     if arg_num < args.len() {
-        return print(&params, typ, args[arg_num]).map(|s| (s, index));
+        return print(&params, typ, &args[arg_num]).map(|s| (s, index));
     }
     Err(format!("unable to process verb: {}", s))
 }
@@ -189,7 +189,7 @@ fn tokenize(s: &str) -> Result<Vec<FormatArg>, String> {
 
         loop {
             match iter.next() {
-                None => return Err(format!("unable to teminate format arg: {}", &s[start..])),
+                None => return Err(format!("unable to terminate format arg: {}", &s[start..])),
                 Some((i, t)) if TYPS.contains(t) => {
                     args.push(FormatArg {
                         start,
@@ -220,13 +220,13 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_printintf_to_format() {
-        let s = sprintf("foo%v2000", &vec![&"bar".into()]);
+    fn test_sprinttf_to_format() {
+        let s = sprintf("foo%v2000", &vec!["bar".into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"foobar2000");
 
-        let s = sprintf("%+0v", &vec![&1.into()]);
+        let s = sprintf("%+0v", &vec![1.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"+1");
@@ -234,12 +234,12 @@ mod test {
 
     #[test]
     fn test_sprintf_fancy() {
-        let s = sprintf("%+-#10c", &vec![&10000.into()]);
+        let s = sprintf("%+-#10c", &vec![10000.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"✐         ");
 
-        let s = sprintf("%+-#10q", &vec![&10000.into()]);
+        let s = sprintf("%+-#10q", &vec![10000.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"'\u2710'  ");
@@ -247,12 +247,12 @@ mod test {
 
     #[test]
     fn test_sprintf_string_to_hex() {
-        let s = sprintf("%x", &vec![&"foobar2000".into()]);
+        let s = sprintf("%x", &vec!["foobar2000".into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"666f6f62617232303030");
 
-        let s = sprintf("%X", &vec![&"foobar2000".into()]);
+        let s = sprintf("%X", &vec!["foobar2000".into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"666F6F62617232303030");
@@ -260,7 +260,7 @@ mod test {
 
     #[test]
     fn test_sprintf_string_prec() {
-        let s = sprintf("%.6s", &vec![&"foobar2000".into()]);
+        let s = sprintf("%.6s", &vec!["foobar2000".into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"foobar");
@@ -268,17 +268,14 @@ mod test {
 
     #[test]
     fn test_sprintf_index() {
-        let s = sprintf(
-            "%[1]v %v",
-            &vec![&"foo".into(), &"bar".into(), &2000.into()],
-        );
+        let s = sprintf("%[1]v %v", &vec!["foo".into(), "bar".into(), 2000.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"foo bar");
 
         let s = sprintf(
             "%[2]v %v%[1]v %v%[1]v",
-            &vec![&"!".into(), &"wtf".into(), &"golang".into()],
+            &vec!["!".into(), "wtf".into(), "golang".into()],
         );
         assert!(s.is_ok());
         let s = s.unwrap();
@@ -287,17 +284,17 @@ mod test {
 
     #[test]
     fn test_sprintf_number() {
-        let s = sprintf("foobar%d", &vec![&2000.into()]);
+        let s = sprintf("foobar%d", &vec![2000.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"foobar2000");
 
-        let s = sprintf("%+0d", &vec![&1.into()]);
+        let s = sprintf("%+0d", &vec![1.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"+1");
 
-        let s = sprintf("%+0b", &vec![&5.into()]);
+        let s = sprintf("%+0b", &vec![5.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"+101");

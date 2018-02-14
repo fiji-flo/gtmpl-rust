@@ -33,13 +33,10 @@ impl<'a> Template<'a> {
     /// ## Example
     ///
     /// ```rust
-    /// use std::any::Any;
-    /// use std::sync::Arc;
-    ///
     /// use gtmpl::{Context, Func, Value};
     ///
-    /// fn hello_world(_args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
-    ///   Ok(Arc::new(Value::from("Hello World!")) as Arc<Any>)
+    /// fn hello_world(_args: &[Value]) -> Result<Value, String> {
+    ///   Ok(Value::from("Hello World!"))
     /// }
     ///
     /// let mut tmpl = gtmpl::Template::default();
@@ -57,14 +54,12 @@ impl<'a> Template<'a> {
     /// ## Example
     ///
     /// ```rust
-    /// use std::any::Any;
     /// use std::collections::HashMap;
-    /// use std::sync::Arc;
     ///
     /// use gtmpl::{Context, Func, Value};
     ///
-    /// fn hello_world(_args: &[Arc<Any>]) -> Result<Arc<Any>, String> {
-    ///   Ok(Arc::new(Value::from("Hello World!")) as Arc<Any>)
+    /// fn hello_world(_args: &[Value]) -> Result<Value, String> {
+    ///   Ok(Value::from("Hello World!"))
     /// }
     ///
     /// let funcs = vec![("helloWorld", hello_world as Func)];

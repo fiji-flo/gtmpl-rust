@@ -1,7 +1,4 @@
-use std::any::Any;
 use std::char;
-use std::sync::Arc;
-
 use gtmpl_value::Value;
 
 pub fn unquote_char(s: &str, quote: char) -> Option<char> {
@@ -112,21 +109,17 @@ fn extract_bytes_x(s: &str) -> Option<(String, usize)> {
 }
 
 /// Returns
-pub fn is_true(val: &Arc<Any>) -> bool {
-    if let Some(v) = val.downcast_ref::<Value>() {
-        return match *v {
-            Value::Bool(ref b) => *b,
-            Value::String(ref s) => !s.is_empty(),
-            Value::Array(ref a) => !a.is_empty(),
-            Value::Object(ref o) => !o.is_empty(),
-            Value::Map(ref m) => !m.is_empty(),
-            Value::Function(_) => true,
-            Value::NoValue | Value::Nil => false,
-            Value::Number(ref n) => n.as_u64().map(|u| u != 0).unwrap_or_else(|| true),
-        };
+pub fn is_true(val: &Value) -> bool {
+    match *val {
+        Value::Bool(ref b) => *b,
+        Value::String(ref s) => !s.is_empty(),
+        Value::Array(ref a) => !a.is_empty(),
+        Value::Object(ref o) => !o.is_empty(),
+        Value::Map(ref m) => !m.is_empty(),
+        Value::Function(_) => true,
+        Value::NoValue | Value::Nil => false,
+        Value::Number(ref n) => n.as_u64().map(|u| u != 0).unwrap_or_else(|| true),
     }
-
-    false
 }
 
 #[cfg(test)]
@@ -185,9 +178,9 @@ mod tests {
 
     #[test]
     fn test_is_true() {
-        let t: Arc<Any> = Arc::new(Value::from(1i8));
+        let t = Value::from(1i8);
         assert_eq!(is_true(&t), true);
-        let t: Arc<Any> = Arc::new(Value::from(0u32));
+        let t = Value::from(0u32);
         assert_eq!(is_true(&t), false);
     }
 }

@@ -1,5 +1,4 @@
 use std::fmt::{Display, Error, Formatter};
-use std::sync::Arc;
 
 use itertools::Itertools;
 use lexer::ItemType;
@@ -105,7 +104,7 @@ pub trait Node: Display {
 
 macro_rules! node {
     ($name:ident {
-        $($field:ident : $typ:ty),*
+        $($field:ident : $typ:ty),* $(,)*
     }) => {
         #[derive(Clone)]
         #[derive(Debug)]
@@ -450,11 +449,7 @@ impl Display for ChainNode {
     }
 }
 
-node!(
-    BoolNode {
-        value: Arc<Value>
-    }
-);
+node!(BoolNode { value: Value });
 
 impl BoolNode {
     pub fn new(tr: TreeId, pos: Pos, val: bool) -> BoolNode {
@@ -462,7 +457,7 @@ impl BoolNode {
             typ: NodeType::Bool,
             tr,
             pos,
-            value: Arc::new(Value::from(val)),
+            value: Value::from(val),
         }
     }
 }
@@ -481,16 +476,14 @@ pub enum NumberType {
     Char,
 }
 
-node!(
-    NumberNode {
-        is_i64: bool,
-        is_u64: bool,
-        is_f64: bool,
-        text: String,
-        number_typ: NumberType,
-        value: Arc<Value>
-    }
-);
+node!(NumberNode {
+    is_i64: bool,
+    is_u64: bool,
+    is_f64: bool,
+    text: String,
+    number_typ: NumberType,
+    value: Value,
+});
 
 impl NumberNode {
     #[cfg_attr(feature = "cargo-clippy", allow(float_cmp))]
@@ -512,7 +505,7 @@ impl NumberNode {
                         is_f64: true,
                         text,
                         number_typ: NumberType::Char,
-                        value: Arc::new(Value::from(c as u64)),
+                        value: Value::from(c as u64),
                     })
                 })
                 .ok_or(Error),
@@ -584,7 +577,7 @@ impl NumberNode {
                     is_f64,
                     text,
                     number_typ,
-                    value: Arc::new(value),
+                    value,
                 })
             }
         }
@@ -597,12 +590,10 @@ impl Display for NumberNode {
     }
 }
 
-node!(
-    StringNode {
-        quoted: String,
-        value: Arc<Value>
-    }
-);
+node!(StringNode {
+    quoted: String,
+    value: Value,
+});
 
 impl StringNode {
     pub fn new(tr: TreeId, pos: Pos, orig: String, text: String) -> StringNode {
@@ -611,7 +602,7 @@ impl StringNode {
             tr,
             pos,
             quoted: orig,
-            value: Arc::new(Value::from(text)),
+            value: Value::from(text),
         }
     }
 }

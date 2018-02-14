@@ -1,5 +1,3 @@
-#[allow(unused_imports)] // for clippy
-use std::ascii::AsciiExt;
 use std::collections::HashMap;
 use std::fmt;
 use std::thread;

@@ -757,8 +757,6 @@ impl<'a> Iterator for Parser<'a> {
 
 #[cfg(test)]
 mod tests_mocked {
-    use std::any::Any;
-    use std::sync::Arc;
     use super::*;
     use lexer::ItemType;
     use gtmpl_value::Value;
@@ -784,8 +782,8 @@ mod tests_mocked {
         make_parser_with(s)
     }
 
-    fn eq_mock(_: &[Arc<Any>]) -> Result<Arc<Any>, String> {
-        Ok(Arc::new(true))
+    fn eq_mock(_: &[Value]) -> Result<Value, String> {
+        Ok(true.into())
     }
 
     fn make_parser_with<'a>(s: &str) -> Parser<'a> {
@@ -912,7 +910,7 @@ mod tests_mocked {
         let t = t.unwrap();
         assert_eq!(t.typ(), &NodeType::Bool);
         if let Nodes::Bool(n) = t {
-            assert_eq!(*n.value, Value::from(true));
+            assert_eq!(n.value, Value::from(true));
         } else {
             assert!(false);
         }
@@ -928,7 +926,7 @@ mod tests_mocked {
         assert_eq!(t.typ(), &NodeType::Bool);
         assert_eq!(t.typ(), &NodeType::Bool);
         if let Nodes::Bool(n) = t {
-            assert_eq!(*n.value, Value::from(false));
+            assert_eq!(n.value, Value::from(false));
         } else {
             assert!(false);
         }

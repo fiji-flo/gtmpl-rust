@@ -1,5 +1,3 @@
-use std::any::Any;
-use std::sync::Arc;
 use std::io::Write;
 use std::collections::VecDeque;
 
@@ -11,7 +9,7 @@ use gtmpl_value::{Func, Value};
 
 struct Variable {
     name: String,
-    value: Arc<Any>,
+    value: Value,
 }
 
 struct State<'a, 'b, T: Write>
@@ -27,17 +25,12 @@ where
 
 /// A Context for the template. Passed to the template exectution.
 pub struct Context {
-    dot: Arc<Any>,
+    dot: Value,
 }
-
-#[derive(Clone, Debug)]
-struct Nothing {}
 
 impl Context {
     pub fn empty() -> Context {
-        Context {
-            dot: Arc::new(Nothing {}),
-        }
+        Context { dot: Value::Nil }
     }
 
     pub fn from<T>(value: T) -> Result<Context, String>
@@ -45,24 +38,11 @@ impl Context {
         T: Into<Value>,
     {
         let serialized = Value::from(value);
-        Ok(Context {
-            dot: Arc::new(serialized),
-        })
+        Ok(Context { dot: serialized })
     }
 
-    pub fn from_any(value: Arc<Any>) -> Context {
+    pub fn from_any(value: Value) -> Context {
         Context { dot: value }
-    }
-}
-
-macro_rules! print_val {
-    ($val:ident : $out:ident <- $($typ:ty,)*) => {
-        $(
-            if let Some(v) = $val.downcast_ref::<$typ>() {
-                write!($out.writer, "{}", v).map_err(|e| format!("{}", e))?;
-                return Ok(())
-            }
-        )*
     }
 }
 
@@ -72,7 +52,7 @@ impl<'a, 'b> Template<'a> {
         let mut dot = VecDeque::new();
         dot.push_back(Variable {
             name: "$".to_owned(),
-            value: Arc::clone(&data.dot),
+            value: data.dot.clone(),
         });
         vars.push_back(dot);
 
@@ -102,7 +82,7 @@ impl<'a, 'b> Template<'a> {
 }
 
 impl<'a, 'b, T: Write> State<'a, 'b, T> {
-    fn set_kth_last_var_value(&mut self, k: usize, value: Arc<Any>) -> Result<(), String> {
+    fn set_kth_last_var_value(&mut self, k: usize, value: Value) -> Result<(), String> {
         if let Some(last_vars) = self.vars.back_mut() {
             let i = last_vars.len() - k;
             if let Some(kth_last_var) = last_vars.get_mut(i) {
@@ -114,11 +94,11 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         Err(String::from("empty var stack"))
     }
 
-    fn var_value(&self, key: &str) -> Result<Arc<Any>, String> {
+    fn var_value(&self, key: &str) -> Result<Value, String> {
         for context in self.vars.iter().rev() {
             for var in context.iter().rev() {
                 if var.name == key {
-                    return Ok(Arc::clone(&var.value));
+                    return Ok(var.value.clone());
                 }
             }
         }
@@ -161,7 +141,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                 let mut dot = VecDeque::new();
                 dot.push_back(Variable {
                     name: "$".to_owned(),
-                    value: Arc::clone(&ctx.dot),
+                    value: ctx.dot.clone(),
                 });
                 vars.push_back(dot);
                 let mut new_state = State {
@@ -177,8 +157,8 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         Err(String::from("work in progress"))
     }
 
-    fn eval_pipeline(&mut self, ctx: &Context, pipe: &PipeNode) -> Result<Arc<Any>, String> {
-        let mut val: Option<Arc<Any>> = None;
+    fn eval_pipeline(&mut self, ctx: &Context, pipe: &PipeNode) -> Result<Value, String> {
+        let mut val: Option<Value> = None;
         for cmd in &pipe.cmds {
             val = Some(self.eval_command(ctx, cmd, &val)?);
             // TODO
@@ -187,11 +167,11 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         for var in &pipe.decl {
             self.vars
                 .back_mut()
-                .and_then(|v| {
-                    Some(v.push_back(Variable {
+                .map(|v| {
+                    v.push_back(Variable {
                         name: var.ident[0].clone(),
-                        value: Arc::clone(&val),
-                    }))
+                        value: val.clone(),
+                    })
                 })
                 .ok_or_else(|| String::from("no stack while evaluating pipeline"))?;
         }
@@ -202,8 +182,8 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         &mut self,
         ctx: &Context,
         cmd: &CommandNode,
-        val: &Option<Arc<Any>>,
-    ) -> Result<Arc<Any>, String> {
+        val: &Option<Value>,
+    ) -> Result<Value, String> {
         let first_word = &cmd.args
             .first()
             .ok_or_else(|| format!("no arguments for command node: {}", cmd))?;
@@ -218,9 +198,9 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         }
         not_a_function(&cmd.args, val)?;
         match *(*first_word) {
-            Nodes::Bool(ref n) => Ok(Arc::clone(&n.value) as Arc<Any>),
-            Nodes::Dot(_) => Ok(Arc::clone(&ctx.dot)),
-            Nodes::Number(ref n) => Ok(Arc::clone(&n.value) as Arc<Any>),
+            Nodes::Bool(ref n) => Ok(n.value.clone()),
+            Nodes::Dot(_) => Ok(ctx.dot.clone()),
+            Nodes::Number(ref n) => Ok(n.value.clone()),
             _ => Err(format!("cannot evaluate command {}", first_word)),
         }
     }
@@ -230,8 +210,8 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         ctx: &Context,
         ident: &IdentifierNode,
         args: &[Nodes],
-        fin: &Option<Arc<Any>>,
-    ) -> Result<Arc<Any>, String> {
+        fin: &Option<Value>,
+    ) -> Result<Value, String> {
         let name = &ident.ident;
         let function = self.template
             .funcs
@@ -245,15 +225,15 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         ctx: &Context,
         function: &Func,
         args: &[Nodes],
-        fin: &Option<Arc<Any>>,
-    ) -> Result<Arc<Any>, String> {
+        fin: &Option<Value>,
+    ) -> Result<Value, String> {
         let mut arg_vals = vec![];
         for arg in &args[1..] {
             let val = self.eval_arg(ctx, arg)?;
             arg_vals.push(val);
         }
         if let Some(ref f) = *fin {
-            arg_vals.push(Arc::clone(f));
+            arg_vals.push(f.clone());
         }
 
         function(&arg_vals)
@@ -264,8 +244,8 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         ctx: &Context,
         chain: &ChainNode,
         args: &[Nodes],
-        fin: &Option<Arc<Any>>,
-    ) -> Result<Arc<Any>, String> {
+        fin: &Option<Value>,
+    ) -> Result<Value, String> {
         if chain.field.is_empty() {
             return Err(String::from("internal error: no fields in eval_chain_node"));
         }
@@ -276,18 +256,18 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         self.eval_field_chain(&pipe, &chain.field, args, fin)
     }
 
-    fn eval_arg(&mut self, ctx: &Context, node: &Nodes) -> Result<Arc<Any>, String> {
+    fn eval_arg(&mut self, ctx: &Context, node: &Nodes) -> Result<Value, String> {
         match *node {
-            Nodes::Dot(_) => Ok(Arc::clone(&ctx.dot)),
+            Nodes::Dot(_) => Ok(ctx.dot.clone()),
             //Nodes::Nil
             Nodes::Field(ref n) => self.eval_field_node(ctx, n, &[], &None), // args?
             Nodes::Variable(ref n) => self.eval_variable_node(n, &[], &None),
             Nodes::Pipe(ref n) => self.eval_pipeline(ctx, n),
             // Nodes::Identifier
             Nodes::Chain(ref n) => self.eval_chain_node(ctx, n, &[], &None),
-            Nodes::String(ref n) => Ok(Arc::clone(&n.value) as Arc<Any>),
-            Nodes::Bool(ref n) => Ok(Arc::clone(&n.value) as Arc<Any>),
-            Nodes::Number(ref n) => Ok(Arc::clone(&n.value) as Arc<Any>),
+            Nodes::String(ref n) => Ok(n.value.clone()),
+            Nodes::Bool(ref n) => Ok(n.value.clone()),
+            Nodes::Number(ref n) => Ok(n.value.clone()),
             _ => Err(format!("cant handle {} as arg", node)),
         }
     }
@@ -297,24 +277,24 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         ctx: &Context,
         field: &FieldNode,
         args: &[Nodes],
-        fin: &Option<Arc<Any>>,
-    ) -> Result<Arc<Any>, String> {
+        fin: &Option<Value>,
+    ) -> Result<Value, String> {
         self.eval_field_chain(&ctx.dot, &field.ident, args, fin)
     }
 
     fn eval_field_chain(
         &mut self,
-        receiver: &Arc<Any>,
+        receiver: &Value,
         ident: &[String],
         args: &[Nodes],
-        fin: &Option<Arc<Any>>,
-    ) -> Result<Arc<Any>, String> {
+        fin: &Option<Value>,
+    ) -> Result<Value, String> {
         let n = ident.len();
         if n < 1 {
             return Err(String::from("field chain without fields :/"));
         }
         // TODO clean shit up
-        let mut r: Arc<Any> = Arc::new(0);
+        let mut r: Value = Value::from(0);
         for (i, id) in ident.iter().enumerate().take(n - 1) {
             r = self.eval_field(if i == 0 { receiver } else { &r }, id, &[], &None)?;
         }
@@ -323,39 +303,33 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
 
     fn eval_field(
         &mut self,
-        receiver: &Arc<Any>,
+        receiver: &Value,
         field_name: &str,
         args: &[Nodes],
-        fin: &Option<Arc<Any>>,
-    ) -> Result<Arc<Any>, String> {
+        fin: &Option<Value>,
+    ) -> Result<Value, String> {
         let has_args = args.len() > 1 || fin.is_some();
-        if let Some(val) = receiver.downcast_ref::<Value>() {
-            if has_args {
-                return Err(format!(
-                    "{} has arguments but cannot be invoked as function",
-                    field_name
-                ));
-            }
-            return match *val {
-                Value::Object(ref o) => o.get(field_name)
-                    .map(|v| Arc::new(v.clone()) as Arc<Any>)
-                    .ok_or_else(|| format!("no field {} for {}", field_name, val)),
-                Value::Map(ref o) => Ok(o.get(field_name)
-                    .map(|v| Arc::new(v.clone()) as Arc<Any>)
-                    .unwrap_or_else(|| Arc::new(Value::NoValue) as Arc<Any>)),
-                _ => Err(String::from("only maps and objects have fields")),
-            };
+        if has_args {
+            return Err(format!(
+                "{} has arguments but cannot be invoked as function",
+                field_name
+            ));
         }
-
-        Err(String::from("only basic fields are supported"))
+        match *receiver {
+            Value::Object(ref o) => o.get(field_name)
+                .cloned()
+                .ok_or_else(|| format!("no field {} for {}", field_name, receiver)),
+            Value::Map(ref o) => Ok(o.get(field_name).cloned().unwrap_or_else(|| Value::NoValue)),
+            _ => Err(String::from("only maps and objects have fields")),
+        }
     }
 
     fn eval_variable_node(
         &mut self,
         variable: &VariableNode,
         args: &[Nodes],
-        fin: &Option<Arc<Any>>,
-    ) -> Result<Arc<Any>, String> {
+        fin: &Option<Value>,
+    ) -> Result<Value, String> {
         let val = self.var_value(&variable.ident[0])?;
         if variable.ident.len() == 1 {
             not_a_function(args, fin)?;
@@ -397,14 +371,14 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
     fn one_iteration(
         &mut self,
         key: Value,
-        val: Arc<Any>,
+        val: Value,
         range: &'a RangeNode,
     ) -> Result<(), String> {
         if !range.pipe.decl.is_empty() {
-            self.set_kth_last_var_value(1, Arc::clone(&val))?;
+            self.set_kth_last_var_value(1, val.clone())?;
         }
         if range.pipe.decl.len() > 1 {
-            self.set_kth_last_var_value(2, Arc::new(key))?;
+            self.set_kth_last_var_value(2, key)?;
         }
         let vars = VecDeque::new();
         self.vars.push_back(vars);
@@ -416,16 +390,14 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
 
     fn walk_range(&mut self, ctx: &Context, range: &'a RangeNode) -> Result<(), String> {
         let val = self.eval_pipeline(ctx, &range.pipe)?;
-        if let Some(value) = val.downcast_ref::<Value>() {
-            match *value {
-                Value::Object(ref map) | Value::Map(ref map) => for (k, v) in map.clone() {
-                    self.one_iteration(Value::from(k), Arc::new(v), range)?;
-                },
-                Value::Array(ref vec) => for (k, v) in vec.iter().enumerate() {
-                    self.one_iteration(Value::from(k), Arc::new(v.clone()), range)?;
-                },
-                _ => return Err(format!("invalid range: {:?}", value)),
-            }
+        match val {
+            Value::Object(ref map) | Value::Map(ref map) => for (k, v) in map.clone() {
+                self.one_iteration(Value::from(k), v, range)?;
+            },
+            Value::Array(ref vec) => for (k, v) in vec.iter().enumerate() {
+                self.one_iteration(Value::from(k), v.clone(), range)?;
+            },
+            _ => return Err(format!("invalid range: {:?}", val)),
         }
         if let Some(ref else_list) = range.else_list {
             self.walk_list(ctx, else_list)?;
@@ -433,32 +405,13 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         Ok(())
     }
 
-    fn print_value(&mut self, val: &Arc<Any>) -> Result<(), String> {
-        print_val!{ val: self <-
-                    String,
-                    bool,
-                    u8,
-                    u16,
-                    u32,
-                    u64,
-                    i8,
-                    i16,
-                    i32,
-                    i64,
-                    f32,
-                    f64,
-                    isize,
-                    usize,
-        };
-        if let Some(v) = val.downcast_ref::<Value>() {
-            write!(self.writer, "{}", v).map_err(|e| format!("{}", e))?;
-            return Ok(());
-        }
-        Err(String::from("unable to format value"))
+    fn print_value(&mut self, val: &Value) -> Result<(), String> {
+        write!(self.writer, "{}", val).map_err(|e| format!("{}", e))?;
+        Ok(())
     }
 }
 
-fn not_a_function(args: &[Nodes], val: &Option<Arc<Any>>) -> Result<(), String> {
+fn not_a_function(args: &[Nodes], val: &Option<Value>) -> Result<(), String> {
     if args.len() > 1 || val.is_some() {
         return Err(format!("can't give arument to non-function {}", args[0]));
     }
