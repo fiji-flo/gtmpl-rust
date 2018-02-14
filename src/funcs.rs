@@ -62,7 +62,7 @@ macro_rules! gtmpl_fn {
                 return Err(String::from("at least one argument required"));
             }
             let x = &args[0];
-            let $arg0: $typ0 = $crate::from_value($arg0)
+            let $arg0: $typ0 = $crate::from_value(x)
                 .ok_or_else(|| "unable to convert from Value".to_owned())?;
             fn inner($arg0 : $typ0) -> Result<$otyp, String> {
                 $($body)*
