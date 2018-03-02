@@ -16,7 +16,7 @@ struct State<'a, 'b, T: Write>
 where
     T: 'b,
 {
-    template: &'a Template<'a>,
+    template: &'a Template,
     writer: &'b mut T,
     node: Option<&'a Nodes>,
     vars: VecDeque<VecDeque<Variable>>,
@@ -46,7 +46,7 @@ impl Context {
     }
 }
 
-impl<'a, 'b> Template<'a> {
+impl<'b> Template {
     pub fn execute<T: Write>(&self, writer: &'b mut T, data: &Context) -> Result<(), String> {
         let mut vars: VecDeque<VecDeque<Variable>> = VecDeque::new();
         let mut dot = VecDeque::new();
@@ -139,9 +139,14 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             if let Some(ref root) = tree.root {
                 let mut vars = VecDeque::new();
                 let mut dot = VecDeque::new();
+                let value = if let Some(ref pipe) = template.pipe {
+                    self.eval_pipeline(ctx, pipe)?
+                } else {
+                    ctx.dot.clone()
+                };
                 dot.push_back(Variable {
                     name: "$".to_owned(),
-                    value: ctx.dot.clone(),
+                    value,
                 });
                 vars.push_back(dot);
                 let mut new_state = State {
@@ -841,4 +846,19 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
     }
+
+    #[test]
+    fn test_block() {
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::default();
+        assert!(
+            t.parse(r#"{{ block "foobar" true -}} {{ $ }} {{- end }}"#)
+                .is_ok()
+        );
+        let data = Context::from(2000).unwrap();
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "true");
+    }
+
 }

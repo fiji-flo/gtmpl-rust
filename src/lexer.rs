@@ -74,12 +74,12 @@ pub struct Item {
 }
 
 impl Item {
-    pub fn new(typ: ItemType, pos: Pos, val: &str, line: usize) -> Item {
+    pub fn new<T: Into<String>>(typ: ItemType, pos: Pos, val: T, line: usize) -> Item {
         Item {
-            typ: typ,
-            pos: pos,
-            val: val.to_owned(),
-            line: line,
+            typ,
+            pos,
+            val: val.into(),
+            line,
         }
     }
 }
@@ -145,7 +145,7 @@ impl Iterator for Lexer {
             }
             Err(e) => {
                 self.finished = true;
-                Item::new(ItemType::ItemError, 0, &format!("{}", e), 0)
+                Item::new(ItemType::ItemError, 0, format!("{}", e), 0)
             }
         };
         Some(item)
@@ -156,7 +156,7 @@ impl Lexer {
     pub fn new(input: String) -> Lexer {
         let (tx, rx) = channel();
         let mut l = LexerStateMachine {
-            input: input,
+            input,
             state: State::LexText,
             pos: 0,
             start: 0,

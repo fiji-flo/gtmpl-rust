@@ -5,35 +5,32 @@ use node::*;
 use utils::*;
 use gtmpl_value::Func;
 
-pub struct Parser<'a> {
-    name: &'a str,
-    text: &'a str,
-    pub funcs: HashMap<&'a str, Func>,
+pub struct Parser {
+    name: String,
+    pub funcs: HashMap<String, Func>,
     lex: Option<Lexer>,
     line: usize,
     token: VecDeque<Item>,
     peek_count: usize,
     pub tree_ids: HashMap<TreeId, String>,
-    pub tree_set: HashMap<String, Tree<'a>>,
+    pub tree_set: HashMap<String, Tree>,
     tree_id: TreeId,
-    tree: Option<Tree<'a>>,
-    tree_stack: VecDeque<Tree<'a>>,
+    tree: Option<Tree>,
+    tree_stack: VecDeque<Tree>,
     max_tree_id: TreeId,
 }
 
-pub struct Tree<'a> {
+pub struct Tree {
     name: String,
     id: TreeId,
-    parse_name: &'a str,
     pub root: Option<Nodes>,
     vars: Vec<String>,
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(name: &'a str) -> Parser<'a> {
+impl Parser {
+    pub fn new(name: String) -> Parser {
         Parser {
             name,
-            text: "",
             funcs: HashMap::new(),
             lex: None,
             line: 0,
@@ -49,12 +46,11 @@ impl<'a> Parser<'a> {
     }
 }
 
-impl<'a> Tree<'a> {
-    fn new(name: String, id: TreeId) -> Tree<'a> {
+impl Tree {
+    fn new(name: String, id: TreeId) -> Tree {
         Tree {
             name,
             id,
-            parse_name: "",
             root: None,
             vars: vec![],
         }
@@ -65,20 +61,15 @@ impl<'a> Tree<'a> {
     }
 }
 
-pub fn parse<'a>(
-    name: &'a str,
-    text: &'a str,
-    funcs: HashMap<&'a str, Func>,
-) -> Result<Parser<'a>, String> {
+pub fn parse(name: String, text: String, funcs: HashMap<String, Func>) -> Result<Parser, String> {
     let mut p = Parser::new(name);
-    p.text = text;
     p.funcs = funcs;
-    p.lex = Some(Lexer::new(text.to_owned()));
+    p.lex = Some(Lexer::new(text));
     p.parse_tree()?;
     Ok(p)
 }
 
-impl<'a> Parser<'a> {
+impl Parser {
     fn next_from_lex(&mut self) -> Option<Item> {
         match self.lex {
             Some(ref mut l) => l.next(),
@@ -142,13 +133,12 @@ impl<'a> Parser<'a> {
         self.error(&format!("unexpected end in {}", context))
     }
 
-    fn start_parse(&mut self, name: String, id: TreeId, parse_name: &'a str) {
+    fn start_parse(&mut self, name: String, id: TreeId) {
         if let Some(t) = self.tree.take() {
             self.tree_stack.push_back(t);
         }
         self.tree_id = id;
-        let mut t = Tree::new(name, id);
-        t.parse_name = parse_name;
+        let t = Tree::new(name, id);
         self.tree = Some(t);
     }
 
@@ -161,15 +151,14 @@ impl<'a> Parser<'a> {
 
     // top level parser
     fn parse_tree(&mut self) -> Result<(), String> {
-        let name = self.name.to_owned();
-        let parse_name = self.name;
-        self.start_parse(name, 1, parse_name);
+        let name = self.name.clone();
+        self.start_parse(name, 1);
         self.parse()?;
         self.stop_parse()?;
         Ok(())
     }
 
-    fn add_tree(&mut self, name: String, t: Tree<'a>) {
+    fn add_tree(&mut self, name: String, t: Tree) {
         self.tree_ids.insert(t.id, name.clone());
         self.tree_set.insert(name, t);
     }
@@ -180,9 +169,9 @@ impl<'a> Parser<'a> {
 
     fn error_msg(&self, msg: &str) -> String {
         let name = if let Some(t) = self.tree.as_ref() {
-            &t.parse_name
+            &t.name
         } else {
-            self.name
+            &self.name
         };
         format!("template: {}:{}:{}", name, self.line, msg)
     }
@@ -294,11 +283,10 @@ impl<'a> Parser<'a> {
     fn parse_definition(&mut self) -> Result<(), String> {
         let context = "define clause";
         let id = self.tree_id;
-        let parse_name = self.name;
         let token = self.next_non_space_must(context)?;
         let name = self.parse_template_name(&token, context)?;
         self.expect(&ItemType::ItemRightDelim, "define end")?;
-        self.start_parse(name, id + 1, parse_name);
+        self.start_parse(name, id + 1);
         let (list, end) = self.item_list()?;
         if *end.typ() != NodeType::End {
             return Err(format!("unexpected {} in {}", end, context));
@@ -443,8 +431,7 @@ impl<'a> Parser<'a> {
 
         self.max_tree_id += 1;
         let tree_id = self.max_tree_id;
-        let parse_name = self.name;
-        self.start_parse(name.clone(), tree_id, parse_name);
+        self.start_parse(name.clone(), tree_id);
         let (root, end) = self.item_list()?;
         self.tree.as_mut().map(|t| t.root = Some(Nodes::List(root)));
         if end.typ() != &NodeType::End {
@@ -736,7 +723,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-impl<'a> Iterator for Parser<'a> {
+impl Iterator for Parser {
     type Item = Item;
     fn next(&mut self) -> Option<Item> {
         let item = if self.peek_count > 0 {
@@ -777,7 +764,7 @@ mod tests_mocked {
        ItemEOF
     */
 
-    fn make_parser<'a>() -> Parser<'a> {
+    fn make_parser() -> Parser {
         let s = r#"something {{ if eq "foo" "bar" }}"#;
         make_parser_with(s)
     }
@@ -786,16 +773,15 @@ mod tests_mocked {
         Ok(true.into())
     }
 
-    fn make_parser_with<'a>(s: &str) -> Parser<'a> {
+    fn make_parser_with(s: &str) -> Parser {
         make_parser_with_funcs(s, &[])
     }
 
-    fn make_parser_with_funcs<'a>(s: &str, funcs: &[(&'a str, Func)]) -> Parser<'a> {
+    fn make_parser_with_funcs<'a>(s: &str, funcs: &[(&'a str, Func)]) -> Parser {
         let lex = Lexer::new(s.to_owned());
         Parser {
-            name: "foo",
-            text: "nope",
-            funcs: funcs.iter().map(|x| *x).collect(),
+            name: String::from("foo"),
+            funcs: funcs.iter().map(|&(k, v)| (k.to_owned(), v)).collect(),
             lex: Some(lex),
             line: 0,
             token: VecDeque::new(),
