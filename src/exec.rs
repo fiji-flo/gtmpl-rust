@@ -64,9 +64,8 @@ impl<'b> Template {
             depth: 0,
         };
 
-        let root = self.tree_ids
-            .get(&1usize)
-            .and_then(|name| self.tree_set.get(name))
+        let root = self.tree_set
+            .get(&self.name)
             .and_then(|tree| tree.root.as_ref())
             .ok_or_else(|| format!("{} is an incomplete or empty template", self.name))?;
         state.walk(data, root)?;
@@ -134,7 +133,17 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
     }
 
     fn walk_template(&mut self, ctx: &Context, template: &TemplateNode) -> Result<(), String> {
-        let tree = self.template.tree_set.get(&template.name);
+        let name = match template.name {
+            PipeOrString::String(ref name) => name.to_owned(),
+            PipeOrString::Pipe(ref pipe) => {
+                if let Value::String(s) = self.eval_pipeline(ctx, pipe)? {
+                    s
+                } else {
+                    return Err(String::from("pipe must yield a string"));
+                }
+            }
+        };
+        let tree = self.template.tree_set.get(&name);
         if let Some(tree) = tree {
             if let Some(ref root) = tree.root {
                 let mut vars = VecDeque::new();

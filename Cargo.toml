@@ -14,6 +14,9 @@ include = ["Cargo.toml", "src/**/*.rs", "tests/**/*.rs", "README.md", "LICENSE"]
 [badges]
 travis-ci = { repository = "fiji-flo/gtmpl-rust" }
 
+[features]
+dynamic_template = []
+
 [dependencies]
 itertools = "0.7"
 lazy_static = "1.0"

@@ -737,24 +737,16 @@ impl Display for BranchNode {
 
 node!(
     TemplateNode {
-        line: usize,
-        name: String,
+        name: PipeOrString,
         pipe: Option<PipeNode>
     }
 );
 
 impl TemplateNode {
-    pub fn new(
-        tr: TreeId,
-        pos: Pos,
-        line: usize,
-        name: String,
-        pipe: Option<PipeNode>,
-    ) -> TemplateNode {
+    pub fn new(tr: TreeId, pos: Pos, name: PipeOrString, pipe: Option<PipeNode>) -> TemplateNode {
         TemplateNode {
             typ: NodeType::Template,
             tr,
-            line,
             pos,
             name,
             pipe,
@@ -767,6 +759,21 @@ impl Display for TemplateNode {
         match self.pipe {
             Some(ref pipe) => write!(f, "{{{{template {} {}}}}}", self.name, pipe),
             None => write!(f, "{{{{template {}}}}}", self.name),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum PipeOrString {
+    Pipe(PipeNode),
+    String(String),
+}
+
+impl Display for PipeOrString {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match *self {
+            PipeOrString::Pipe(ref pipe_node) => write!(f, "{}", pipe_node),
+            PipeOrString::String(ref s) => write!(f, "{}", s),
         }
     }
 }
