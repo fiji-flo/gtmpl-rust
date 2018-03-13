@@ -104,7 +104,7 @@ impl Template {
     ///
     /// let mut tmpl = gtmpl::Template::default();
     /// tmpl.add_template("fancy", "{{ . }}");
-    /// tmpl.parse(r#"{{ template "fancy" }}!"#).unwrap();
+    /// tmpl.parse(r#"{{ template "fancy" . }}!"#).unwrap();
     /// let output = tmpl.render(&Context::from("Hello World").unwrap());
     /// assert_eq!(&output.unwrap(), "Hello World!");
     /// ```

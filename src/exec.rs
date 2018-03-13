@@ -40,10 +40,6 @@ impl Context {
         let serialized = Value::from(value);
         Ok(Context { dot: serialized })
     }
-
-    pub fn from_any(value: Value) -> Context {
-        Context { dot: value }
-    }
 }
 
 impl<'b> Template {
@@ -151,11 +147,11 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                 let value = if let Some(ref pipe) = template.pipe {
                     self.eval_pipeline(ctx, pipe)?
                 } else {
-                    ctx.dot.clone()
+                    Value::NoValue
                 };
                 dot.push_back(Variable {
                     name: "$".to_owned(),
-                    value,
+                    value: value.clone(),
                 });
                 vars.push_back(dot);
                 let mut new_state = State {
@@ -165,7 +161,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                     vars,
                     depth: self.depth + 1,
                 };
-                return new_state.walk(ctx, root);
+                return new_state.walk(&Context::from(value)?, root);
             }
         }
         Err(String::from("work in progress"))

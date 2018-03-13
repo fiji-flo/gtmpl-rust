@@ -451,15 +451,15 @@ impl Parser {
         let token = self.next_non_space()
             .ok_or_else(|| String::from("unexpected end"))?;
         let name = if let ItemType::ItemLeftParen = token.typ {
-            #[cfg(feature = "dynamic_template")]
+            #[cfg(feature = "gtmpl_dynamic_template")]
             {
                 let pipe = self.pipeline(context)?;
                 self.next_must("template name pipeline end")?;
                 PipeOrString::Pipe(pipe)
             }
-            #[cfg(not(feature = "dynamic_template"))]
+            #[cfg(not(feature = "gtmpl_dynamic_template"))]
             return Err(String::from(
-                "enable dynamic_template to use a pipeline as name",
+                "enable gtmpl_dynamic_template to use a pipeline as name",
             ));
         } else {
             PipeOrString::String(self.parse_template_name(&token, context)?)
