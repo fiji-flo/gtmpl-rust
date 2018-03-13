@@ -41,5 +41,7 @@ else
         channel clean
         channel build
         channel test
+        channel build --features gtmpl_dynamic_template
+        channel test --features gtmpl_dynamic_template
     done
 fi

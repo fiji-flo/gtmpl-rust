@@ -1,31 +1,34 @@
 use std::collections::HashMap;
 
-use parse::{parse, Parser, Tree};
+use parse::{parse, Tree};
 use funcs::BUILTINS;
-use node::TreeId;
-
 use gtmpl_value::Func;
 
 /// The main template structure.
-#[derive(Default)]
-pub struct Template<'a> {
-    pub name: &'a str,
-    pub text: &'a str,
-    pub funcs: HashMap<&'a str, Func>,
-    pub tree_ids: HashMap<TreeId, String>,
-    pub tree_set: HashMap<String, Tree<'a>>,
+pub struct Template {
+    pub name: String,
+    pub text: String,
+    pub funcs: HashMap<String, Func>,
+    pub tree_set: HashMap<String, Tree>,
 }
 
-impl<'a> Template<'a> {
-    /// Creates a new empty template with a given `name`.
-    pub fn with_name(name: &'a str) -> Template<'a> {
+impl Default for Template {
+    fn default() -> Template {
         Template {
-            name: name,
-            text: "",
-            funcs: HashMap::default(),
-            tree_ids: HashMap::default(),
+            name: String::default(),
+            text: String::from(""),
+            funcs: BUILTINS.iter().map(|&(k, v)| (k.to_owned(), v)).collect(),
             tree_set: HashMap::default(),
         }
+    }
+}
+
+impl Template {
+    /// Creates a new empty template with a given `name`.
+    pub fn with_name<T: Into<String>>(name: T) -> Template {
+        let mut tmpl = Template::default();
+        tmpl.name = name.into();
+        tmpl
     }
 
     /// Adds a single custom function to the template.
@@ -45,8 +48,8 @@ impl<'a> Template<'a> {
     /// let output = tmpl.render(&Context::empty());
     /// assert_eq!(&output.unwrap(), "Hello World!");
     /// ```
-    pub fn add_func(&mut self, name: &'a str, func: Func) {
-        self.funcs.insert(name, func);
+    pub fn add_func(&mut self, name: &str, func: Func) {
+        self.funcs.insert(name.to_owned(), func);
     }
 
     /// Adds custom functions to the template.
@@ -69,8 +72,9 @@ impl<'a> Template<'a> {
     /// let output = tmpl.render(&Context::empty());
     /// assert_eq!(&output.unwrap(), "Hello World!");
     /// ```
-    pub fn add_funcs(&mut self, funcs: &[(&'a str, Func)]) {
-        self.funcs.extend(funcs.iter().cloned());
+    pub fn add_funcs<T: Into<String> + Clone>(&mut self, funcs: &[(T, Func)]) {
+        self.funcs
+            .extend(funcs.iter().cloned().map(|(k, v)| (k.into(), v)));
     }
 
     /// Parse the given `text` as template body.
@@ -81,23 +85,41 @@ impl<'a> Template<'a> {
     /// let mut tmpl = gtmpl::Template::default();
     /// tmpl.parse("Hello World!").unwrap();
     /// ```
-    pub fn parse(&mut self, text: &'a str) -> Result<(), String> {
-        let mut funcs = HashMap::new();
-        funcs.extend(BUILTINS.iter().cloned());
-        funcs.extend(&self.funcs);
-        let parser = parse(self.name, text, funcs)?;
-        match parser {
-            Parser {
-                funcs,
-                tree_ids,
-                tree_set,
-                ..
-            } => {
-                self.funcs = funcs;
-                self.tree_set = tree_set;
-                self.tree_ids = tree_ids;
-            }
-        }
+    pub fn parse<T: Into<String>>(&mut self, text: T) -> Result<(), String> {
+        let tree_set = parse(
+            self.name.clone(),
+            text.into(),
+            self.funcs.keys().cloned().collect(),
+        )?;
+        self.tree_set.extend(tree_set);
+        Ok(())
+    }
+
+    /// Add the given `text` as a template with a `name`.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use gtmpl::Context;
+    ///
+    /// let mut tmpl = gtmpl::Template::default();
+    /// tmpl.add_template("fancy", "{{ . }}");
+    /// tmpl.parse(r#"{{ template "fancy" . }}!"#).unwrap();
+    /// let output = tmpl.render(&Context::from("Hello World").unwrap());
+    /// assert_eq!(&output.unwrap(), "Hello World!");
+    /// ```
+    /// ```
+    pub fn add_template<N: Into<String>, T: Into<String>>(
+        &mut self,
+        name: N,
+        text: T,
+    ) -> Result<(), String> {
+        let tree_set = parse(
+            name.into(),
+            text.into(),
+            self.funcs.keys().cloned().collect(),
+        )?;
+        self.tree_set.extend(tree_set);
         Ok(())
     }
 }
@@ -111,6 +133,5 @@ mod tests_mocked {
         let mut t = Template::with_name("foo");
         assert!(t.parse(r#"{{ if eq "bar" "bar" }} 2000 {{ end }}"#).is_ok());
         assert!(t.tree_set.contains_key("foo"));
-        assert!(t.tree_ids.contains_key(&1usize));
     }
 }

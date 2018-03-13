@@ -161,11 +161,11 @@ fn parse_index(s: &str) -> Result<Option<(usize, usize)>, String> {
 }
 
 fn parse_num(s: &str) -> Result<Option<(usize, usize)>, String> {
-    let end = s.find(|c: char| !c.is_digit(10)).unwrap_or_else(|| s.len());
-    if end > 0 {
-        s[..end]
+    let till = s.find(|c: char| !c.is_digit(10)).unwrap_or_else(|| s.len());
+    if till > 0 {
+        s[..till]
             .parse()
-            .map(|u| Some((u, end)))
+            .map(|u| Some((u, till)))
             .map_err(|e| format!("unable to parse width: {}", e))
     } else {
         Ok(None)
@@ -176,7 +176,7 @@ fn tokenize(s: &str) -> Result<Vec<FormatArg>, String> {
     let mut iter = s.char_indices().peekable();
     let mut args = Vec::new();
     loop {
-        let start = match iter.next() {
+        let from = match iter.next() {
             None => break,
             Some((i, '%')) => i,
             _ => continue,
@@ -189,10 +189,10 @@ fn tokenize(s: &str) -> Result<Vec<FormatArg>, String> {
 
         loop {
             match iter.next() {
-                None => return Err(format!("unable to terminate format arg: {}", &s[start..])),
+                None => return Err(format!("unable to terminate format arg: {}", &s[from..])),
                 Some((i, t)) if TYPS.contains(t) => {
                     args.push(FormatArg {
-                        start,
+                        start: from,
                         end: i,
                         typ: t,
                     });

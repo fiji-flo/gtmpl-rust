@@ -1,6 +1,6 @@
 [package]
 name = "gtmpl"
-version = "0.4.1"
+version = "0.5.0"
 authors = ["Florian Merz <flomerz@gmail.com>"]
 description = "The Golang Templating Language for Rust"
 license = "MIT"
@@ -13,6 +13,9 @@ include = ["Cargo.toml", "src/**/*.rs", "tests/**/*.rs", "README.md", "LICENSE"]
 
 [badges]
 travis-ci = { repository = "fiji-flo/gtmpl-rust" }
+
+[features]
+gtmpl_dynamic_template = []
 
 [dependencies]
 itertools = "0.7"

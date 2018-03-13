@@ -1,45 +1,39 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use lexer::{Item, ItemType, Lexer};
 use node::*;
 use utils::*;
-use gtmpl_value::Func;
 
-pub struct Parser<'a> {
-    name: &'a str,
-    text: &'a str,
-    pub funcs: HashMap<&'a str, Func>,
+pub struct Parser {
+    name: String,
+    pub funcs: HashSet<String>,
     lex: Option<Lexer>,
     line: usize,
     token: VecDeque<Item>,
     peek_count: usize,
-    pub tree_ids: HashMap<TreeId, String>,
-    pub tree_set: HashMap<String, Tree<'a>>,
+    pub tree_set: HashMap<String, Tree>,
     tree_id: TreeId,
-    tree: Option<Tree<'a>>,
-    tree_stack: VecDeque<Tree<'a>>,
+    tree: Option<Tree>,
+    tree_stack: VecDeque<Tree>,
     max_tree_id: TreeId,
 }
 
-pub struct Tree<'a> {
+pub struct Tree {
     name: String,
     id: TreeId,
-    parse_name: &'a str,
     pub root: Option<Nodes>,
     vars: Vec<String>,
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(name: &'a str) -> Parser<'a> {
+impl Parser {
+    pub fn new(name: String) -> Parser {
         Parser {
             name,
-            text: "",
-            funcs: HashMap::new(),
+            funcs: HashSet::new(),
             lex: None,
             line: 0,
             token: VecDeque::new(),
             peek_count: 0,
-            tree_ids: HashMap::new(),
             tree_set: HashMap::new(),
             tree_id: 0,
             tree: None,
@@ -49,12 +43,11 @@ impl<'a> Parser<'a> {
     }
 }
 
-impl<'a> Tree<'a> {
-    fn new(name: String, id: TreeId) -> Tree<'a> {
+impl Tree {
+    fn new(name: String, id: TreeId) -> Tree {
         Tree {
             name,
             id,
-            parse_name: "",
             root: None,
             vars: vec![],
         }
@@ -65,20 +58,19 @@ impl<'a> Tree<'a> {
     }
 }
 
-pub fn parse<'a>(
-    name: &'a str,
-    text: &'a str,
-    funcs: HashMap<&'a str, Func>,
-) -> Result<Parser<'a>, String> {
+pub fn parse(
+    name: String,
+    text: String,
+    funcs: HashSet<String>,
+) -> Result<HashMap<String, Tree>, String> {
     let mut p = Parser::new(name);
-    p.text = text;
     p.funcs = funcs;
-    p.lex = Some(Lexer::new(text.to_owned()));
+    p.lex = Some(Lexer::new(text));
     p.parse_tree()?;
-    Ok(p)
+    Ok(p.tree_set)
 }
 
-impl<'a> Parser<'a> {
+impl Parser {
     fn next_from_lex(&mut self) -> Option<Item> {
         match self.lex {
             Some(ref mut l) => l.next(),
@@ -142,13 +134,12 @@ impl<'a> Parser<'a> {
         self.error(&format!("unexpected end in {}", context))
     }
 
-    fn start_parse(&mut self, name: String, id: TreeId, parse_name: &'a str) {
+    fn start_parse(&mut self, name: String, id: TreeId) {
         if let Some(t) = self.tree.take() {
             self.tree_stack.push_back(t);
         }
         self.tree_id = id;
-        let mut t = Tree::new(name, id);
-        t.parse_name = parse_name;
+        let t = Tree::new(name, id);
         self.tree = Some(t);
     }
 
@@ -161,16 +152,14 @@ impl<'a> Parser<'a> {
 
     // top level parser
     fn parse_tree(&mut self) -> Result<(), String> {
-        let name = self.name.to_owned();
-        let parse_name = self.name;
-        self.start_parse(name, 1, parse_name);
+        let name = self.name.clone();
+        self.start_parse(name, 1);
         self.parse()?;
         self.stop_parse()?;
         Ok(())
     }
 
-    fn add_tree(&mut self, name: String, t: Tree<'a>) {
-        self.tree_ids.insert(t.id, name.clone());
+    fn add_tree(&mut self, name: String, t: Tree) {
         self.tree_set.insert(name, t);
     }
 
@@ -180,9 +169,9 @@ impl<'a> Parser<'a> {
 
     fn error_msg(&self, msg: &str) -> String {
         let name = if let Some(t) = self.tree.as_ref() {
-            &t.parse_name
+            &t.name
         } else {
-            self.name
+            &self.name
         };
         format!("template: {}:{}:{}", name, self.line, msg)
     }
@@ -226,7 +215,7 @@ impl<'a> Parser<'a> {
     }
 
     fn has_func(&self, name: &str) -> bool {
-        self.funcs.contains_key(name)
+        self.funcs.contains(name)
     }
 
     fn parse(&mut self) -> Result<(), String> {
@@ -294,11 +283,10 @@ impl<'a> Parser<'a> {
     fn parse_definition(&mut self) -> Result<(), String> {
         let context = "define clause";
         let id = self.tree_id;
-        let parse_name = self.name;
         let token = self.next_non_space_must(context)?;
         let name = self.parse_template_name(&token, context)?;
         self.expect(&ItemType::ItemRightDelim, "define end")?;
-        self.start_parse(name, id + 1, parse_name);
+        self.start_parse(name, id + 1);
         let (list, end) = self.item_list()?;
         if *end.typ() != NodeType::End {
             return Err(format!("unexpected {} in {}", end, context));
@@ -443,8 +431,7 @@ impl<'a> Parser<'a> {
 
         self.max_tree_id += 1;
         let tree_id = self.max_tree_id;
-        let parse_name = self.name;
-        self.start_parse(name.clone(), tree_id, parse_name);
+        self.start_parse(name.clone(), tree_id);
         let (root, end) = self.item_list()?;
         self.tree.as_mut().map(|t| t.root = Some(Nodes::List(root)));
         if end.typ() != &NodeType::End {
@@ -454,16 +441,29 @@ impl<'a> Parser<'a> {
         Ok(Nodes::Template(TemplateNode::new(
             self.tree_id,
             token.pos,
-            token.line,
-            name,
+            PipeOrString::String(name),
             Some(pipe),
         )))
     }
 
     fn template_control(&mut self) -> Result<Nodes, String> {
         let context = "template clause";
-        let token = self.next_non_space_must(context)?;
-        let name = self.parse_template_name(&token, context)?;
+        let token = self.next_non_space()
+            .ok_or_else(|| String::from("unexpected end"))?;
+        let name = if let ItemType::ItemLeftParen = token.typ {
+            #[cfg(feature = "gtmpl_dynamic_template")]
+            {
+                let pipe = self.pipeline(context)?;
+                self.next_must("template name pipeline end")?;
+                PipeOrString::Pipe(pipe)
+            }
+            #[cfg(not(feature = "gtmpl_dynamic_template"))]
+            return Err(String::from(
+                "enable gtmpl_dynamic_template to use a pipeline as name",
+            ));
+        } else {
+            PipeOrString::String(self.parse_template_name(&token, context)?)
+        };
         let next = self.next_non_space()
             .ok_or_else(|| String::from("unexpected end"))?;
         let pipe = if next.typ != ItemType::ItemRightDelim {
@@ -474,7 +474,6 @@ impl<'a> Parser<'a> {
         };
         Ok(Nodes::Template(TemplateNode::new(
             self.tree_id,
-            token.line,
             token.pos,
             name,
             pipe,
@@ -736,7 +735,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-impl<'a> Iterator for Parser<'a> {
+impl Iterator for Parser {
     type Item = Item;
     fn next(&mut self) -> Option<Item> {
         let item = if self.peek_count > 0 {
@@ -777,30 +776,24 @@ mod tests_mocked {
        ItemEOF
     */
 
-    fn make_parser<'a>() -> Parser<'a> {
+    fn make_parser() -> Parser {
         let s = r#"something {{ if eq "foo" "bar" }}"#;
         make_parser_with(s)
     }
 
-    fn eq_mock(_: &[Value]) -> Result<Value, String> {
-        Ok(true.into())
-    }
-
-    fn make_parser_with<'a>(s: &str) -> Parser<'a> {
+    fn make_parser_with(s: &str) -> Parser {
         make_parser_with_funcs(s, &[])
     }
 
-    fn make_parser_with_funcs<'a>(s: &str, funcs: &[(&'a str, Func)]) -> Parser<'a> {
+    fn make_parser_with_funcs<'a>(s: &str, funcs: &[&'a str]) -> Parser {
         let lex = Lexer::new(s.to_owned());
         Parser {
-            name: "foo",
-            text: "nope",
-            funcs: funcs.iter().map(|x| *x).collect(),
+            name: String::from("foo"),
+            funcs: funcs.iter().map(|&k| k.to_owned()).collect(),
             lex: Some(lex),
             line: 0,
             token: VecDeque::new(),
             peek_count: 0,
-            tree_ids: HashMap::new(),
             tree_set: HashMap::new(),
             tree_id: 0,
             tree: None,
@@ -876,15 +869,27 @@ mod tests_mocked {
     }
 
     #[test]
+    fn test_display() {
+        let raw = r#"{{if .}}2000{{else}} 3000 {{end}}"#;
+        let mut ts = parse(String::default(), String::from(raw), HashSet::default()).unwrap();
+        let tree = ts.get_mut("").unwrap();
+        if let Some(ref root) = tree.root {
+            assert_eq!(raw, format!("{}", root))
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
     fn parse_basic_tree() {
         let mut p = make_parser_with(r#"{{ if eq .foo "bar" }} 2000 {{ end }}"#);
         let r = p.parse_tree();
         assert_eq!(r.err().unwrap(), "template: foo:2:function eq not defined");
-        let funcs = &[("eq", eq_mock as Func)];
+        let funcs = &["eq"];
         let mut p = make_parser_with_funcs(r#"{{ if eq .foo "bar" }} 2000 {{ end }}"#, funcs);
         let r = p.parse_tree();
         assert!(r.is_ok());
-        let funcs = &[("eq", eq_mock as Func)];
+        let funcs = &["eq"];
         let mut p = make_parser_with_funcs(r#"{{ if eq 1 2 }} 2000 {{ end }}"#, funcs);
         let r = p.parse_tree();
         assert!(r.is_ok());

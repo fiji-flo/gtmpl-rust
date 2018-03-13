@@ -22,7 +22,7 @@ seamless integration of Rust application into the world of devops tools around
 Add the following dependency to your Cargo manifest…
 ```toml
 [dependencies]
-gtmpl = "0.4.1"
+gtmpl = "0.5.0"
 ```
 
 and look at the docs:
@@ -92,6 +92,59 @@ This is work in progress. Currently the following features are not supported:
 * the following functions have not been implemented:
   * `html`, `js`
 * `printf` is not yet fully stable, but should support all *sane* input
+
+## Enhancements
+
+Even though it was never intended to extend the syntax of Golang text/template
+there might be some convenient additions:
+
+### Dynamic Template
+
+Enable `gtmpl_dynamic_template` in your `Cargo.toml`:
+```toml
+[dependencies.gtmpl]
+version = "0.5.0"
+features = ["gtmpl_dynamic_template"]
+
+```
+
+Now you can have dynamic template names for the `template` action.
+
+#### Example
+
+```rust
+extern crate gtmpl;
+use gtmpl::{Context, Template};
+
+fn main() {
+    let mut template = Template::default();
+    template
+        .parse(
+            r#"
+            {{- define "tmpl1"}} some {{ end -}}
+            {{- define "tmpl2"}} some other {{ end -}}
+            there is {{- template (.) -}} template
+            "#,
+        )
+        .unwrap();
+
+    let context = Context::from("tmpl2").unwrap();
+
+    let output = template.render(&context);
+    assert_eq!(output.unwrap(), "there is some other template".to_string());
+}
+```
+
+The following syntax is used:
+```
+{{template (pipeline)}}
+	The template with the name evaluated from the pipeline (parenthesized) is
+    executed with nil data.
+
+{{template (pipeline) pipeline}}
+	The template with the name evaluated from the first pipeline (parenthesized)
+    is executed with dot set to the value of the second pipeline.
+```
 
 ## Context
 

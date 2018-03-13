@@ -16,7 +16,7 @@ struct State<'a, 'b, T: Write>
 where
     T: 'b,
 {
-    template: &'a Template<'a>,
+    template: &'a Template,
     writer: &'b mut T,
     node: Option<&'a Nodes>,
     vars: VecDeque<VecDeque<Variable>>,
@@ -40,13 +40,9 @@ impl Context {
         let serialized = Value::from(value);
         Ok(Context { dot: serialized })
     }
-
-    pub fn from_any(value: Value) -> Context {
-        Context { dot: value }
-    }
 }
 
-impl<'a, 'b> Template<'a> {
+impl<'b> Template {
     pub fn execute<T: Write>(&self, writer: &'b mut T, data: &Context) -> Result<(), String> {
         let mut vars: VecDeque<VecDeque<Variable>> = VecDeque::new();
         let mut dot = VecDeque::new();
@@ -64,9 +60,8 @@ impl<'a, 'b> Template<'a> {
             depth: 0,
         };
 
-        let root = self.tree_ids
-            .get(&1usize)
-            .and_then(|name| self.tree_set.get(name))
+        let root = self.tree_set
+            .get(&self.name)
             .and_then(|tree| tree.root.as_ref())
             .ok_or_else(|| format!("{} is an incomplete or empty template", self.name))?;
         state.walk(data, root)?;
@@ -134,14 +129,29 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
     }
 
     fn walk_template(&mut self, ctx: &Context, template: &TemplateNode) -> Result<(), String> {
-        let tree = self.template.tree_set.get(&template.name);
+        let name = match template.name {
+            PipeOrString::String(ref name) => name.to_owned(),
+            PipeOrString::Pipe(ref pipe) => {
+                if let Value::String(s) = self.eval_pipeline(ctx, pipe)? {
+                    s
+                } else {
+                    return Err(String::from("pipe must yield a string"));
+                }
+            }
+        };
+        let tree = self.template.tree_set.get(&name);
         if let Some(tree) = tree {
             if let Some(ref root) = tree.root {
                 let mut vars = VecDeque::new();
                 let mut dot = VecDeque::new();
+                let value = if let Some(ref pipe) = template.pipe {
+                    self.eval_pipeline(ctx, pipe)?
+                } else {
+                    Value::NoValue
+                };
                 dot.push_back(Variable {
                     name: "$".to_owned(),
-                    value: ctx.dot.clone(),
+                    value: value.clone(),
                 });
                 vars.push_back(dot);
                 let mut new_state = State {
@@ -151,7 +161,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                     vars,
                     depth: self.depth + 1,
                 };
-                return new_state.walk(ctx, root);
+                return new_state.walk(&Context::from(value)?, root);
             }
         }
         Err(String::from("work in progress"))
@@ -543,7 +553,6 @@ mod tests_mocked {
         let data = Context::from(Foo { foo: 1u8 }).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        println!("{:?}", t.parse(r#"{{$.foo}}"#));
         assert!(t.parse(r#"{{$.foo}}"#).is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
@@ -657,7 +666,6 @@ mod tests_mocked {
         let mut t = Template::default();
         assert!(t.parse(r#"{{ range . -}} {{.}} {{- end }}"#).is_ok());
         let out = t.execute(&mut w, &data);
-        println!("{:?}", out);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "foobar2000");
     }
@@ -841,4 +849,19 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
     }
+
+    #[test]
+    fn test_block() {
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::default();
+        assert!(
+            t.parse(r#"{{ block "foobar" true -}} {{ $ }} {{- end }}"#)
+                .is_ok()
+        );
+        let data = Context::from(2000).unwrap();
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "true");
+    }
+
 }
