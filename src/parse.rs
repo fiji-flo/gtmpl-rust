@@ -869,6 +869,18 @@ mod tests_mocked {
     }
 
     #[test]
+    fn test_display() {
+        let raw = r#"{{if .}}2000{{else}} 3000 {{end}}"#;
+        let mut ts = parse(String::default(), String::from(raw), HashSet::default()).unwrap();
+        let tree = ts.get_mut("").unwrap();
+        if let Some(ref root) = tree.root {
+            assert_eq!(raw, format!("{}", root))
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
     fn parse_basic_tree() {
         let mut p = make_parser_with(r#"{{ if eq .foo "bar" }} 2000 {{ end }}"#);
         let r = p.parse_tree();

@@ -228,8 +228,12 @@ impl PipeNode {
 
 impl Display for PipeNode {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "{} := ", self.decl.iter().join(", "))
-            .and_then(|_| write!(f, "{}", self.cmds.iter().join(" | ")))
+        let decl = if self.decl.is_empty() {
+            Ok(())
+        } else {
+            write!(f, "{} := ", self.decl.iter().join(", "))
+        };
+        decl.and_then(|_| write!(f, "{}", self.cmds.iter().join(" | ")))
     }
 }
 

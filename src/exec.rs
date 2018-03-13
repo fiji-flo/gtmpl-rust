@@ -553,7 +553,6 @@ mod tests_mocked {
         let data = Context::from(Foo { foo: 1u8 }).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        println!("{:?}", t.parse(r#"{{$.foo}}"#));
         assert!(t.parse(r#"{{$.foo}}"#).is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
@@ -667,7 +666,6 @@ mod tests_mocked {
         let mut t = Template::default();
         assert!(t.parse(r#"{{ range . -}} {{.}} {{- end }}"#).is_ok());
         let out = t.execute(&mut w, &data);
-        println!("{:?}", out);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "foobar2000");
     }
