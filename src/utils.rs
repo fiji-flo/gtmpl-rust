@@ -1,5 +1,5 @@
-use std::char;
 use gtmpl_value::Value;
+use std::char;
 
 pub fn unquote_char(s: &str, quote: char) -> Option<char> {
     if s.len() < 2 || !s.starts_with(quote) || !s.ends_with(quote) {

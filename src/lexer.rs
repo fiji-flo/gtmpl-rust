@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
-use std::thread;
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::thread;
 
 type Pos = usize;
 

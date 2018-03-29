@@ -757,8 +757,8 @@ impl Iterator for Parser {
 #[cfg(test)]
 mod tests_mocked {
     use super::*;
-    use lexer::ItemType;
     use gtmpl_value::Value;
+    use lexer::ItemType;
 
     /*
        ItemText

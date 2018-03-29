@@ -7,27 +7,23 @@
 //! let output = gtmpl::template("Finally! Some {{ . }} for Rust", "gtmpl");
 //! assert_eq!(&output.unwrap(), "Finally! Some gtmpl for Rust");
 //! ```
-#[cfg_attr(feature = "cargo-clippy", allow(useless_attribute))]
-#[allow(unused_imports)]
+#[cfg(test)]
 #[macro_use]
 extern crate gtmpl_derive;
-#[cfg_attr(feature = "cargo-clippy", allow(useless_attribute))]
-#[allow(unused_imports)]
-#[macro_use]
 extern crate gtmpl_value;
 extern crate itertools;
 #[macro_use]
 extern crate lazy_static;
+mod exec;
+#[doc(inlne)]
+pub mod funcs;
 mod lexer;
 mod node;
 mod parse;
-#[doc(inlne)]
-pub mod funcs;
-mod template;
-mod exec;
-mod utils;
 mod print_verb;
 mod printf;
+mod template;
+mod utils;
 
 #[doc(inline)]
 pub use template::Template;

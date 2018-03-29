@@ -1,9 +1,9 @@
-use std::io::Write;
 use std::collections::VecDeque;
+use std::io::Write;
 
+use node::*;
 use template::Template;
 use utils::is_true;
-use node::*;
 
 use gtmpl_value::{Func, Value};
 

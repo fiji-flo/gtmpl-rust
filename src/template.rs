@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use parse::{parse, Tree};
 use funcs::BUILTINS;
 use gtmpl_value::Func;
+use parse::{parse, Tree};
 
 /// The main template structure.
 pub struct Template {
@@ -107,7 +107,6 @@ impl Template {
     /// tmpl.parse(r#"{{ template "fancy" . }}!"#).unwrap();
     /// let output = tmpl.render(&Context::from("Hello World").unwrap());
     /// assert_eq!(&output.unwrap(), "Hello World!");
-    /// ```
     /// ```
     pub fn add_template<N: Into<String>, T: Into<String>>(
         &mut self,

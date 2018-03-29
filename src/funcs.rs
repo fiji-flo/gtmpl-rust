@@ -7,8 +7,8 @@ use gtmpl_value::{Func, Value};
 extern crate percent_encoding;
 use self::percent_encoding::{utf8_percent_encode, DEFAULT_ENCODE_SET};
 
-use utils::is_true;
 use printf::sprintf;
+use utils::is_true;
 
 pub static BUILTINS: &[(&'static str, Func)] = &[
     ("eq", eq as Func),
@@ -543,20 +543,16 @@ mod tests_mocked {
 
     #[test]
     fn test_macro() {
-        gtmpl_fn!(
-            fn f1(i: i64) -> Result<i64, String> {
-                Ok(i + 1)
-            }
-        );
+        gtmpl_fn!(fn f1(i: i64) -> Result<i64, String> {
+            Ok(i + 1)
+        });
         let vals: Vec<Value> = vec![val!(1i64)];
         let ret = f1(&vals);
         assert_eq!(ret, Ok(Value::from(2i64)));
 
-        gtmpl_fn!(
-            fn f3(i: i64, j: i64, k: i64) -> Result<i64, String> {
-                Ok(i +j + k)
-            }
-        );
+        gtmpl_fn!(fn f3(i: i64, j: i64, k: i64) -> Result<i64, String> {
+            Ok(i + j + k)
+        });
         let vals: Vec<Value> = vec![val!(1i64), val!(2i64), val!(3i64)];
         let ret = f3(&vals);
         assert_eq!(ret, Ok(Value::from(6i64)));
@@ -737,11 +733,9 @@ mod tests_mocked {
 
     #[test]
     fn test_gtmpl_fn() {
-        gtmpl_fn!(
-            fn add(a: u64, b: u64) -> Result<u64, String> {
-                Ok(a + b)
-            }
-        );
+        gtmpl_fn!(fn add(a: u64, b: u64) -> Result<u64, String> {
+            Ok(a + b)
+        });
         let vals: Vec<Value> = vec![val!(1u32), val!(2u32)];
         let ret = add(&vals);
         assert_eq!(ret, Ok(Value::from(3u32)));

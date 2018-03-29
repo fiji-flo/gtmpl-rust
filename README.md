@@ -22,7 +22,7 @@ seamless integration of Rust application into the world of devops tools around
 Add the following dependency to your Cargo manifest…
 ```toml
 [dependencies]
-gtmpl = "0.5.0"
+gtmpl = "0.5.1"
 ```
 
 and look at the docs:
@@ -103,7 +103,7 @@ there might be some convenient additions:
 Enable `gtmpl_dynamic_template` in your `Cargo.toml`:
 ```toml
 [dependencies.gtmpl]
-version = "0.5.0"
+version = "0.5.1"
 features = ["gtmpl_dynamic_template"]
 
 ```
