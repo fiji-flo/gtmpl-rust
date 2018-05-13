@@ -325,13 +325,17 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                 field_name
             ));
         }
-        match *receiver {
+        let ret = match *receiver {
             Value::Object(ref o) => o.get(field_name)
                 .cloned()
                 .ok_or_else(|| format!("no field {} for {}", field_name, receiver)),
             Value::Map(ref o) => Ok(o.get(field_name).cloned().unwrap_or_else(|| Value::NoValue)),
             _ => Err(String::from("only maps and objects have fields")),
+        };
+        if let Ok(Value::Function(ref f)) = ret {
+            return (f.f)(&[receiver.clone()]);
         }
+        ret
     }
 
     fn eval_variable_node(
@@ -558,6 +562,49 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "1");
     }
+
+    #[test]
+    fn test_funtion_via_dot() {
+        #[derive(Gtmpl)]
+        struct Foo {
+            foo: Func,
+        }
+        fn foo(_: &[Value]) -> Result<Value, String> {
+            Ok(Value::from("foobar"))
+        }
+        let data = Context::from(Foo { foo }).unwrap();
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::default();
+        assert!(t.parse(r#"{{.foo}}"#).is_ok());
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "foobar");
+
+        fn plus_one(args: &[Value]) -> Result<Value, String> {
+            if let Value::Object(ref o) = &args[0] {
+                if let Some(Value::Number(ref n)) = o.get("num") {
+                    if let Some(i) = n.as_i64() {
+                        return Ok((i +1).into())
+                    }
+                }
+            }
+            Err(format!("integer required, got: {:?}", args))
+        }
+
+        #[derive(Gtmpl)]
+        struct AddMe {
+            num: u8,
+            plus_one: Func
+        }
+        let data = Context::from(AddMe { num: 42, plus_one }).unwrap();
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::default();
+        assert!(t.parse(r#"{{.plus_one}}"#).is_ok());
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "43");
+    }
+
 
     #[test]
     fn test_dot_value() {

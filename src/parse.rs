@@ -227,9 +227,9 @@ impl Parser {
             None => return self.error(&format!("unable to peek for tree {}", id)),
             Some(t) => t,
         };
-        self.tree
-            .as_mut()
-            .map(|tree| tree.root = Some(Nodes::List(ListNode::new(id, t.pos))));
+        if let Some(tree) = self.tree.as_mut() {
+            tree.root = Some(Nodes::List(ListNode::new(id, t.pos)));
+        }
         while t.typ != ItemType::ItemEOF {
             if t.typ == ItemType::ItemLeftDelim {
                 let nns = self.next_non_space();
@@ -370,7 +370,9 @@ impl Parser {
             }
             _ => return self.error(&format!("expected end; found {}", next)),
         };
-        self.tree.as_mut().map(|t| t.pop_vars(vars_len));
+        if let Some(t) = self.tree.as_mut() {
+            t.pop_vars(vars_len);
+        }
         Ok((pipe.pos(), pipe, list, else_list))
     }
 
@@ -433,7 +435,9 @@ impl Parser {
         let tree_id = self.max_tree_id;
         self.start_parse(name.clone(), tree_id);
         let (root, end) = self.item_list()?;
-        self.tree.as_mut().map(|t| t.root = Some(Nodes::List(root)));
+        if let Some(tree) = self.tree.as_mut() {
+            tree.root = Some(Nodes::List(root));
+        }
         if end.typ() != &NodeType::End {
             return self.error(&format!("unexpected {} in {}", end, context));
         }
