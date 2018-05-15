@@ -92,7 +92,7 @@ extern crate gtmpl;
 extern crate gtmpl_derive;
 extern crate gtmpl_value;
 
-use gtmpl::Value;
+use gtmpl::{Func, Value};
 
 fn plus_one(args: &[Value]) -> Result<Value, String> {
     if let Value::Object(ref o) = &args[0] {
