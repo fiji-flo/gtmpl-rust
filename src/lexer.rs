@@ -268,7 +268,8 @@ impl LexerStateMachine {
     }
 
     fn accept(&mut self, valid: &str) -> bool {
-        if self.next()
+        if self
+            .next()
             .and_then(|s| Some(valid.contains(s)))
             .unwrap_or(false)
         {
@@ -461,7 +462,8 @@ impl LexerStateMachine {
     }
 
     fn lex_space(&mut self) -> State {
-        while self.peek()
+        while self
+            .peek()
             .and_then(|c| Some(c.is_whitespace()))
             .unwrap_or(false)
         {}
@@ -575,7 +577,8 @@ impl LexerStateMachine {
             }
         }
         // Let's ignore imaginary numbers for now.
-        if self.peek()
+        if self
+            .peek()
             .and_then(|c| Some(c.is_alphanumeric()))
             .unwrap_or(true)
         {

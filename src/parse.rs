@@ -452,7 +452,8 @@ impl Parser {
 
     fn template_control(&mut self) -> Result<Nodes, String> {
         let context = "template clause";
-        let token = self.next_non_space()
+        let token = self
+            .next_non_space()
             .ok_or_else(|| String::from("unexpected end"))?;
         let name = if let ItemType::ItemLeftParen = token.typ {
             #[cfg(feature = "gtmpl_dynamic_template")]
@@ -468,7 +469,8 @@ impl Parser {
         } else {
             PipeOrString::String(self.parse_template_name(&token, context)?)
         };
-        let next = self.next_non_space()
+        let next = self
+            .next_non_space()
             .ok_or_else(|| String::from("unexpected end"))?;
         let pipe = if next.typ != ItemType::ItemRightDelim {
             self.backup(next);
@@ -623,16 +625,15 @@ impl Parser {
                         | NodeType::Number
                         | NodeType::Nil
                         | NodeType::Dot => {
-                            return self.error(&format!(
-                                "unexpected . after term {}",
-                                n.to_string()
-                            ));
+                            return self
+                                .error(&format!("unexpected . after term {}", n.to_string()));
                         }
                         _ => {}
                     };
                     let mut chain = ChainNode::new(self.tree_id, next.pos, n);
                     chain.add(next.val);
-                    while self.peek()
+                    while self
+                        .peek()
                         .map(|p| p.typ == ItemType::ItemField)
                         .unwrap_or(false)
                     {

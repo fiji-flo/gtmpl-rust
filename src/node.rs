@@ -279,7 +279,8 @@ impl CommandNode {
 
 impl Display for CommandNode {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        let s = self.args
+        let s = self
+            .args
             .iter()
             .map(|n| {
                 match n {
@@ -517,7 +518,8 @@ impl NumberNode {
                 let mut number_typ = NumberType::Float;
 
                 // TODO: Deal with hex.
-                let (mut as_i64, mut is_i64) = text.parse::<i64>()
+                let (mut as_i64, mut is_i64) = text
+                    .parse::<i64>()
                     .and_then(|i| Ok((i, true)))
                     .unwrap_or((0i64, false));
 
@@ -525,7 +527,8 @@ impl NumberNode {
                     number_typ = NumberType::I64;
                 }
 
-                let (mut as_u64, mut is_u64) = text.parse::<u64>()
+                let (mut as_u64, mut is_u64) = text
+                    .parse::<u64>()
                     .and_then(|i| Ok((i, true)))
                     .unwrap_or((0u64, false));
 

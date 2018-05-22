@@ -70,7 +70,8 @@ pub fn print(p: &FormatParams, typ: char, val: &Value) -> Result<String, String>
             'x' => printf_x(p, Hexer::from(s.as_str())),
             'X' => printf_xx(p, Hexer::from(s.as_str())),
             'q' => {
-                let s = s.chars()
+                let s = s
+                    .chars()
                     .map(|c| c.escape_default().to_string())
                     .collect::<String>();
                 printf_generic(p, s)

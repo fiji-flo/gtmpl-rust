@@ -60,7 +60,8 @@ impl<'b> Template {
             depth: 0,
         };
 
-        let root = self.tree_set
+        let root = self
+            .tree_set
             .get(&self.name)
             .and_then(|tree| tree.root.as_ref())
             .ok_or_else(|| format!("{} is an incomplete or empty template", self.name))?;
@@ -194,7 +195,8 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         cmd: &CommandNode,
         val: &Option<Value>,
     ) -> Result<Value, String> {
-        let first_word = &cmd.args
+        let first_word = &cmd
+            .args
             .first()
             .ok_or_else(|| format!("no arguments for command node: {}", cmd))?;
 
@@ -223,7 +225,8 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         fin: &Option<Value>,
     ) -> Result<Value, String> {
         let name = &ident.ident;
-        let function = self.template
+        let function = self
+            .template
             .funcs
             .get(name.as_str())
             .ok_or_else(|| format!("{} is not a defined function", name))?;
@@ -326,7 +329,8 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             ));
         }
         let ret = match *receiver {
-            Value::Object(ref o) => o.get(field_name)
+            Value::Object(ref o) => o
+                .get(field_name)
                 .cloned()
                 .ok_or_else(|| format!("no field {} for {}", field_name, receiver)),
             Value::Map(ref o) => Ok(o.get(field_name).cloned().unwrap_or_else(|| Value::NoValue)),
@@ -584,7 +588,7 @@ mod tests_mocked {
             if let Value::Object(ref o) = &args[0] {
                 if let Some(Value::Number(ref n)) = o.get("num") {
                     if let Some(i) = n.as_i64() {
-                        return Ok((i +1).into())
+                        return Ok((i + 1).into());
                     }
                 }
             }
@@ -594,7 +598,7 @@ mod tests_mocked {
         #[derive(Gtmpl)]
         struct AddMe {
             num: u8,
-            plus_one: Func
+            plus_one: Func,
         }
         let data = Context::from(AddMe { num: 42, plus_one }).unwrap();
         let mut w: Vec<u8> = vec![];
@@ -604,7 +608,6 @@ mod tests_mocked {
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "43");
     }
-
 
     #[test]
     fn test_dot_value() {

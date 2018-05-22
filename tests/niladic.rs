@@ -9,7 +9,7 @@ fn plus_one(args: &[Value]) -> Result<Value, String> {
     if let Value::Object(ref o) = &args[0] {
         if let Some(Value::Number(ref n)) = o.get("num") {
             if let Some(i) = n.as_i64() {
-                return Ok((i +1).into())
+                return Ok((i + 1).into());
             }
         }
     }
@@ -19,7 +19,7 @@ fn plus_one(args: &[Value]) -> Result<Value, String> {
 #[derive(Gtmpl)]
 struct AddMe {
     num: u8,
-    plus_one: Func
+    plus_one: Func,
 }
 
 #[test]
