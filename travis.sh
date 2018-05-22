@@ -27,7 +27,7 @@ if [ -n "${NIGHTLY}" ]; then
         exit
     fi
 
-    cargo fmt -- --write-mode diff
+    cargo fmt -- --check
 
     # cached installation will not work on a later nightly
     if [ -n "${TRAVIS}" ] && ! cargo install clippy --debug --force; then

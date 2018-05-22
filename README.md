@@ -22,7 +22,7 @@ seamless integration of Rust application into the world of devops tools around
 Add the following dependency to your Cargo manifest…
 ```toml
 [dependencies]
-gtmpl = "0.5.1"
+gtmpl = "0.5.2"
 ```
 
 and look at the docs:
@@ -84,6 +84,40 @@ fn main() {
 }
 ```
 
+Invoking a *method* on a context:
+```rust
+#[macro_use]
+extern crate gtmpl;
+#[macro_use]
+extern crate gtmpl_derive;
+extern crate gtmpl_value;
+
+use gtmpl::{Func, Value};
+
+fn plus_one(args: &[Value]) -> Result<Value, String> {
+    if let Value::Object(ref o) = &args[0] {
+        if let Some(Value::Number(ref n)) = o.get("num") {
+            if let Some(i) = n.as_i64() {
+                return Ok((i +1).into())
+            }
+        }
+    }
+    Err(format!("integer required, got: {:?}", args))
+}
+
+#[derive(Gtmpl)]
+struct AddMe {
+    num: u8,
+    plus_one: Func
+}
+
+fn main() {
+    let add_me = AddMe { num: 42, plus_one };
+    let output = gtmpl::template("The answer is: {{ .plus_one }}", add_me);
+    assert_eq!(&output.unwrap(), "The answer is: 43");
+}
+```
+
 ## Current Limitations
 
 This is work in progress. Currently the following features are not supported:
@@ -103,7 +137,7 @@ there might be some convenient additions:
 Enable `gtmpl_dynamic_template` in your `Cargo.toml`:
 ```toml
 [dependencies.gtmpl]
-version = "0.5.1"
+version = "0.5.2"
 features = ["gtmpl_dynamic_template"]
 
 ```

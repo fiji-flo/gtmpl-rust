@@ -227,9 +227,9 @@ impl Parser {
             None => return self.error(&format!("unable to peek for tree {}", id)),
             Some(t) => t,
         };
-        self.tree
-            .as_mut()
-            .map(|tree| tree.root = Some(Nodes::List(ListNode::new(id, t.pos))));
+        if let Some(tree) = self.tree.as_mut() {
+            tree.root = Some(Nodes::List(ListNode::new(id, t.pos)));
+        }
         while t.typ != ItemType::ItemEOF {
             if t.typ == ItemType::ItemLeftDelim {
                 let nns = self.next_non_space();
@@ -370,7 +370,9 @@ impl Parser {
             }
             _ => return self.error(&format!("expected end; found {}", next)),
         };
-        self.tree.as_mut().map(|t| t.pop_vars(vars_len));
+        if let Some(t) = self.tree.as_mut() {
+            t.pop_vars(vars_len);
+        }
         Ok((pipe.pos(), pipe, list, else_list))
     }
 
@@ -433,7 +435,9 @@ impl Parser {
         let tree_id = self.max_tree_id;
         self.start_parse(name.clone(), tree_id);
         let (root, end) = self.item_list()?;
-        self.tree.as_mut().map(|t| t.root = Some(Nodes::List(root)));
+        if let Some(tree) = self.tree.as_mut() {
+            tree.root = Some(Nodes::List(root));
+        }
         if end.typ() != &NodeType::End {
             return self.error(&format!("unexpected {} in {}", end, context));
         }
@@ -448,7 +452,8 @@ impl Parser {
 
     fn template_control(&mut self) -> Result<Nodes, String> {
         let context = "template clause";
-        let token = self.next_non_space()
+        let token = self
+            .next_non_space()
             .ok_or_else(|| String::from("unexpected end"))?;
         let name = if let ItemType::ItemLeftParen = token.typ {
             #[cfg(feature = "gtmpl_dynamic_template")]
@@ -464,7 +469,8 @@ impl Parser {
         } else {
             PipeOrString::String(self.parse_template_name(&token, context)?)
         };
-        let next = self.next_non_space()
+        let next = self
+            .next_non_space()
             .ok_or_else(|| String::from("unexpected end"))?;
         let pipe = if next.typ != ItemType::ItemRightDelim {
             self.backup(next);
@@ -619,16 +625,15 @@ impl Parser {
                         | NodeType::Number
                         | NodeType::Nil
                         | NodeType::Dot => {
-                            return self.error(&format!(
-                                "unexpected . after term {}",
-                                n.to_string()
-                            ));
+                            return self
+                                .error(&format!("unexpected . after term {}", n.to_string()));
                         }
                         _ => {}
                     };
                     let mut chain = ChainNode::new(self.tree_id, next.pos, n);
                     chain.add(next.val);
-                    while self.peek()
+                    while self
+                        .peek()
                         .map(|p| p.typ == ItemType::ItemField)
                         .unwrap_or(false)
                     {
