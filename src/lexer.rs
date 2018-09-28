@@ -230,12 +230,11 @@ impl LexerStateMachine {
 
     fn backup(&mut self) {
         self.pos -= 1;
-        if self.width == 1
-            && self.input[self.pos..]
-                .chars()
-                .next()
-                .and_then(|c| if c == '\n' { Some(()) } else { None })
-                .is_some()
+        if self.width == 1 && self.input[self.pos..]
+            .chars()
+            .next()
+            .and_then(|c| if c == '\n' { Some(()) } else { None })
+            .is_some()
         {
             self.line -= 1;
         }

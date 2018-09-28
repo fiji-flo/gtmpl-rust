@@ -287,8 +287,7 @@ impl Display for CommandNode {
                     // Handle PipeNode.
                     _ => n.to_string(),
                 }
-            })
-            .join(" ");
+            }).join(" ");
         write!(f, "{}", s)
     }
 }
@@ -401,8 +400,7 @@ impl FieldNode {
                     } else {
                         Some(s.to_owned())
                     }
-                })
-                .collect(),
+                }).collect(),
         }
     }
 }
@@ -512,8 +510,7 @@ impl NumberNode {
                         number_typ: NumberType::Char,
                         value: Value::from(c as u64),
                     })
-                })
-                .ok_or(Error),
+                }).ok_or(Error),
             _ => {
                 let mut number_typ = NumberType::Float;
 

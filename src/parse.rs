@@ -268,8 +268,7 @@ impl Parser {
                         }
                         _ => None,
                     })
-                })
-                .ok_or_else(|| self.error_msg("invalid root node"))?;
+                }).ok_or_else(|| self.error_msg("invalid root node"))?;
 
             t = match self.next() {
                 None => return self.error(&format!("unable to peek for tree {}", id)),
@@ -727,8 +726,7 @@ impl Parser {
                     .iter()
                     .find(|&v| v == name)
                     .map(|_| VariableNode::new(tree_id, pos, name))
-            })
-            .ok_or_else(|| self.error_msg(&format!("undefined variable {}", name)))
+            }).ok_or_else(|| self.error_msg(&format!("undefined variable {}", name)))
     }
 
     fn parse_template_name(&self, token: &Item, context: &str) -> Result<String, String> {

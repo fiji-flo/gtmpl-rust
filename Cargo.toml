@@ -1,6 +1,6 @@
 [package]
 name = "gtmpl"
-version = "0.5.2"
+version = "0.5.3"
 authors = ["Florian Merz <flomerz@gmail.com>"]
 description = "The Golang Templating Language for Rust"
 license = "MIT"
@@ -19,7 +19,7 @@ gtmpl_dynamic_template = []
 
 [dependencies]
 itertools = "0.7"
-lazy_static = "1.0"
+lazy_static = "1.1"
 percent-encoding = "1.0"
 gtmpl_value = "0.3"
 

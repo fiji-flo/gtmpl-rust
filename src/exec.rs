@@ -183,8 +183,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                         name: var.ident[0].clone(),
                         value: val.clone(),
                     })
-                })
-                .ok_or_else(|| String::from("no stack while evaluating pipeline"))?;
+                }).ok_or_else(|| String::from("no stack while evaluating pipeline"))?;
         }
         Ok(val)
     }
@@ -230,13 +229,13 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             .funcs
             .get(name.as_str())
             .ok_or_else(|| format!("{} is not a defined function", name))?;
-        self.eval_call(ctx, function, args, fin)
+        self.eval_call(ctx, *function, args, fin)
     }
 
     fn eval_call(
         &mut self,
         ctx: &Context,
-        function: &Func,
+        function: Func,
         args: &[Nodes],
         fin: &Option<Value>,
     ) -> Result<Value, String> {

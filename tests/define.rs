@@ -22,8 +22,7 @@ fn range_and_define() {
         .parse(
             r#"{{ define "foo" }}{{ $ }}{{ end -}}
                   {{ range $x := . -}}{{ template "foo" . }}{{- end }}"#,
-        )
-        .unwrap();
+        ).unwrap();
 
     let context = Context::from(vec![1, 2]).unwrap();
 
@@ -36,8 +35,7 @@ fn range_and_define() {
         .parse(
             r#"{{ define "foo" }}{{ . }}{{ end -}}
                   {{ range $x := . -}}{{ template "foo" . }}{{- end }}"#,
-        )
-        .unwrap();
+        ).unwrap();
 
     let context = Context::from(vec![1, 2]).unwrap();
 
@@ -50,8 +48,7 @@ fn range_and_define() {
         .parse(
             r#"{{ define "foo" }}{{ $ }}{{ end -}}
                   {{ range $x := . -}}{{ template "foo" }}{{- end }}"#,
-        )
-        .unwrap();
+        ).unwrap();
 
     let context = Context::from(vec![1, 2]).unwrap();
 
@@ -64,8 +61,7 @@ fn range_and_define() {
         .parse(
             r#"{{ define "foo" }}{{ . }}{{ end -}}
                   {{ range $x := . -}}{{ template "foo" }}{{- end }}"#,
-        )
-        .unwrap();
+        ).unwrap();
 
     let context = Context::from(vec![1, 2]).unwrap();
 
@@ -106,8 +102,7 @@ fn multiple_defines() {
         .parse(
             r#"{{ define "tmpl1"}} some {{ end -}} {{- define "tmpl2"}} some other {{ end -}}
             there is {{- template "tmpl2" -}} template"#,
-        )
-        .unwrap();
+        ).unwrap();
 
     let context = Context::empty();
 
@@ -126,8 +121,7 @@ fn dynamic_template() {
             {{- define "tmpl1"}} some {{ end -}}
             {{- define "tmpl2"}} some other {{ end -}}
             there is {{- template (.) -}} template"#,
-        )
-        .unwrap();
+        ).unwrap();
 
     let context = Context::from("tmpl2").unwrap();
 

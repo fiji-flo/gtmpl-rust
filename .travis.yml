@@ -8,8 +8,18 @@ rust:
   - beta
 
 matrix:
-  include:
+  allow_failures:
     - rust: nightly
-      env: NIGHTLY=true
+  fast_finish: true
 
-script: ./travis.sh
+before_script:
+  - rustup component add rustfmt-preview
+  - rustup component add clippy-preview
+script:
+  - cargo fmt --all -- --check
+  - cargo clippy
+  - cargo build --verbose --all
+  - cargo test --verbose --all
+  - cargo clippy --features gtmpl_dynamic_template
+  - cargo build --verbose --all --features gtmpl_dynamic_template
+  - cargo test --verbose --all --features gtmpl_dynamic_template
