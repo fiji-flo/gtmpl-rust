@@ -22,7 +22,7 @@ seamless integration of Rust application into the world of devops tools around
 Add the following dependency to your Cargo manifest…
 ```toml
 [dependencies]
-gtmpl = "0.5.2"
+gtmpl = "0.5.4"
 ```
 
 and look at the docs:

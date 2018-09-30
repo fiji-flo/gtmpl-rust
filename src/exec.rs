@@ -37,7 +37,7 @@ impl Context {
     where
         T: Into<Value>,
     {
-        let serialized = Value::from(value);
+        let serialized: Value = value.into();
         Ok(Context { dot: serialized })
     }
 }
