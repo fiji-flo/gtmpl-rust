@@ -240,9 +240,11 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         fin: &Option<Value>,
     ) -> Result<Value, String> {
         let mut arg_vals = vec![];
-        for arg in &args[1..] {
-            let val = self.eval_arg(ctx, arg)?;
-            arg_vals.push(val);
+        if !args.is_empty() {
+            for arg in &args[1..] {
+                let val = self.eval_arg(ctx, arg)?;
+                arg_vals.push(val);
+            }
         }
         if let Some(ref f) = *fin {
             arg_vals.push(f.clone());
@@ -276,6 +278,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             Nodes::Variable(ref n) => self.eval_variable_node(n, &[], &None),
             Nodes::Pipe(ref n) => self.eval_pipeline(ctx, n),
             // Nodes::Identifier
+            Nodes::Identifier(ref n) => self.eval_function(ctx, n, &[], &None),
             Nodes::Chain(ref n) => self.eval_chain_node(ctx, n, &[], &None),
             Nodes::String(ref n) => Ok(n.value.clone()),
             Nodes::Bool(ref n) => Ok(n.value.clone()),
@@ -567,7 +570,7 @@ mod tests_mocked {
     }
 
     #[test]
-    fn test_funtion_via_dot() {
+    fn test_function_via_dot() {
         #[derive(Gtmpl)]
         struct Foo {
             foo: Func,
@@ -606,6 +609,24 @@ mod tests_mocked {
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "43");
+    }
+
+    #[test]
+    fn test_function_ret_map() {
+        fn map(_: &[Value]) -> Result<Value, String> {
+            let mut h = HashMap::new();
+            h.insert("field".to_owned(), 1);
+            Ok(h.into())
+        }
+
+        let data = Context::empty();
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::default();
+        t.add_func("map", map);
+        assert!(t.parse(r#"{{map.field}}"#).is_ok());
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "1");
     }
 
     #[test]

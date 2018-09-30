@@ -630,14 +630,14 @@ impl Parser {
                         _ => {}
                     };
                     let mut chain = ChainNode::new(self.tree_id, next.pos, n);
-                    chain.add(next.val);
+                    chain.add(&next.val);
                     while self
                         .peek()
                         .map(|p| p.typ == ItemType::ItemField)
                         .unwrap_or(false)
                     {
                         let field = self.next().unwrap();
-                        chain.add(field.val);
+                        chain.add(&field.val);
                     }
                     let n = match typ {
                         NodeType::Field => Nodes::Field(FieldNode::new(

@@ -429,7 +429,8 @@ impl ChainNode {
         }
     }
 
-    pub fn add(&mut self, val: String) {
+    pub fn add(&mut self, val: &str) {
+        let val = val.trim_left_matches('.').to_owned();
         self.field.push(val);
     }
 }
@@ -443,8 +444,7 @@ impl Display for ChainNode {
             return Err(e);
         }
         for field in &self.field {
-            // fields are prefixed with .
-            if let Err(e) = write!(f, "{}", field) {
+            if let Err(e) = write!(f, ".{}", field) {
                 return Err(e);
             }
         }
