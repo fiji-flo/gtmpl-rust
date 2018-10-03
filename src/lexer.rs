@@ -465,7 +465,9 @@ impl LexerStateMachine {
             .peek()
             .and_then(|c| Some(c.is_whitespace()))
             .unwrap_or(false)
-        {}
+        {
+            self.next();
+        }
         self.emit(ItemType::ItemSpace);
         State::LexInsideAction
     }
@@ -652,6 +654,15 @@ mod tests {
         let l = Lexer::new(s.to_owned());
         let items = l.collect::<Vec<_>>();
         assert_eq!(items.len(), 13);
+    }
+
+    #[test]
+    fn test_whitespace() {
+        let s = r#"something {{  .foo  }}"#;
+        let l = Lexer::new(s.to_owned());
+        let items = l.collect::<Vec<_>>();
+        let s_ = items.into_iter().map(|i| i.val).join("");
+        assert_eq!(s_, s);
     }
 
     #[test]
