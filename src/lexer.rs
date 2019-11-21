@@ -230,11 +230,12 @@ impl LexerStateMachine {
 
     fn backup(&mut self) {
         self.pos -= 1;
-        if self.width == 1 && self.input[self.pos..]
-            .chars()
-            .next()
-            .and_then(|c| if c == '\n' { Some(()) } else { None })
-            .is_some()
+        if self.width == 1
+            && self.input[self.pos..]
+                .chars()
+                .next()
+                .and_then(|c| if c == '\n' { Some(()) } else { None })
+                .is_some()
         {
             self.line -= 1;
         }
@@ -267,11 +268,7 @@ impl LexerStateMachine {
     }
 
     fn accept(&mut self, valid: &str) -> bool {
-        if self
-            .next()
-            .and_then(|s| Some(valid.contains(s)))
-            .unwrap_or(false)
-        {
+        if self.next().map(|s| valid.contains(s)).unwrap_or_default() {
             return true;
         }
         self.backup();
@@ -434,13 +431,13 @@ impl LexerStateMachine {
                         State::LexInsideAction
                     }
                     '.' => match self.input[self.pos..].chars().next() {
-                        Some('0'...'9') => {
+                        Some('0'..='9') => {
                             self.backup();
                             State::LexNumber
                         }
                         _ => State::LexField,
                     },
-                    '+' | '-' | '0'...'9' => {
+                    '+' | '-' | '0'..='9' => {
                         self.backup();
                         State::LexNumber
                     }
@@ -461,11 +458,7 @@ impl LexerStateMachine {
     }
 
     fn lex_space(&mut self) -> State {
-        while self
-            .peek()
-            .and_then(|c| Some(c.is_whitespace()))
-            .unwrap_or(false)
-        {
+        while self.peek().map(|c| c.is_whitespace()).unwrap_or_default() {
             self.next();
         }
         self.emit(ItemType::ItemSpace);
@@ -578,11 +571,7 @@ impl LexerStateMachine {
             }
         }
         // Let's ignore imaginary numbers for now.
-        if self
-            .peek()
-            .and_then(|c| Some(c.is_alphanumeric()))
-            .unwrap_or(true)
-        {
+        if self.peek().map(|c| c.is_alphanumeric()).unwrap_or(true) {
             self.next();
             return false;
         }

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use funcs::BUILTINS;
+use crate::funcs::BUILTINS;
+use crate::parse::{parse, Tree};
 use gtmpl_value::Func;
-use parse::{parse, Tree};
 
 /// The main template structure.
 pub struct Template {

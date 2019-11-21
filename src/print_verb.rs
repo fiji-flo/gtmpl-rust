@@ -1,7 +1,7 @@
 use std::char;
 use std::fmt;
 
-use printf::{params_to_chars, FormatParams};
+use crate::printf::{params_to_chars, FormatParams};
 
 use gtmpl_value::Value;
 

@@ -2,7 +2,7 @@ use std::char;
 
 use gtmpl_value::{FromValue, Value};
 
-use print_verb::print;
+use crate::print_verb::print;
 
 pub fn sprintf(s: &str, args: &[Value]) -> Result<String, String> {
     let tokens = tokenize(s)?;
@@ -26,7 +26,7 @@ struct FormatArg {
     pub typ: char,
 }
 
-static TYPS: &'static str = "vVtTbcdoqxXUeEfFgGsp";
+static TYPS: &str = "vVtTbcdoqxXUeEfFgGsp";
 
 #[derive(Default)]
 pub struct FormatParams {

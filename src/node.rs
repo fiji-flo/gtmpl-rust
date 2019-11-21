@@ -1,8 +1,8 @@
 use std::fmt::{Display, Error, Formatter};
 
+use crate::lexer::ItemType;
+use crate::utils::unquote_char;
 use itertools::Itertools;
-use lexer::ItemType;
-use utils::unquote_char;
 
 use gtmpl_value::Value;
 
@@ -287,7 +287,8 @@ impl Display for CommandNode {
                     // Handle PipeNode.
                     _ => n.to_string(),
                 }
-            }).join(" ");
+            })
+            .join(" ");
         write!(f, "{}", s)
     }
 }
@@ -400,7 +401,8 @@ impl FieldNode {
                     } else {
                         Some(s.to_owned())
                     }
-                }).collect(),
+                })
+                .collect(),
         }
     }
 }
@@ -430,7 +432,7 @@ impl ChainNode {
     }
 
     pub fn add(&mut self, val: &str) {
-        let val = val.trim_left_matches('.').to_owned();
+        let val = val.trim_start_matches('.').to_owned();
         self.field.push(val);
     }
 }
@@ -489,7 +491,7 @@ node!(NumberNode {
 });
 
 impl NumberNode {
-    #[cfg_attr(feature = "cargo-clippy", allow(float_cmp))]
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::float_cmp))]
     pub fn new(
         tr: TreeId,
         pos: Pos,
@@ -498,19 +500,18 @@ impl NumberNode {
     ) -> Result<NumberNode, Error> {
         match *item_typ {
             ItemType::ItemCharConstant => unquote_char(&text, '\'')
-                .and_then(|c| {
-                    Some(NumberNode {
-                        typ: NodeType::Number,
-                        tr,
-                        pos,
-                        is_i64: true,
-                        is_u64: true,
-                        is_f64: true,
-                        text,
-                        number_typ: NumberType::Char,
-                        value: Value::from(c as u64),
-                    })
-                }).ok_or(Error),
+                .map(|c| NumberNode {
+                    typ: NodeType::Number,
+                    tr,
+                    pos,
+                    is_i64: true,
+                    is_u64: true,
+                    is_f64: true,
+                    text,
+                    number_typ: NumberType::Char,
+                    value: Value::from(c as u64),
+                })
+                .ok_or(Error),
             _ => {
                 let mut number_typ = NumberType::Float;
 

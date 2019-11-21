@@ -1,9 +1,9 @@
 use std::collections::VecDeque;
 use std::io::Write;
 
-use node::*;
-use template::Template;
-use utils::is_true;
+use crate::node::*;
+use crate::template::Template;
+use crate::utils::is_true;
 
 use gtmpl_value::{Func, Value};
 
@@ -183,7 +183,8 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                         name: var.ident[0].clone(),
                         value: val.clone(),
                     })
-                }).ok_or_else(|| String::from("no stack while evaluating pipeline"))?;
+                })
+                .ok_or_else(|| String::from("no stack while evaluating pipeline"))?;
         }
         Ok(val)
     }
@@ -212,6 +213,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
             Nodes::Bool(ref n) => Ok(n.value.clone()),
             Nodes::Dot(_) => Ok(ctx.dot.clone()),
             Nodes::Number(ref n) => Ok(n.value.clone()),
+            Nodes::String(ref n) => Ok(n.value.clone()),
             _ => Err(format!("cannot evaluate command {}", first_word)),
         }
     }
@@ -411,12 +413,16 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
     fn walk_range(&mut self, ctx: &Context, range: &'a RangeNode) -> Result<(), String> {
         let val = self.eval_pipeline(ctx, &range.pipe)?;
         match val {
-            Value::Object(ref map) | Value::Map(ref map) => for (k, v) in map.clone() {
-                self.one_iteration(Value::from(k), v, range)?;
-            },
-            Value::Array(ref vec) => for (k, v) in vec.iter().enumerate() {
-                self.one_iteration(Value::from(k), v.clone(), range)?;
-            },
+            Value::Object(ref map) | Value::Map(ref map) => {
+                for (k, v) in map.clone() {
+                    self.one_iteration(Value::from(k), v, range)?;
+                }
+            }
+            Value::Array(ref vec) => {
+                for (k, v) in vec.iter().enumerate() {
+                    self.one_iteration(Value::from(k), v.clone(), range)?;
+                }
+            }
             _ => return Err(format!("invalid range: {:?}", val)),
         }
         if let Some(ref else_list) = range.else_list {
@@ -472,10 +478,9 @@ mod tests_mocked {
         let data = Context::from(1).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ if false -}} 2000 {{- else -}} 3000 {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ if false -}} 2000 {{- else -}} 3000 {{- end }}"#)
+            .is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
@@ -486,10 +491,9 @@ mod tests_mocked {
         let data = Context::from(1).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ if . -}} 2000 {{- else -}} 3000 {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ if . -}} 2000 {{- else -}} 3000 {{- end }}"#)
+            .is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
@@ -497,10 +501,9 @@ mod tests_mocked {
         let data = Context::from(false).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ if . -}} 2000 {{- else -}} 3000 {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ if . -}} 2000 {{- else -}} 3000 {{- end }}"#)
+            .is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
@@ -643,10 +646,9 @@ mod tests_mocked {
         let data = Context::from(foo).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ if .foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ if .foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
+            .is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
@@ -655,10 +657,9 @@ mod tests_mocked {
         let data = Context::from(foo).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ if .foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ if .foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
+            .is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
@@ -669,10 +670,9 @@ mod tests_mocked {
         let data = Context::from(bar).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ if .bar.foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ if .bar.foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
+            .is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "2000");
@@ -683,10 +683,9 @@ mod tests_mocked {
         let data = Context::from(bar).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ if .bar.foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ if .bar.foo -}} 2000 {{- else -}} 3000 {{- end }}"#)
+            .is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "3000");
@@ -702,10 +701,9 @@ mod tests_mocked {
         let data = Context::from(foo).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ with .foo -}} {{.}} {{- else -}} 3000 {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ with .foo -}} {{.}} {{- else -}} 3000 {{- end }}"#)
+            .is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "1000");
@@ -748,10 +746,9 @@ mod tests_mocked {
         let data = Context::from(map).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ range $k, $v := . -}} {{ $v }} {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ range $k, $v := . -}} {{ $v }} {{- end }}"#)
+            .is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(to_sorted_string(w), "12");
@@ -762,10 +759,9 @@ mod tests_mocked {
         let data = Context::from(map).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ range $k, $v := . -}} {{ $k }}{{ $v }} {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ range $k, $v := . -}} {{ $k }}{{ $v }} {{- end }}"#)
+            .is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(to_sorted_string(w), "abcd");
@@ -776,10 +772,9 @@ mod tests_mocked {
         let data = Context::from(map).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ range $k, $v := . -}} {{ $k }}{{ $v }} {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ range $k, $v := . -}} {{ $k }}{{ $v }} {{- end }}"#)
+            .is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(to_sorted_string(w), "12ab");
@@ -795,10 +790,9 @@ mod tests_mocked {
         let data = Context::from(foo).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ range $k, $v := .foo -}} {{ $v }} {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ range $k, $v := .foo -}} {{ $v }} {{- end }}"#)
+            .is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(to_sorted_string(w), "12");
@@ -813,10 +807,9 @@ mod tests_mocked {
         let data = Context::from(map).unwrap();
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ range $k, $v := . -}} {{ $v.bar }} {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ range $k, $v := . -}} {{ $v.bar }} {{- end }}"#)
+            .is_ok());
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(to_sorted_string(w), "12");
@@ -891,10 +884,9 @@ mod tests_mocked {
 
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ if eq true false -}} 2000 {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ if eq true false -}} 2000 {{- end }}"#)
+            .is_ok());
         let data = Context::from(1).unwrap();
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
@@ -902,10 +894,9 @@ mod tests_mocked {
 
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ if eq 23.42 23.42 -}} 2000 {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ if eq 23.42 23.42 -}} 2000 {{- end }}"#)
+            .is_ok());
         let data = Context::from(1).unwrap();
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
@@ -924,14 +915,25 @@ mod tests_mocked {
     fn test_block() {
         let mut w: Vec<u8> = vec![];
         let mut t = Template::default();
-        assert!(
-            t.parse(r#"{{ block "foobar" true -}} {{ $ }} {{- end }}"#)
-                .is_ok()
-        );
+        assert!(t
+            .parse(r#"{{ block "foobar" true -}} {{ $ }} {{- end }}"#)
+            .is_ok());
         let data = Context::from(2000).unwrap();
         let out = t.execute(&mut w, &data);
         assert!(out.is_ok());
         assert_eq!(String::from_utf8(w).unwrap(), "true");
     }
 
+    #[test]
+    fn test_assign_string() {
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::default();
+        assert!(t
+            .parse(r#"{{ with $foo := "bar" }}{{ $foo }}{{ end }}"#)
+            .is_ok());
+        let data = Context::from(1).unwrap();
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "bar");
+    }
 }

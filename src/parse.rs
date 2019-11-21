@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use lexer::{Item, ItemType, Lexer};
-use node::*;
-use utils::*;
+use crate::lexer::{Item, ItemType, Lexer};
+use crate::node::*;
+use crate::utils::*;
 
 pub struct Parser {
     name: String,
@@ -268,7 +268,8 @@ impl Parser {
                         }
                         _ => None,
                     })
-                }).ok_or_else(|| self.error_msg("invalid root node"))?;
+                })
+                .ok_or_else(|| self.error_msg("invalid root node"))?;
 
             t = match self.next() {
                 None => return self.error(&format!("unable to peek for tree {}", id)),
@@ -726,7 +727,8 @@ impl Parser {
                     .iter()
                     .find(|&v| v == name)
                     .map(|_| VariableNode::new(tree_id, pos, name))
-            }).ok_or_else(|| self.error_msg(&format!("undefined variable {}", name)))
+            })
+            .ok_or_else(|| self.error_msg(&format!("undefined variable {}", name)))
     }
 
     fn parse_template_name(&self, token: &Item, context: &str) -> Result<String, String> {
@@ -760,8 +762,8 @@ impl Iterator for Parser {
 #[cfg(test)]
 mod tests_mocked {
     use super::*;
+    use crate::lexer::ItemType;
     use gtmpl_value::Value;
-    use lexer::ItemType;
 
     /*
        ItemText
@@ -904,6 +906,13 @@ mod tests_mocked {
         let pipe = p.pipeline("range");
         // broken for now
         assert!(pipe.is_err());
+    }
+
+    #[test]
+    fn test_assign_string() {
+        let mut p = make_parser_with(r#"{{ with $bar := "foo" }}{{ $bar }}{{ end }}"#);
+        let r = p.parse_tree();
+        assert!(r.is_ok());
     }
 
     #[test]
