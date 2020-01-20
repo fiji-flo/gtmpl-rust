@@ -1,4 +1,7 @@
 extern crate gtmpl;
+extern crate gtmpl_value;
+#[macro_use]
+extern crate gtmpl_derive;
 use gtmpl::{Context, Template};
 
 #[test]
@@ -93,6 +96,27 @@ fn simple_define_context() {
         .unwrap();
 
     let context = Context::from("some").unwrap();
+
+    let output = template.render(&context);
+    assert!(output.is_ok());
+    assert_eq!(output.unwrap(), "there is some template".to_string());
+}
+
+#[test]
+fn other_define_context() {
+    #[derive(Gtmpl)]
+    struct Other {
+        pub foo: String,
+    }
+    let mut template = Template::default();
+    template
+        .parse(r#"{{ define "tmpl"}} some {{ end -}} there is {{- template "tmpl" . -}} template"#)
+        .unwrap();
+
+    let context = Context::from(Other {
+        foo: "some".to_owned(),
+    })
+    .unwrap();
 
     let output = template.render(&context);
     assert!(output.is_ok());

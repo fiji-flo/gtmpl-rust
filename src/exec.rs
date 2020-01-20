@@ -360,7 +360,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
         self.eval_field_chain(&val, &variable.ident[1..], args, fin)
     }
 
-    // Walks an `if` or `with` node. They behave the same, except that `wtih` sets dot.
+    // Walks an `if` or `with` node. They behave the same, except that `with` sets dot.
     fn walk_if_or_with(&mut self, node: &'a Nodes, ctx: &Context) -> Result<(), String> {
         let pipe = match *node {
             Nodes::If(ref n) | Nodes::With(ref n) => &n.pipe,
@@ -740,6 +740,19 @@ mod tests_mocked {
 
     #[test]
     fn test_proper_range() {
+        let mut vec = Vec::new();
+        vec.push("a".to_owned());
+        vec.push("b".to_owned());
+        let data = Context::from(vec).unwrap();
+        let mut w: Vec<u8> = vec![];
+        let mut t = Template::default();
+        assert!(t
+            .parse(r#"{{ range $k, $v := . -}} {{ $k }}{{ $v }} {{- end }}"#)
+            .is_ok());
+        let out = t.execute(&mut w, &data);
+        assert!(out.is_ok());
+        assert_eq!(String::from_utf8(w).unwrap(), "0a1b");
+
         let mut map = HashMap::new();
         map.insert("a".to_owned(), 1);
         map.insert("b".to_owned(), 2);
