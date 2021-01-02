@@ -102,7 +102,7 @@ impl Parser {
     }
 
     fn next_non_space(&mut self) -> Option<Item> {
-        self.skip_while(|c| c.typ == ItemType::ItemSpace).next()
+        self.find(|c| c.typ != ItemType::ItemSpace)
     }
 
     fn next_non_space_must(&mut self, context: &str) -> Result<Item, String> {

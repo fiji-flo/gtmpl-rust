@@ -12,10 +12,7 @@ struct Variable {
     value: Value,
 }
 
-struct State<'a, 'b, T: Write>
-where
-    T: 'b,
-{
+struct State<'a, 'b, T: Write> {
     template: &'a Template,
     writer: &'b mut T,
     node: Option<&'a Nodes>,
@@ -337,7 +334,7 @@ impl<'a, 'b, T: Write> State<'a, 'b, T> {
                 .get(field_name)
                 .cloned()
                 .ok_or_else(|| format!("no field {} for {}", field_name, receiver)),
-            Value::Map(ref o) => Ok(o.get(field_name).cloned().unwrap_or_else(|| Value::NoValue)),
+            Value::Map(ref o) => Ok(o.get(field_name).cloned().unwrap_or(Value::NoValue)),
             _ => Err(String::from("only maps and objects have fields")),
         };
         if let Ok(Value::Function(ref f)) = ret {
@@ -447,6 +444,7 @@ fn not_a_function(args: &[Nodes], val: &Option<Value>) -> Result<(), String> {
 #[cfg(test)]
 mod tests_mocked {
     use super::*;
+    use gtmpl_derive::Gtmpl;
     use std::collections::HashMap;
 
     #[test]

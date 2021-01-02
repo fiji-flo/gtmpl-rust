@@ -26,9 +26,10 @@ impl Default for Template {
 impl Template {
     /// Creates a new empty template with a given `name`.
     pub fn with_name<T: Into<String>>(name: T) -> Template {
-        let mut tmpl = Template::default();
-        tmpl.name = name.into();
-        tmpl
+        Template {
+            name: name.into(),
+            ..Default::default()
+        }
     }
 
     /// Adds a single custom function to the template.

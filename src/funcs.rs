@@ -3,12 +3,22 @@ use std::cmp::Ordering;
 use std::fmt::Write;
 
 use gtmpl_value::{Func, Value};
-
-extern crate percent_encoding;
-use self::percent_encoding::{utf8_percent_encode, DEFAULT_ENCODE_SET};
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 
 use crate::printf::sprintf;
 use crate::utils::is_true;
+
+const QUERY_ENCODE: &AsciiSet = &CONTROLS
+    .add(b' ')
+    .add(b'"')
+    .add(b'<')
+    .add(b'>')
+    .add(b'#')
+    .add(b'`')
+    .add(b'`')
+    .add(b'?')
+    .add(b'{')
+    .add(b'}');
 
 pub static BUILTINS: &[(&str, Func)] = &[
     ("eq", eq as Func),
@@ -29,104 +39,106 @@ pub static BUILTINS: &[(&str, Func)] = &[
     ("call", call as Func),
 ];
 
-macro_rules! val(
-    ($x:expr) => { Value::from($x) }
-);
+macro_rules! val {
+    ($x:expr) => {
+        Value::from($x)
+    };
+}
 
 /// Help to write new functions for gtmpl.
 #[macro_export]
 macro_rules! gtmpl_fn {
-    (
-        $(#[$outer:meta])*
-        fn $name:ident() -> Result<$otyp:ty, String>
-        { $($body:tt)* }
-    ) => {
-        $(#[$outer])*
-        pub fn $name(args: &[$crate::Value]) -> Result<$crate::Value, String> {
-            fn inner() -> Result<$otyp, String> {
-                $($body)*
-            }
-            Ok($crate::Value::from(inner()?))
-        }
-    };
-    (
-        $(#[$outer:meta])*
-        fn $name:ident($arg0:ident : $typ0:ty) -> Result<$otyp:ty, String>
-        { $($body:tt)* }
-    ) => {
-        $(#[$outer])*
-        pub fn $name(
-            args: &[$crate::Value]
-        ) -> Result<$crate::Value, String> {
-            if args.is_empty() {
-                return Err(String::from("at least one argument required"));
-            }
-            let x = &args[0];
-            let $arg0: $typ0 = $crate::from_value(x)
-                .ok_or_else(|| "unable to convert from Value".to_owned())?;
-            fn inner($arg0 : $typ0) -> Result<$otyp, String> {
-                $($body)*
-            }
-            let ret: $crate::Value = inner($arg0)?.into();
-            Ok(ret)
-        }
-    };
-    (
-        $(#[$outer:meta])*
-        fn $name:ident($arg0:ident : $typ0:ty$(, $arg:ident : $typ:ty)*) -> Result<$otyp:ty, String>
-        { $($body:tt)* }
-    ) => {
-        $(#[$outer])*
-        pub fn $name(
-            args: &[$crate::Value]
-        ) -> Result<$crate::Value, String> {
-            #[allow(unused_mut)]
-            let mut args = args;
-            if args.is_empty() {
-                return Err(String::from("at least one argument required"));
-            }
-            let x = &args[0];
-            let $arg0: $typ0 = $crate::from_value(x)
-                .ok_or_else(|| "unable to convert from Value".to_owned())?;
-            $(args = &args[1..];
-              let x = &args[0];
-              let $arg: $typ = $crate::from_value(x)
-                .ok_or_else(|| "unable to convert from Value".to_owned())?;)*
-            fn inner($arg0 : $typ0, $($arg : $typ,)*) -> Result<$otyp, String> {
-                $($body)*
-            }
-            let ret: $crate::Value = inner($arg0, $($arg),*)?.into();
-            Ok(ret)
-        }
-    }
+ (
+  $(#[$outer:meta])*
+  fn $name:ident() -> Result<$otyp:ty, String>
+  { $($body:tt)* }
+ ) => {
+  $(#[$outer])*
+  pub fn $name(args: &[$crate::Value]) -> Result<$crate::Value, String> {
+   fn inner() -> Result<$otyp, String> {
+    $($body)*
+   }
+   Ok($crate::Value::from(inner()?))
+  }
+ };
+ (
+  $(#[$outer:meta])*
+  fn $name:ident($arg0:ident : $typ0:ty) -> Result<$otyp:ty, String>
+  { $($body:tt)* }
+ ) => {
+  $(#[$outer])*
+  pub fn $name(
+   args: &[$crate::Value]
+  ) -> Result<$crate::Value, String> {
+   if args.is_empty() {
+    return Err(String::from("at least one argument required"));
+   }
+   let x = &args[0];
+   let $arg0: $typ0 = $crate::from_value(x)
+    .ok_or_else(|| "unable to convert from Value".to_owned())?;
+   fn inner($arg0 : $typ0) -> Result<$otyp, String> {
+    $($body)*
+   }
+   let ret: $crate::Value = inner($arg0)?.into();
+   Ok(ret)
+  }
+ };
+ (
+  $(#[$outer:meta])*
+  fn $name:ident($arg0:ident : $typ0:ty$(, $arg:ident : $typ:ty)*) -> Result<$otyp:ty, String>
+  { $($body:tt)* }
+ ) => {
+  $(#[$outer])*
+  pub fn $name(
+   args: &[$crate::Value]
+  ) -> Result<$crate::Value, String> {
+   #[allow(unused_mut)]
+   let mut args = args;
+   if args.is_empty() {
+    return Err(String::from("at least one argument required"));
+   }
+   let x = &args[0];
+   let $arg0: $typ0 = $crate::from_value(x)
+    .ok_or_else(|| "unable to convert from Value".to_owned())?;
+   $(args = &args[1..];
+     let x = &args[0];
+     let $arg: $typ = $crate::from_value(x)
+    .ok_or_else(|| "unable to convert from Value".to_owned())?;)*
+   fn inner($arg0 : $typ0, $($arg : $typ,)*) -> Result<$otyp, String> {
+    $($body)*
+   }
+   let ret: $crate::Value = inner($arg0, $($arg),*)?.into();
+   Ok(ret)
+  }
+ }
 }
 
 macro_rules! gn {
-    (
-        $(#[$outer:meta])*
-        $name:ident($arg1:ident : ref Value, $arg2:ident : ref Value) ->
-            Result<Value, String>
-        { $($body:tt)* }
-    ) => {
-        $(#[$outer])*
-        pub fn $name(args: &[Value]) -> Result<Value, String> {
-            if args.len() != 2 {
-                return Err(String::from("two arguments required"));
-            }
-            let $arg1 = &args[0];
-            let $arg2 = &args[1];
-            fn inner($arg1: &Value, $arg2: &Value) -> Result<Value, String> {
-                $($body)*
-            }
-            Ok(inner($arg1, $arg2)?)
-        }
-    }
+ (
+  $(#[$outer:meta])*
+  $name:ident($arg1:ident : ref Value, $arg2:ident : ref Value) ->
+   Result<Value, String>
+  { $($body:tt)* }
+ ) => {
+  $(#[$outer])*
+  pub fn $name(args: &[Value]) -> Result<Value, String> {
+   if args.len() != 2 {
+    return Err(String::from("two arguments required"));
+   }
+   let $arg1 = &args[0];
+   let $arg2 = &args[1];
+   fn inner($arg1: &Value, $arg2: &Value) -> Result<Value, String> {
+    $($body)*
+   }
+   Ok(inner($arg1, $arg2)?)
+  }
+ }
 }
 
-///	Returns the boolean OR of its arguments by returning the
-///	first non-empty argument or the last argument, that is,
-///	"or x y" behaves as "if x then x else y". All the
-///	arguments are evaluated.
+/// Returns the boolean OR of its arguments by returning the
+/// first non-empty argument or the last argument, that is,
+/// "or x y" behaves as "if x then x else y". All the
+/// arguments are evaluated.
 ///
 /// # Example
 /// ```
@@ -147,9 +159,9 @@ pub fn or(args: &[Value]) -> Result<Value, String> {
 }
 
 /// Returns the boolean AND of its arguments by returning the
-///	first empty argument or the last argument, that is,
-///	"and x y" behaves as "if x then y else x". All the
-///	arguments are evaluated.
+/// first empty argument or the last argument, that is,
+/// "and x y" behaves as "if x then y else x". All the
+/// arguments are evaluated.
 ///
 /// # Example
 /// ```
@@ -211,24 +223,19 @@ pub fn len(args: &[Value]) -> Result<Value, String> {
 }
 
 /// Returns the result of calling the first argument, which
-///	must be a function, with the remaining arguments as parameters.
+/// must be a function, with the remaining arguments as parameters.
 ///
 /// # Example
 /// ```
-/// #[macro_use]
-/// extern crate gtmpl;
-/// extern crate gtmpl_value;
+/// use gtmpl::{gtmpl_fn, template, Value};
 /// use gtmpl_value::Function;
-/// use gtmpl::{template, Value};
 ///
-/// fn main() {
-///     gtmpl_fn!(
-///     fn add(a: u64, b: u64) -> Result<u64, String> {
-///         Ok(a + b)
-///     });
-///     let equal = template(r#"{{ call . 1 2 }}"#, Value::Function(Function { f: add }));
-///     assert_eq!(&equal.unwrap(), "3");
-/// }
+/// gtmpl_fn!(
+/// fn add(a: u64, b: u64) -> Result<u64, String> {
+///     Ok(a + b)
+/// });
+/// let equal = template(r#"{{ call . 1 2 }}"#, Value::Function(Function { f: add }));
+/// assert_eq!(&equal.unwrap(), "3");
 /// ```
 pub fn call(args: &[Value]) -> Result<Value, String> {
     if args.is_empty() {
@@ -296,14 +303,14 @@ pub fn println(args: &[Value]) -> Result<Value, String> {
                 write!(&mut result, "{}", first_elt).unwrap();
             }
             for elt in iter {
-                result.push_str(" ");
+                result.push(' ');
                 if let Value::String(ref v) = *elt {
                     result.push_str(v);
                 } else {
                     write!(&mut result, "{}", elt).unwrap();
                 }
             }
-            result.push_str("\n");
+            result.push('\n');
             result
         }
     };
@@ -335,8 +342,8 @@ pub fn printf(args: &[Value]) -> Result<Value, String> {
 }
 
 /// Returns the result of indexing its first argument by the
-///	following arguments. Thus "index x 1 2 3" is, in Go syntax,
-///	x[1][2][3]. Each indexed item must be a map, slice or array.
+/// following arguments. Thus "index x 1 2 3" is, in Go syntax,
+/// x[1][2][3]. Each indexed item must be a map, slice or array.
 ///
 /// # Example
 /// ```
@@ -373,7 +380,7 @@ fn get_item<'a>(col: &'a Value, key: &Value) -> Result<&'a Value, String> {
         _ => None,
     };
     match *col {
-        Value::Map(_) => Ok(ret.unwrap_or_else(|| &Value::NoValue)),
+        Value::Map(_) => Ok(ret.unwrap_or(&Value::NoValue)),
         _ => ret.ok_or_else(|| format!("unabled to get {} in {}", key, col)),
     }
 }
@@ -393,7 +400,7 @@ pub fn urlquery(args: &[Value]) -> Result<Value, String> {
     }
     let val = &args[0];
     match *val {
-        Value::String(ref s) => Ok(val!(utf8_percent_encode(s, DEFAULT_ENCODE_SET).to_string())),
+        Value::String(ref s) => Ok(val!(utf8_percent_encode(s, QUERY_ENCODE).to_string())),
         _ => Err(String::from("Arguments need to be of type String")),
     }
 }
@@ -426,7 +433,7 @@ assert_eq!(&not_equal.unwrap(), \"true\");
 ```
 "]
 ne(a: ref Value, b: ref Value) -> Result<Value, String> {
-    Ok(Value::from(a != b))
+ Ok(Value::from(a != b))
 });
 
 gn!(
@@ -441,12 +448,12 @@ assert_eq!(&less_than.unwrap(), \"true\");
 ```
 "]
 lt(a: ref Value, b: ref Value) -> Result<Value, String> {
-    let ret = match cmp(a, b) {
-        None => return Err(format!("unable to compare {} and {}", a, b)),
-        Some(Ordering::Less) => true,
-        _ => false,
-    };
-    Ok(Value::from(ret))
+ let ret = match cmp(a, b) {
+  None => return Err(format!("unable to compare {} and {}", a, b)),
+  Some(Ordering::Less) => true,
+  _ => false,
+ };
+ Ok(Value::from(ret))
 });
 
 gn!(
@@ -464,12 +471,12 @@ assert_eq!(&less_or_equal.unwrap(), \"true\");
 ```
 "]
 le(a: ref Value, b: ref Value) -> Result<Value, String> {
-    let ret = match cmp(a, b) {
-        None => return Err(format!("unable to compare {} and {}", a, b)),
-        Some(Ordering::Less) | Some(Ordering::Equal) => true,
-        _ => false,
-    };
-    Ok(Value::from(ret))
+ let ret = match cmp(a, b) {
+  None => return Err(format!("unable to compare {} and {}", a, b)),
+  Some(Ordering::Less) | Some(Ordering::Equal) => true,
+  _ => false,
+ };
+ Ok(Value::from(ret))
 });
 
 gn!(
@@ -484,12 +491,12 @@ assert_eq!(&greater_than.unwrap(), \"true\");
 ```
 "]
 gt(a: ref Value, b: ref Value) -> Result<Value, String> {
-    let ret = match cmp(a, b) {
-        None => return Err(format!("unable to compare {} and {}", a, b)),
-        Some(Ordering::Greater) => true,
-        _ => false,
-    };
-    Ok(Value::from(ret))
+ let ret = match cmp(a, b) {
+  None => return Err(format!("unable to compare {} and {}", a, b)),
+  Some(Ordering::Greater) => true,
+  _ => false,
+ };
+ Ok(Value::from(ret))
 });
 
 gn!(
@@ -507,12 +514,12 @@ assert_eq!(&greater_or_equal.unwrap(), \"true\");
 ```
 "]
 ge(a: ref Value, b: ref Value) -> Result<Value, String> {
-    let ret = match cmp(a, b) {
-        None => return Err(format!("unable to compare {} and {}", a, b)),
-        Some(Ordering::Greater) | Some(Ordering::Equal) => true,
-        _ => false,
-    };
-    Ok(Value::from(ret))
+ let ret = match cmp(a, b) {
+  None => return Err(format!("unable to compare {} and {}", a, b)),
+  Some(Ordering::Greater) | Some(Ordering::Equal) => true,
+  _ => false,
+ };
+ Ok(Value::from(ret))
 });
 
 fn cmp(left: &Value, right: &Value) -> Option<Ordering> {

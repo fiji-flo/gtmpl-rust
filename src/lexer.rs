@@ -1,3 +1,4 @@
+use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -85,7 +86,7 @@ impl Item {
 }
 
 impl fmt::Display for Item {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.typ {
             ItemType::ItemEOF => write!(f, "EOF"),
             ItemType::ItemKeyword => write!(f, "<{}>", self.val),
@@ -466,7 +467,7 @@ impl LexerStateMachine {
     }
 
     fn lex_identifier(&mut self) -> State {
-        let c = self.skip_while(|c| c.is_alphanumeric() || *c == '_').next();
+        let c = self.find(|c| !(c.is_alphanumeric() || *c == '_'));
         self.backup();
         if !self.at_terminator() {
             return self.errorf(&format!("bad character {}", c.unwrap_or_default()));
@@ -497,7 +498,7 @@ impl LexerStateMachine {
             });
             return State::LexInsideAction;
         }
-        let c = self.skip_while(|c| c.is_alphanumeric() || *c == '_').next();
+        let c = self.find(|c| !(c.is_alphanumeric() || *c == '_'));
         self.backup();
 
         if !self.at_terminator() {
@@ -603,7 +604,7 @@ impl LexerStateMachine {
 
     fn lex_raw_quote(&mut self) -> State {
         let start_line = self.line;
-        if self.skip_while(|c| *c != '`').next().is_none() {
+        if self.find(|c| *c == '`').is_none() {
             self.line = start_line;
             return self.errorf("unterminated raw quoted string");
         }
@@ -626,9 +627,9 @@ fn ltrim_len(s: &str) -> usize {
 
 #[cfg(test)]
 mod tests {
-    extern crate itertools;
     use self::itertools::Itertools;
     use super::*;
+    use itertools;
     #[test]
     fn lexer_run() {
         let mut l = Lexer::new("abc".to_owned());
