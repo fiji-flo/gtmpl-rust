@@ -1,8 +1,5 @@
-extern crate gtmpl;
-extern crate gtmpl_value;
-#[macro_use]
-extern crate gtmpl_derive;
 use gtmpl::{Context, Template};
+use gtmpl_derive::Gtmpl;
 
 #[test]
 fn simple_define() {

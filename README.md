@@ -1,15 +1,9 @@
 # gtmpl-rust – Golang Templates for Rust
 
-[![Travis Build Status]][travis]
-[![Appveyor Build Status]][appveyor]
 [![Latest Version]][crates.io]
 
-[Travis Build Status]: https://travis-ci.org/fiji-flo/gtmpl-rust.svg?branch=master
-[travis]: https://travis-ci.org/fiji-flo/gtmpl-rust
 [Latest Version]: https://img.shields.io/crates/v/gtmpl.svg
 [crates.io]: https://crates.io/crates/gtmpl
-[Appveyor Build Status]: https://ci.appveyor.com/api/projects/status/drir5474smj6c4e7?svg=true
-[appveyor]: https://ci.appveyor.com/project/fiji-flo/gtmpl-rust
 
 ---
 
@@ -22,7 +16,7 @@ seamless integration of Rust application into the world of devops tools around
 Add the following dependency to your Cargo manifest…
 ```toml
 [dependencies]
-gtmpl = "0.5.7"
+gtmpl = "0.6"
 ```
 
 and look at the docs:
@@ -37,7 +31,6 @@ It's not perfect, yet. Help and feedback is more than welcome.
 
 Basic template:
 ```rust
-extern crate gtmpl;
 use gtmpl;
 
 fn main() {
@@ -48,11 +41,8 @@ fn main() {
 
 Adding custom functions:
 ```rust
-#[macro_use]
-extern crate gtmpl;
-extern crate gtmpl_value;
 use gtmpl_value::Function;
-use gtmpl::{template, Value};
+use gtmpl::{gtmpl_fn, template, Value};
 
 fn main() {
     gtmpl_fn!(
@@ -66,11 +56,7 @@ fn main() {
 
 Passing a struct as context:
 ```rust
-#[macro_use]
-extern crate gtmpl;
-#[macro_use]
-extern crate gtmpl_derive;
-extern crate gtmpl_value;
+use gtmpl_derive::Gtmpl;
 
 #[derive(Gtmpl)]
 struct Foo {
@@ -86,12 +72,8 @@ fn main() {
 
 Invoking a *method* on a context:
 ```rust
-#[macro_use]
-extern crate gtmpl;
-#[macro_use]
-extern crate gtmpl_derive;
-extern crate gtmpl_value;
 
+use gtmpl_derive::Gtmpl;
 use gtmpl::{Func, Value};
 
 fn plus_one(args: &[Value]) -> Result<Value, String> {
@@ -137,7 +119,7 @@ there might be some convenient additions:
 Enable `gtmpl_dynamic_template` in your `Cargo.toml`:
 ```toml
 [dependencies.gtmpl]
-version = "0.5.7"
+version = "0.6"
 features = ["gtmpl_dynamic_template"]
 
 ```
@@ -147,7 +129,6 @@ Now you can have dynamic template names for the `template` action.
 #### Example
 
 ```rust
-extern crate gtmpl;
 use gtmpl::{Context, Template};
 
 fn main() {

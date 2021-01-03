@@ -7,13 +7,6 @@
 //! let output = gtmpl::template("Finally! Some {{ . }} for Rust", "gtmpl");
 //! assert_eq!(&output.unwrap(), "Finally! Some gtmpl for Rust");
 //! ```
-#[cfg(test)]
-#[macro_use]
-extern crate gtmpl_derive;
-extern crate gtmpl_value;
-extern crate itertools;
-#[macro_use]
-extern crate lazy_static;
 mod exec;
 #[doc(inlne)]
 pub mod funcs;

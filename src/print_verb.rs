@@ -281,7 +281,7 @@ impl<'a> From<&'a str> for Hexer<'a> {
 }
 
 impl<'a> fmt::UpperHex for Hexer<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for u in self.s.as_bytes() {
             write!(f, "{:X}", u)?
         }
@@ -290,7 +290,7 @@ impl<'a> fmt::UpperHex for Hexer<'a> {
 }
 
 impl<'a> fmt::LowerHex for Hexer<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for u in self.s.as_bytes() {
             write!(f, "{:x}", u)?
         }
