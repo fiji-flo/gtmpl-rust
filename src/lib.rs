@@ -8,7 +8,7 @@
 //! assert_eq!(&output.unwrap(), "Finally! Some gtmpl for Rust");
 //! ```
 mod exec;
-#[doc(inlne)]
+#[doc(inline)]
 pub mod funcs;
 mod lexer;
 mod node;
