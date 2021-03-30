@@ -2,7 +2,7 @@
 use std::cmp::Ordering;
 use std::fmt::Write;
 
-use gtmpl_value::{Func, Value};
+use gtmpl_value::{Func, FuncError, Value};
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 
 use crate::printf::sprintf;
@@ -50,12 +50,12 @@ macro_rules! val {
 macro_rules! gtmpl_fn {
  (
   $(#[$outer:meta])*
-  fn $name:ident() -> Result<$otyp:ty, String>
+  fn $name:ident() -> Result<$otyp:ty, FuncError>
   { $($body:tt)* }
  ) => {
   $(#[$outer])*
-  pub fn $name(args: &[$crate::Value]) -> Result<$crate::Value, String> {
-   fn inner() -> Result<$otyp, String> {
+  pub fn $name(args: &[$crate::Value]) -> Result<$crate::Value, FuncError> {
+   fn inner() -> Result<$otyp, FuncError> {
     $($body)*
    }
    Ok($crate::Value::from(inner()?))
@@ -63,20 +63,20 @@ macro_rules! gtmpl_fn {
  };
  (
   $(#[$outer:meta])*
-  fn $name:ident($arg0:ident : $typ0:ty) -> Result<$otyp:ty, String>
+  fn $name:ident($arg0:ident : $typ0:ty) -> Result<$otyp:ty, FuncError>
   { $($body:tt)* }
  ) => {
   $(#[$outer])*
   pub fn $name(
    args: &[$crate::Value]
-  ) -> Result<$crate::Value, String> {
+  ) -> Result<$crate::Value, FuncError> {
    if args.is_empty() {
-    return Err(String::from("at least one argument required"));
+    return Err(FuncError::AtLeastXArgs(stringify!($name).into(), 1));
    }
    let x = &args[0];
    let $arg0: $typ0 = $crate::from_value(x)
-    .ok_or_else(|| "unable to convert from Value".to_owned())?;
-   fn inner($arg0 : $typ0) -> Result<$otyp, String> {
+    .ok_or(FuncError::UnableToConvertFromValue)?;
+   fn inner($arg0 : $typ0) -> Result<$otyp, FuncError> {
     $($body)*
    }
    let ret: $crate::Value = inner($arg0)?.into();
@@ -85,26 +85,26 @@ macro_rules! gtmpl_fn {
  };
  (
   $(#[$outer:meta])*
-  fn $name:ident($arg0:ident : $typ0:ty$(, $arg:ident : $typ:ty)*) -> Result<$otyp:ty, String>
+  fn $name:ident($arg0:ident : $typ0:ty$(, $arg:ident : $typ:ty)*) -> Result<$otyp:ty, FuncError>
   { $($body:tt)* }
  ) => {
   $(#[$outer])*
   pub fn $name(
    args: &[$crate::Value]
-  ) -> Result<$crate::Value, String> {
+  ) -> Result<$crate::Value, FuncError> {
    #[allow(unused_mut)]
    let mut args = args;
    if args.is_empty() {
-    return Err(String::from("at least one argument required"));
+    return Err(FuncError::AtLeastXArgs(stringify!($name).into(), 1));
    }
    let x = &args[0];
    let $arg0: $typ0 = $crate::from_value(x)
-    .ok_or_else(|| "unable to convert from Value".to_owned())?;
+    .ok_or(FuncError::UnableToConvertFromValue)?;
    $(args = &args[1..];
      let x = &args[0];
      let $arg: $typ = $crate::from_value(x)
-    .ok_or_else(|| "unable to convert from Value".to_owned())?;)*
-   fn inner($arg0 : $typ0, $($arg : $typ,)*) -> Result<$otyp, String> {
+    .ok_or(FuncError::UnableToConvertFromValue)?;)*
+   fn inner($arg0 : $typ0, $($arg : $typ,)*) -> Result<$otyp, FuncError> {
     $($body)*
    }
    let ret: $crate::Value = inner($arg0, $($arg),*)?.into();
@@ -117,20 +117,20 @@ macro_rules! gn {
  (
   $(#[$outer:meta])*
   $name:ident($arg1:ident : ref Value, $arg2:ident : ref Value) ->
-   Result<Value, String>
+   Result<Value, FuncError>
   { $($body:tt)* }
  ) => {
   $(#[$outer])*
-  pub fn $name(args: &[Value]) -> Result<Value, String> {
+  pub fn $name(args: &[Value]) -> Result<Value, FuncError> {
    if args.len() != 2 {
-    return Err(String::from("two arguments required"));
+    return Err(FuncError::AtLeastXArgs(stringify!($name).into(), 2));
    }
    let $arg1 = &args[0];
    let $arg2 = &args[1];
-   fn inner($arg1: &Value, $arg2: &Value) -> Result<Value, String> {
+   fn inner($arg1: &Value, $arg2: &Value) -> Result<Value, FuncError> {
     $($body)*
    }
-   Ok(inner($arg1, $arg2)?)
+   inner($arg1, $arg2)
   }
  }
 }
@@ -146,7 +146,7 @@ macro_rules! gn {
 /// let equal = template("{{ or 1 2.0 false . }}", "foo");
 /// assert_eq!(&equal.unwrap(), "1");
 /// ```
-pub fn or(args: &[Value]) -> Result<Value, String> {
+pub fn or(args: &[Value]) -> Result<Value, FuncError> {
     for arg in args {
         if is_true(arg) {
             return Ok(arg.clone());
@@ -155,7 +155,7 @@ pub fn or(args: &[Value]) -> Result<Value, String> {
     args.iter()
         .cloned()
         .last()
-        .ok_or_else(|| String::from("and needs at least one argument"))
+        .ok_or_else(|| FuncError::AtLeastXArgs("or".into(), 1))
 }
 
 /// Returns the boolean AND of its arguments by returning the
@@ -169,7 +169,7 @@ pub fn or(args: &[Value]) -> Result<Value, String> {
 /// let equal = template("{{ and 1 2.0 true . }}", "foo");
 /// assert_eq!(&equal.unwrap(), "foo");
 /// ```
-pub fn and(args: &[Value]) -> Result<Value, String> {
+pub fn and(args: &[Value]) -> Result<Value, FuncError> {
     for arg in args {
         if !is_true(arg) {
             return Ok(arg.clone());
@@ -178,7 +178,7 @@ pub fn and(args: &[Value]) -> Result<Value, String> {
     args.iter()
         .cloned()
         .last()
-        .ok_or_else(|| String::from("and needs at least one argument"))
+        .ok_or_else(|| FuncError::AtLeastXArgs("and".into(), 1))
 }
 
 /// Returns the boolean negation of its single argument.
@@ -189,9 +189,9 @@ pub fn and(args: &[Value]) -> Result<Value, String> {
 /// let equal = template("{{ not 0 }}", "");
 /// assert_eq!(&equal.unwrap(), "true");
 /// ```
-pub fn not(args: &[Value]) -> Result<Value, String> {
+pub fn not(args: &[Value]) -> Result<Value, FuncError> {
     if args.len() != 1 {
-        Err(String::from("not requires a single argument"))
+        Err(FuncError::ExactlyXArgs("not".into(), 1))
     } else {
         Ok(val!(!is_true(&args[0])))
     }
@@ -205,9 +205,9 @@ pub fn not(args: &[Value]) -> Result<Value, String> {
 /// let equal = template("{{ len . }}", "foo");
 /// assert_eq!(&equal.unwrap(), "3");
 /// ```
-pub fn len(args: &[Value]) -> Result<Value, String> {
+pub fn len(args: &[Value]) -> Result<Value, FuncError> {
     if args.len() != 1 {
-        return Err(String::from("len requires exactly 1 arugment"));
+        return Err(FuncError::ExactlyXArgs("len".into(), 1));
     }
     let arg = &args[0];
     let len = match *arg {
@@ -215,7 +215,7 @@ pub fn len(args: &[Value]) -> Result<Value, String> {
         Value::Array(ref a) => a.len(),
         Value::Object(ref o) => o.len(),
         _ => {
-            return Err(format!("unable to call len on {}", arg));
+            return Err(FuncError::Generic(format!("unable to call len on {}", arg)));
         }
     };
 
@@ -228,23 +228,23 @@ pub fn len(args: &[Value]) -> Result<Value, String> {
 /// # Example
 /// ```
 /// use gtmpl::{gtmpl_fn, template, Value};
-/// use gtmpl_value::Function;
+/// use gtmpl_value::{FuncError, Function};
 ///
 /// gtmpl_fn!(
-/// fn add(a: u64, b: u64) -> Result<u64, String> {
+/// fn add(a: u64, b: u64) -> Result<u64, FuncError> {
 ///     Ok(a + b)
 /// });
 /// let equal = template(r#"{{ call . 1 2 }}"#, Value::Function(Function { f: add }));
 /// assert_eq!(&equal.unwrap(), "3");
 /// ```
-pub fn call(args: &[Value]) -> Result<Value, String> {
+pub fn call(args: &[Value]) -> Result<Value, FuncError> {
     if args.is_empty() {
-        Err(String::from("call requires at least on argument"))
+        Err(FuncError::AtLeastXArgs("call".into(), 1))
     } else if let Value::Function(ref f) = args[0] {
         (f.f)(&args[1..])
     } else {
-        Err(String::from(
-            "call requires the first argument to be a function",
+        Err(FuncError::Generic(
+            "call requires the first argument to be a function".into(),
         ))
     }
 }
@@ -260,7 +260,7 @@ pub fn call(args: &[Value]) -> Result<Value, String> {
 /// let equal = template(r#"{{ print "Hello " . "!" }}"#, "world");
 /// assert_eq!(&equal.unwrap(), "Hello world!");
 /// ```
-pub fn print(args: &[Value]) -> Result<Value, String> {
+pub fn print(args: &[Value]) -> Result<Value, FuncError> {
     let mut no_space = true;
     let mut s = String::new();
     for val in args {
@@ -290,7 +290,7 @@ pub fn print(args: &[Value]) -> Result<Value, String> {
 /// let equal = template(r#"{{ println "Hello" . "!" }}"#, "world");
 /// assert_eq!(&equal.unwrap(), "Hello world !\n");
 /// ```
-pub fn println(args: &[Value]) -> Result<Value, String> {
+pub fn println(args: &[Value]) -> Result<Value, FuncError> {
     let mut iter = args.iter();
     let s = match iter.next() {
         None => String::from("\n"),
@@ -329,15 +329,15 @@ pub fn println(args: &[Value]) -> Result<Value, String> {
 /// let equal = template(r#"{{ printf "%v %s %v" "Hello" . "!" }}"#, "world");
 /// assert_eq!(&equal.unwrap(), "Hello world !");
 /// ```
-pub fn printf(args: &[Value]) -> Result<Value, String> {
+pub fn printf(args: &[Value]) -> Result<Value, FuncError> {
     if args.is_empty() {
-        return Err("printf requires at least one argument".to_owned());
+        return Err(FuncError::AtLeastXArgs("printf".into(), 1));
     }
     if let Value::String(ref s) = args[0] {
-        let s = sprintf(s, &args[1..])?;
+        let s = sprintf(s, &args[1..]).map_err(|e| FuncError::Other(e.into()))?;
         Ok(val!(s))
     } else {
-        Err("printf requires a format string".to_owned())
+        Err(FuncError::Generic("printf requires a format string".into()))
     }
 }
 
@@ -352,9 +352,9 @@ pub fn printf(args: &[Value]) -> Result<Value, String> {
 /// let index = template("{{ index . 1 }}", ctx);
 /// assert_eq!(&index.unwrap(), "42");
 /// ```
-pub fn index(args: &[Value]) -> Result<Value, String> {
+pub fn index(args: &[Value]) -> Result<Value, FuncError> {
     if args.len() < 2 {
-        return Err(String::from("index requires at least 2 arugments"));
+        return Err(FuncError::AtLeastXArgs("index".into(), 2));
     }
     let mut col = &args[0];
     for val in &args[1..] {
@@ -364,7 +364,7 @@ pub fn index(args: &[Value]) -> Result<Value, String> {
     Ok(col.clone())
 }
 
-fn get_item<'a>(col: &'a Value, key: &Value) -> Result<&'a Value, String> {
+fn get_item<'a>(col: &'a Value, key: &Value) -> Result<&'a Value, FuncError> {
     let ret = match (col, key) {
         (&Value::Array(ref a), &Value::Number(ref n)) => {
             if let Some(i) = n.as_u64() {
@@ -381,7 +381,7 @@ fn get_item<'a>(col: &'a Value, key: &Value) -> Result<&'a Value, String> {
     };
     match *col {
         Value::Map(_) => Ok(ret.unwrap_or(&Value::NoValue)),
-        _ => ret.ok_or_else(|| format!("unabled to get {} in {}", key, col)),
+        _ => ret.ok_or_else(|| FuncError::Generic(format!("unable to get {} in {}", key, col))),
     }
 }
 
@@ -394,14 +394,16 @@ fn get_item<'a>(col: &'a Value, key: &Value) -> Result<&'a Value, String> {
 /// let url = template(r#"{{ urlquery "foo bar?" }}"#, 0);
 /// assert_eq!(&url.unwrap(), "foo%20bar%3F");
 /// ```
-pub fn urlquery(args: &[Value]) -> Result<Value, String> {
+pub fn urlquery(args: &[Value]) -> Result<Value, FuncError> {
     if args.len() != 1 {
-        return Err(String::from("urlquery requires one argument"));
+        return Err(FuncError::ExactlyXArgs("urlquery".into(), 1));
     }
     let val = &args[0];
     match *val {
         Value::String(ref s) => Ok(val!(utf8_percent_encode(s, QUERY_ENCODE).to_string())),
-        _ => Err(String::from("Arguments need to be of type String")),
+        _ => Err(FuncError::Generic(
+            "Arguments need to be of type String".into(),
+        )),
     }
 }
 
@@ -413,9 +415,9 @@ pub fn urlquery(args: &[Value]) -> Result<Value, String> {
 /// let equal = template("{{ eq 1 1 . }}", 1);
 /// assert_eq!(&equal.unwrap(), "true");
 /// ```
-pub fn eq(args: &[Value]) -> Result<Value, String> {
+pub fn eq(args: &[Value]) -> Result<Value, FuncError> {
     if args.len() < 2 {
-        return Err(String::from("eq requires at least 2 arguments"));
+        return Err(FuncError::AtLeastXArgs("eq".into(), 2));
     }
     let first = &args[0];
     Ok(Value::from(args.iter().skip(1).all(|x| *x == *first)))
@@ -432,7 +434,7 @@ let not_equal = template(\"{{ ne 2 . }}\", 1);
 assert_eq!(&not_equal.unwrap(), \"true\");
 ```
 "]
-ne(a: ref Value, b: ref Value) -> Result<Value, String> {
+ne(a: ref Value, b: ref Value) -> Result<Value, FuncError> {
  Ok(Value::from(a != b))
 });
 
@@ -447,9 +449,9 @@ let less_than = template(\"{{ lt 0 . }}\", 1);
 assert_eq!(&less_than.unwrap(), \"true\");
 ```
 "]
-lt(a: ref Value, b: ref Value) -> Result<Value, String> {
+lt(a: ref Value, b: ref Value) -> Result<Value, FuncError> {
  let ret = match cmp(a, b) {
-  None => return Err(format!("unable to compare {} and {}", a, b)),
+  None => return Err(FuncError::Generic(format!("unable to compare {} and {}", a, b))),
   Some(Ordering::Less) => true,
   _ => false,
  };
@@ -470,9 +472,9 @@ let less_or_equal = template(\"{{ le 0.2 . }}\", 1.4);
 assert_eq!(&less_or_equal.unwrap(), \"true\");
 ```
 "]
-le(a: ref Value, b: ref Value) -> Result<Value, String> {
+le(a: ref Value, b: ref Value) -> Result<Value, FuncError> {
  let ret = match cmp(a, b) {
-  None => return Err(format!("unable to compare {} and {}", a, b)),
+  None => return Err(FuncError::Generic(format!("unable to compare {} and {}", a, b))),
   Some(Ordering::Less) | Some(Ordering::Equal) => true,
   _ => false,
  };
@@ -490,9 +492,9 @@ let greater_than = template(\"{{ gt 1.4 . }}\", 1.2);
 assert_eq!(&greater_than.unwrap(), \"true\");
 ```
 "]
-gt(a: ref Value, b: ref Value) -> Result<Value, String> {
+gt(a: ref Value, b: ref Value) -> Result<Value, FuncError> {
  let ret = match cmp(a, b) {
-  None => return Err(format!("unable to compare {} and {}", a, b)),
+  None => return Err(FuncError::Generic(format!("unable to compare {} and {}", a, b))),
   Some(Ordering::Greater) => true,
   _ => false,
  };
@@ -513,9 +515,9 @@ let greater_or_equal = template(\"{{ ge 1.4 . }}\", 0.2);
 assert_eq!(&greater_or_equal.unwrap(), \"true\");
 ```
 "]
-ge(a: ref Value, b: ref Value) -> Result<Value, String> {
+ge(a: ref Value, b: ref Value) -> Result<Value, FuncError> {
  let ret = match cmp(a, b) {
-  None => return Err(format!("unable to compare {} and {}", a, b)),
+  None => return Err(FuncError::Generic(format!("unable to compare {} and {}", a, b))),
   Some(Ordering::Greater) | Some(Ordering::Equal) => true,
   _ => false,
  };
@@ -551,183 +553,183 @@ mod tests_mocked {
     #[test]
     fn test_macro() {
         gtmpl_fn!(
-            fn f1(i: i64) -> Result<i64, String> {
+            fn f1(i: i64) -> Result<i64, FuncError> {
                 Ok(i + 1)
             }
         );
         let vals: Vec<Value> = vec![val!(1i64)];
         let ret = f1(&vals);
-        assert_eq!(ret, Ok(Value::from(2i64)));
+        assert_eq!(ret.unwrap(), Value::from(2i64));
 
         gtmpl_fn!(
-            fn f3(i: i64, j: i64, k: i64) -> Result<i64, String> {
+            fn f3(i: i64, j: i64, k: i64) -> Result<i64, FuncError> {
                 Ok(i + j + k)
             }
         );
         let vals: Vec<Value> = vec![val!(1i64), val!(2i64), val!(3i64)];
         let ret = f3(&vals);
-        assert_eq!(ret, Ok(Value::from(6i64)));
+        assert_eq!(ret.unwrap(), Value::from(6i64));
     }
 
     #[test]
     fn test_eq() {
         let vals: Vec<Value> = vec![val!("foo".to_owned()), val!("foo".to_owned())];
         let ret = eq(&vals);
-        assert_eq!(ret, Ok(Value::Bool(true)));
+        assert_eq!(ret.unwrap(), Value::Bool(true));
         let vals: Vec<Value> = vec![val!(1u32), val!(1u32), val!(1i8)];
         let ret = eq(&vals);
-        assert_eq!(ret, Ok(Value::Bool(true)));
+        assert_eq!(ret.unwrap(), Value::Bool(true));
         let vals: Vec<Value> = vec![val!(false), val!(false), val!(false)];
         let ret = eq(&vals);
-        assert_eq!(ret, Ok(Value::Bool(true)));
+        assert_eq!(ret.unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn test_and() {
         let vals: Vec<Value> = vec![val!(0i32), val!(1u8)];
         let ret = and(&vals);
-        assert_eq!(ret, Ok(Value::from(0i32)));
+        assert_eq!(ret.unwrap(), Value::from(0i32));
 
         let vals: Vec<Value> = vec![val!(1i32), val!(2u8)];
         let ret = and(&vals);
-        assert_eq!(ret, Ok(Value::from(2u8)));
+        assert_eq!(ret.unwrap(), Value::from(2u8));
     }
 
     #[test]
     fn test_or() {
         let vals: Vec<Value> = vec![val!(0i32), val!(1u8)];
         let ret = or(&vals);
-        assert_eq!(ret, Ok(Value::from(1u8)));
+        assert_eq!(ret.unwrap(), Value::from(1u8));
 
         let vals: Vec<Value> = vec![val!(0i32), val!(0u8)];
         let ret = or(&vals);
-        assert_eq!(ret, Ok(Value::from(0u8)));
+        assert_eq!(ret.unwrap(), Value::from(0u8));
     }
 
     #[test]
     fn test_ne() {
         let vals: Vec<Value> = vec![val!(0i32), val!(1u8)];
         let ret = ne(&vals);
-        assert_eq!(ret, Ok(Value::from(true)));
+        assert_eq!(ret.unwrap(), Value::from(true));
 
         let vals: Vec<Value> = vec![val!(0i32), val!(0u8)];
         let ret = ne(&vals);
-        assert_eq!(ret, Ok(Value::from(false)));
+        assert_eq!(ret.unwrap(), Value::from(false));
 
         let vals: Vec<Value> = vec![val!("foo"), val!("bar")];
         let ret = ne(&vals);
-        assert_eq!(ret, Ok(Value::from(true)));
+        assert_eq!(ret.unwrap(), Value::from(true));
 
         let vals: Vec<Value> = vec![val!("foo"), val!("foo")];
         let ret = ne(&vals);
-        assert_eq!(ret, Ok(Value::from(false)));
+        assert_eq!(ret.unwrap(), Value::from(false));
     }
 
     #[test]
     fn test_lt() {
         let vals: Vec<Value> = vec![val!(-1i32), val!(1u8)];
         let ret = lt(&vals);
-        assert_eq!(ret, Ok(Value::from(true)));
+        assert_eq!(ret.unwrap(), Value::from(true));
 
         let vals: Vec<Value> = vec![val!(0i32), val!(0u8)];
         let ret = lt(&vals);
-        assert_eq!(ret, Ok(Value::from(false)));
+        assert_eq!(ret.unwrap(), Value::from(false));
 
         let vals: Vec<Value> = vec![val!(1i32), val!(0u8)];
         let ret = lt(&vals);
-        assert_eq!(ret, Ok(Value::from(false)));
+        assert_eq!(ret.unwrap(), Value::from(false));
     }
 
     #[test]
     fn test_le() {
         let vals: Vec<Value> = vec![val!(-1i32), val!(1u8)];
         let ret = le(&vals);
-        assert_eq!(ret, Ok(Value::from(true)));
+        assert_eq!(ret.unwrap(), Value::from(true));
 
         let vals: Vec<Value> = vec![val!(0i32), val!(0u8)];
         let ret = le(&vals);
-        assert_eq!(ret, Ok(Value::from(true)));
+        assert_eq!(ret.unwrap(), Value::from(true));
 
         let vals: Vec<Value> = vec![val!(1i32), val!(0u8)];
         let ret = le(&vals);
-        assert_eq!(ret, Ok(Value::from(false)));
+        assert_eq!(ret.unwrap(), Value::from(false));
     }
 
     #[test]
     fn test_gt() {
         let vals: Vec<Value> = vec![val!(-1i32), val!(1u8)];
         let ret = gt(&vals);
-        assert_eq!(ret, Ok(Value::from(false)));
+        assert_eq!(ret.unwrap(), Value::from(false));
 
         let vals: Vec<Value> = vec![val!(0i32), val!(0u8)];
         let ret = gt(&vals);
-        assert_eq!(ret, Ok(Value::from(false)));
+        assert_eq!(ret.unwrap(), Value::from(false));
 
         let vals: Vec<Value> = vec![val!(1i32), val!(0u8)];
         let ret = gt(&vals);
-        assert_eq!(ret, Ok(Value::from(true)));
+        assert_eq!(ret.unwrap(), Value::from(true));
     }
 
     #[test]
     fn test_ge() {
         let vals: Vec<Value> = vec![val!(-1i32), val!(1u8)];
         let ret = ge(&vals);
-        assert_eq!(ret, Ok(Value::from(false)));
+        assert_eq!(ret.unwrap(), Value::from(false));
 
         let vals: Vec<Value> = vec![val!(0i32), val!(0u8)];
         let ret = ge(&vals);
-        assert_eq!(ret, Ok(Value::from(true)));
+        assert_eq!(ret.unwrap(), Value::from(true));
 
         let vals: Vec<Value> = vec![val!(1i32), val!(0u8)];
         let ret = ge(&vals);
-        assert_eq!(ret, Ok(Value::from(true)));
+        assert_eq!(ret.unwrap(), Value::from(true));
     }
 
     #[test]
     fn test_print() {
         let vals: Vec<Value> = vec![val!("foo"), val!(1u8)];
         let ret = print(&vals);
-        assert_eq!(ret, Ok(Value::from("foo1")));
+        assert_eq!(ret.unwrap(), Value::from("foo1"));
 
         let vals: Vec<Value> = vec![val!("foo"), val!(1u8), val!(2)];
         let ret = print(&vals);
-        assert_eq!(ret, Ok(Value::from("foo1 2")));
+        assert_eq!(ret.unwrap(), Value::from("foo1 2"));
 
         let vals: Vec<Value> = vec![val!(true), val!(1), val!("foo"), val!(2)];
         let ret = print(&vals);
-        assert_eq!(ret, Ok(Value::from("true 1foo2")));
+        assert_eq!(ret.unwrap(), Value::from("true 1foo2"));
     }
 
     #[test]
     fn test_println() {
         let vals: Vec<Value> = vec![val!("foo"), val!(1u8)];
         let ret = println(&vals);
-        assert_eq!(ret, Ok(Value::from("foo 1\n")));
+        assert_eq!(ret.unwrap(), Value::from("foo 1\n"));
 
         let vals: Vec<Value> = vec![];
         let ret = println(&vals);
-        assert_eq!(ret, Ok(Value::from("\n")));
+        assert_eq!(ret.unwrap(), Value::from("\n"));
     }
 
     #[test]
     fn test_index() {
         let vals: Vec<Value> = vec![val!(vec![vec![1, 2], vec![3, 4]]), val!(1), val!(0)];
         let ret = index(&vals);
-        assert_eq!(ret, Ok(Value::from(3)));
+        assert_eq!(ret.unwrap(), Value::from(3));
 
         let mut o = HashMap::new();
         o.insert(String::from("foo"), vec![String::from("bar")]);
         let col = Value::from(o);
         let vals: Vec<Value> = vec![col, val!("foo"), val!(0)];
         let ret = index(&vals);
-        assert_eq!(ret, Ok(Value::from("bar")));
+        assert_eq!(ret.unwrap(), Value::from("bar"));
 
         let mut o = HashMap::new();
         o.insert(String::from("foo"), String::from("bar"));
         let col = Value::from(o);
         let vals: Vec<Value> = vec![col, val!("foo2")];
         let ret = index(&vals);
-        assert_eq!(ret, Ok(Value::NoValue));
+        assert_eq!(ret.unwrap(), Value::NoValue);
     }
 
     #[test]
@@ -739,27 +741,27 @@ mod tests_mocked {
             .map(|&(_, f)| f)
             .unwrap();
         let ret = builtin_eq(&vals);
-        assert_eq!(ret, Ok(Value::Bool(true)));
+        assert_eq!(ret.unwrap(), Value::Bool(true));
     }
 
     #[test]
     fn test_gtmpl_fn() {
         gtmpl_fn!(
-            fn add(a: u64, b: u64) -> Result<u64, String> {
+            fn add(a: u64, b: u64) -> Result<u64, FuncError> {
                 Ok(a + b)
             }
         );
         let vals: Vec<Value> = vec![val!(1u32), val!(2u32)];
         let ret = add(&vals);
-        assert_eq!(ret, Ok(Value::from(3u32)));
+        assert_eq!(ret.unwrap(), Value::from(3u32));
 
         gtmpl_fn!(
-            fn has_prefix(s: String, prefix: String) -> Result<bool, String> {
+            fn has_prefix(s: String, prefix: String) -> Result<bool, FuncError> {
                 Ok(s.starts_with(&prefix))
             }
         );
         let vals: Vec<Value> = vec![val!("foobar"), val!("foo")];
         let ret = has_prefix(&vals);
-        assert_eq!(ret, Ok(Value::from(true)));
+        assert_eq!(ret.unwrap(), Value::from(true));
     }
 }

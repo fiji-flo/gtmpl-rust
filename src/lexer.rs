@@ -627,9 +627,8 @@ fn ltrim_len(s: &str) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use self::itertools::Itertools;
     use super::*;
-    use itertools;
+
     #[test]
     fn lexer_run() {
         let mut l = Lexer::new("abc".to_owned());
@@ -642,16 +641,14 @@ mod tests {
     fn lex_simple() {
         let s = r#"something {{ if eq "foo" "bar" }}"#;
         let l = Lexer::new(s.to_owned());
-        let items = l.collect::<Vec<_>>();
-        assert_eq!(items.len(), 13);
+        assert_eq!(l.count(), 13);
     }
 
     #[test]
     fn test_whitespace() {
         let s = r#"something {{  .foo  }}"#;
         let l = Lexer::new(s.to_owned());
-        let items = l.collect::<Vec<_>>();
-        let s_ = items.into_iter().map(|i| i.val).join("");
+        let s_ = l.map(|i| i.val).collect::<Vec<String>>().join("");
         assert_eq!(s_, s);
     }
 
@@ -659,8 +656,7 @@ mod tests {
     fn test_input() {
         let s = r#"something {{ .foo }}"#;
         let l = Lexer::new(s.to_owned());
-        let items = l.collect::<Vec<_>>();
-        let s_ = items.into_iter().map(|i| i.val).join("");
+        let s_ = l.map(|i| i.val).collect::<Vec<String>>().join("");
         assert_eq!(s_, s);
     }
 
@@ -668,8 +664,7 @@ mod tests {
     fn test_underscore() {
         let s = r#"something {{ .foo_bar }}"#;
         let l = Lexer::new(s.to_owned());
-        let items = l.collect::<Vec<_>>();
-        let s_ = items.into_iter().map(|i| i.val).join("");
+        let s_ = l.map(|i| i.val).collect::<Vec<String>>().join("");
         assert_eq!(s_, s);
     }
 
@@ -677,8 +672,7 @@ mod tests {
     fn test_trim() {
         let s = r#"something {{- .foo -}} 2000"#;
         let l = Lexer::new(s.to_owned());
-        let items = l.collect::<Vec<_>>();
-        let s_ = items.into_iter().map(|i| i.val).join("");
+        let s_ = l.map(|i| i.val).collect::<Vec<String>>().join("");
         assert_eq!(s_, r#"something{{.foo}}2000"#);
     }
 
@@ -686,8 +680,7 @@ mod tests {
     fn test_comment() {
         let s = r#"something {{- /* foo */ -}} 2000"#;
         let l = Lexer::new(s.to_owned());
-        let items = l.collect::<Vec<_>>();
-        let s_ = items.into_iter().map(|i| i.val).join("");
+        let s_ = l.map(|i| i.val).collect::<Vec<String>>().join("");
         assert_eq!(s_, r#"something2000"#);
     }
 }

@@ -1,7 +1,7 @@
 [package]
 name = "gtmpl"
-version = "0.6.0"
-authors = ["Florian Merz <me@fiji-flo.de>"]
+version = "0.7.0"
+authors = ["Florian Dieminger <me@fiji-flo.de>"]
 description = "The Golang Templating Language for Rust"
 license = "MIT"
 repository = "https://github.com/fiji-flo/gtmpl-rust"
@@ -19,10 +19,11 @@ maintenance = { status = "passively-maintained" }
 gtmpl_dynamic_template = []
 
 [dependencies]
-itertools = "0.10"
 lazy_static = "1"
 percent-encoding = "2"
-gtmpl_value = "0.4"
+gtmpl_value = "0.5"
+anyhow = "1"
+thiserror = "1"
 
 [dev-dependencies]
-gtmpl_derive = "0.4"
+gtmpl_derive = "0.5"

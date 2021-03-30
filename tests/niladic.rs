@@ -1,7 +1,8 @@
-use gtmpl::{Func, Value};
+use anyhow::anyhow;
+use gtmpl::{Func, FuncError, Value};
 use gtmpl_derive::Gtmpl;
 
-fn plus_one(args: &[Value]) -> Result<Value, String> {
+fn plus_one(args: &[Value]) -> Result<Value, FuncError> {
     if let Value::Object(ref o) = &args[0] {
         if let Some(Value::Number(ref n)) = o.get("num") {
             if let Some(i) = n.as_i64() {
@@ -9,7 +10,7 @@ fn plus_one(args: &[Value]) -> Result<Value, String> {
             }
         }
     }
-    Err(format!("integer required, got: {:?}", args))
+    Err(anyhow!("integer required, got: {:?}", args).into())
 }
 
 #[derive(Gtmpl)]

@@ -16,7 +16,7 @@ seamless integration of Rust application into the world of devops tools around
 Add the following dependency to your Cargo manifest…
 ```toml
 [dependencies]
-gtmpl = "0.6"
+gtmpl = "0.7"
 ```
 
 and look at the docs:
@@ -42,11 +42,11 @@ fn main() {
 Adding custom functions:
 ```rust
 use gtmpl_value::Function;
-use gtmpl::{gtmpl_fn, template, Value};
+use gtmpl::{FuncError, gtmpl_fn, template, Value};
 
 fn main() {
     gtmpl_fn!(
-    fn add(a: u64, b: u64) -> Result<u64, String> {
+    fn add(a: u64, b: u64) -> Result<u64, FuncError> {
         Ok(a + b)
     });
     let equal = template(r#"{{ call . 1 2 }}"#, Value::Function(Function { f: add }));
@@ -74,9 +74,9 @@ Invoking a *method* on a context:
 ```rust
 
 use gtmpl_derive::Gtmpl;
-use gtmpl::{Func, Value};
+use gtmpl::{Func, FuncError, Value};
 
-fn plus_one(args: &[Value]) -> Result<Value, String> {
+fn plus_one(args: &[Value]) -> Result<Value, FuncError> {
     if let Value::Object(ref o) = &args[0] {
         if let Some(Value::Number(ref n)) = o.get("num") {
             if let Some(i) = n.as_i64() {
@@ -84,7 +84,7 @@ fn plus_one(args: &[Value]) -> Result<Value, String> {
             }
         }
     }
-    Err(format!("integer required, got: {:?}", args))
+    Err(anyhow!("integer required, got: {:?}", args))
 }
 
 #[derive(Gtmpl)]
@@ -119,7 +119,7 @@ there might be some convenient additions:
 Enable `gtmpl_dynamic_template` in your `Cargo.toml`:
 ```toml
 [dependencies.gtmpl]
-version = "0.6"
+version = "0.7"
 features = ["gtmpl_dynamic_template"]
 
 ```
@@ -143,7 +143,7 @@ fn main() {
         )
         .unwrap();
 
-    let context = Context::from("tmpl2").unwrap();
+    let context = Context::from("tmpl2");
 
     let output = template.render(&context);
     assert_eq!(output.unwrap(), "there is some other template".to_string());

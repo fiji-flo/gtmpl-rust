@@ -1,12 +1,13 @@
 use std::char;
 use std::fmt;
 
+use crate::error::PrintError;
 use crate::printf::{params_to_chars, FormatParams};
 
 use gtmpl_value::Value;
 
 /// Print a verb like golang's printf.
-pub fn print(p: &FormatParams, typ: char, val: &Value) -> Result<String, String> {
+pub fn print(p: &FormatParams, typ: char, val: &Value) -> Result<String, PrintError> {
     match *val {
         Value::Number(ref n) if n.as_u64().is_some() => {
             let u = n.as_u64().unwrap();
@@ -15,19 +16,17 @@ pub fn print(p: &FormatParams, typ: char, val: &Value) -> Result<String, String>
                 'd' | 'v' => printf_generic(p, u),
                 'o' => printf_o(p, u),
                 'c' => {
-                    let c = char::from_u32(u as u32)
-                        .ok_or_else(|| format!("{:X} is not a valid char", u))?;
+                    let c = char::from_u32(u as u32).ok_or(PrintError::NotAValidChar(u as i128))?;
                     printf_generic(p, c)
                 }
                 'q' => {
-                    let c = char::from_u32(u as u32)
-                        .ok_or_else(|| format!("{:X} is not a valid char", u))?;
+                    let c = char::from_u32(u as u32).ok_or(PrintError::NotAValidChar(u as i128))?;
                     printf_generic(p, format!("'{}'", escape_char(c)))
                 }
                 'x' => printf_x(p, u),
                 'X' => printf_xx(p, u),
                 'U' => printf_generic(p, format!("U+{:X}", u)),
-                _ => return Err(format!("unable to format {} as %{}", val, typ)),
+                _ => return Err(PrintError::UnableToFormat(val.clone(), typ)),
             })
         }
         Value::Number(ref n) if n.as_i64().is_some() => {
@@ -37,19 +36,17 @@ pub fn print(p: &FormatParams, typ: char, val: &Value) -> Result<String, String>
                 'd' => printf_generic(p, i),
                 'o' => printf_o(p, i),
                 'c' => {
-                    let c = char::from_u32(i as u32)
-                        .ok_or_else(|| format!("{:X} is not a valid char", i))?;
+                    let c = char::from_u32(i as u32).ok_or(PrintError::NotAValidChar(i as i128))?;
                     printf_generic(p, c)
                 }
                 'q' => {
-                    let c = char::from_u32(i as u32)
-                        .ok_or_else(|| format!("{:X} is not a valid char", i))?;
+                    let c = char::from_u32(i as u32).ok_or(PrintError::NotAValidChar(i as i128))?;
                     printf_generic(p, format!("'{}'", escape_char(c)))
                 }
                 'x' => printf_x(p, i),
                 'X' => printf_xx(p, i),
                 'U' => printf_generic(p, format!("U+{:X}", i)),
-                _ => return Err(format!("unable to format {} as %{}", val, typ)),
+                _ => return Err(PrintError::UnableToFormat(val.clone(), typ)),
             })
         }
         Value::Number(ref n) if n.as_f64().is_some() => {
@@ -58,12 +55,12 @@ pub fn print(p: &FormatParams, typ: char, val: &Value) -> Result<String, String>
                 'e' => printf_e(p, f),
                 'E' => printf_ee(p, f),
                 'f' | 'F' => printf_generic(p, f),
-                _ => return Err(format!("unable to format {} as %{}", val, typ)),
+                _ => return Err(PrintError::UnableToFormat(val.clone(), typ)),
             })
         }
         Value::Bool(ref b) => Ok(match typ {
             'v' | 't' => printf_generic(p, b),
-            _ => return Err(format!("unable to format {} as %{}", val, typ)),
+            _ => return Err(PrintError::UnableToFormat(val.clone(), typ)),
         }),
         Value::String(ref s) => Ok(match typ {
             's' | 'v' => printf_generic(p, s),
@@ -76,9 +73,9 @@ pub fn print(p: &FormatParams, typ: char, val: &Value) -> Result<String, String>
                     .collect::<String>();
                 printf_generic(p, s)
             }
-            _ => return Err(format!("unable to format {} as %{}", val, typ)),
+            _ => return Err(PrintError::UnableToFormat(val.clone(), typ)),
         }),
-        _ => Err(format!("unable to format {} as %{}", val, typ)),
+        _ => Err(PrintError::UnableToFormat(val.clone(), typ)),
     }
 }
 

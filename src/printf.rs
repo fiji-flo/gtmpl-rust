@@ -2,9 +2,10 @@ use std::char;
 
 use gtmpl_value::{FromValue, Value};
 
+use crate::error::PrintError;
 use crate::print_verb::print;
 
-pub fn sprintf(s: &str, args: &[Value]) -> Result<String, String> {
+pub fn sprintf(s: &str, args: &[Value]) -> Result<String, PrintError> {
     let tokens = tokenize(s)?;
     let mut fmt = String::new();
     let mut i = 0;
@@ -44,7 +45,7 @@ fn process_verb(
     typ: char,
     args: &[Value],
     mut index: usize,
-) -> Result<(String, usize), String> {
+) -> Result<(String, usize), PrintError> {
     let mut params = FormatParams::default();
     let mut complex = false;
     let mut pos = 0;
@@ -92,7 +93,7 @@ fn process_verb(
             after_index = false;
         } else if let Some((width, till)) = parse_num(&s[pos..])? {
             if after_index {
-                return Err("width after index (e.g. %[3]2d)".to_owned());
+                return Err(PrintError::WithAfterIndex);
             }
             pos += till;
             params.width = width;
@@ -101,7 +102,7 @@ fn process_verb(
         if pos + 1 < s.len() && s[pos..].starts_with('.') {
             pos += 1;
             if after_index {
-                return Err("precision after index (e.g. %[3].2d)".to_owned());
+                return Err(PrintError::PrecisionAfterIndex);
             }
 
             let arg_num = parse_index(&s[pos..])?.map(|(i, till)| {
@@ -125,7 +126,7 @@ fn process_verb(
                 }
             } else if let Some((prec, till)) = parse_num(&s[pos..])? {
                 if after_index {
-                    return Err("precision after index (e.g. %[3].2d)".to_owned());
+                    return Err(PrintError::PrecisionAfterIndex);
                 }
                 pos += till;
                 params.precision = Some(prec);
@@ -145,34 +146,36 @@ fn process_verb(
     if arg_num < args.len() {
         return print(&params, typ, &args[arg_num]).map(|s| (s, index));
     }
-    Err(format!("unable to process verb: {}", s))
+    Err(PrintError::UnableToProcessVerb(s.to_string()))
 }
 
-fn parse_index(s: &str) -> Result<Option<(usize, usize)>, String> {
+fn parse_index(s: &str) -> Result<Option<(usize, usize)>, PrintError> {
     if s.starts_with('[') {
-        let till = s.find(']').ok_or_else(|| format!("missing ] in {}", s))?;
+        let till = s
+            .find(']')
+            .ok_or_else(|| PrintError::MissingClosingBracket(s.to_string()))?;
         s[1..till]
             .parse::<usize>()
             .map(|u| Some((u - 1, till + 1)))
-            .map_err(|e| format!("unable to parse index: {}", e))
+            .map_err(PrintError::UnableToParseIndex)
     } else {
         Ok(None)
     }
 }
 
-fn parse_num(s: &str) -> Result<Option<(usize, usize)>, String> {
+fn parse_num(s: &str) -> Result<Option<(usize, usize)>, PrintError> {
     let till = s.find(|c: char| !c.is_digit(10)).unwrap_or_else(|| s.len());
     if till > 0 {
         s[..till]
             .parse()
             .map(|u| Some((u, till)))
-            .map_err(|e| format!("unable to parse width: {}", e))
+            .map_err(PrintError::UnableToParseWidth)
     } else {
         Ok(None)
     }
 }
 
-fn tokenize(s: &str) -> Result<Vec<FormatArg>, String> {
+fn tokenize(s: &str) -> Result<Vec<FormatArg>, PrintError> {
     let mut iter = s.char_indices().peekable();
     let mut args = Vec::new();
     loop {
@@ -189,7 +192,11 @@ fn tokenize(s: &str) -> Result<Vec<FormatArg>, String> {
 
         loop {
             match iter.next() {
-                None => return Err(format!("unable to terminate format arg: {}", &s[from..])),
+                None => {
+                    return Err(PrintError::UnableToTerminateFormatArg(
+                        s[from..].to_string(),
+                    ))
+                }
                 Some((i, t)) if TYPS.contains(t) => {
                     args.push(FormatArg {
                         start: from,
@@ -221,12 +228,12 @@ mod test {
 
     #[test]
     fn test_sprinttf_to_format() {
-        let s = sprintf("foo%v2000", &vec!["bar".into()]);
+        let s = sprintf("foo%v2000", &["bar".into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"foobar2000");
 
-        let s = sprintf("%+0v", &vec![1.into()]);
+        let s = sprintf("%+0v", &[1.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"+1");
@@ -234,12 +241,12 @@ mod test {
 
     #[test]
     fn test_sprintf_fancy() {
-        let s = sprintf("%+-#10c", &vec![10000.into()]);
+        let s = sprintf("%+-#10c", &[10000.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"✐         ");
 
-        let s = sprintf("%+-#10q", &vec![10000.into()]);
+        let s = sprintf("%+-#10q", &[10000.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"'\u2710'  ");
@@ -247,12 +254,12 @@ mod test {
 
     #[test]
     fn test_sprintf_string_to_hex() {
-        let s = sprintf("%x", &vec!["foobar2000".into()]);
+        let s = sprintf("%x", &["foobar2000".into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"666f6f62617232303030");
 
-        let s = sprintf("%X", &vec!["foobar2000".into()]);
+        let s = sprintf("%X", &["foobar2000".into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"666F6F62617232303030");
@@ -260,7 +267,7 @@ mod test {
 
     #[test]
     fn test_sprintf_string_prec() {
-        let s = sprintf("%.6s", &vec!["foobar2000".into()]);
+        let s = sprintf("%.6s", &["foobar2000".into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"foobar");
@@ -268,14 +275,14 @@ mod test {
 
     #[test]
     fn test_sprintf_index() {
-        let s = sprintf("%[1]v %v", &vec!["foo".into(), "bar".into(), 2000.into()]);
+        let s = sprintf("%[1]v %v", &["foo".into(), "bar".into(), 2000.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"foo bar");
 
         let s = sprintf(
             "%[2]v %v%[1]v %v%[1]v",
-            &vec!["!".into(), "wtf".into(), "golang".into()],
+            &["!".into(), "wtf".into(), "golang".into()],
         );
         assert!(s.is_ok());
         let s = s.unwrap();
@@ -284,17 +291,17 @@ mod test {
 
     #[test]
     fn test_sprintf_number() {
-        let s = sprintf("foobar%d", &vec![2000.into()]);
+        let s = sprintf("foobar%d", &[2000.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"foobar2000");
 
-        let s = sprintf("%+0d", &vec![1.into()]);
+        let s = sprintf("%+0d", &[1.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"+1");
 
-        let s = sprintf("%+0b", &vec![5.into()]);
+        let s = sprintf("%+0b", &[5.into()]);
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"+101");

@@ -25,7 +25,7 @@ fn range_and_define() {
         )
         .unwrap();
 
-    let context = Context::from(vec![1, 2]).unwrap();
+    let context = Context::from(vec![1, 2]);
 
     let output = template.render(&context);
     assert!(output.is_ok());
@@ -39,7 +39,7 @@ fn range_and_define() {
         )
         .unwrap();
 
-    let context = Context::from(vec![1, 2]).unwrap();
+    let context = Context::from(vec![1, 2]);
 
     let output = template.render(&context);
     assert!(output.is_ok());
@@ -53,7 +53,7 @@ fn range_and_define() {
         )
         .unwrap();
 
-    let context = Context::from(vec![1, 2]).unwrap();
+    let context = Context::from(vec![1, 2]);
 
     let output = template.render(&context);
     assert!(output.is_ok());
@@ -67,7 +67,7 @@ fn range_and_define() {
         )
         .unwrap();
 
-    let context = Context::from(vec![1, 2]).unwrap();
+    let context = Context::from(vec![1, 2]);
 
     let output = template.render(&context);
     assert!(output.is_ok());
@@ -81,7 +81,7 @@ fn simple_define_context() {
         .parse(r#"{{ define "tmpl"}} {{.}} {{ end -}} there is {{- template "tmpl" -}} template"#)
         .unwrap();
 
-    let context = Context::from("some").unwrap();
+    let context = Context::from("some");
 
     let output = template.render(&context);
     assert!(output.is_ok());
@@ -92,7 +92,7 @@ fn simple_define_context() {
         .parse(r#"{{ define "tmpl"}} some {{ end -}} there is {{- template "tmpl" . -}} template"#)
         .unwrap();
 
-    let context = Context::from("some").unwrap();
+    let context = Context::from("some");
 
     let output = template.render(&context);
     assert!(output.is_ok());
@@ -112,8 +112,7 @@ fn other_define_context() {
 
     let context = Context::from(Other {
         foo: "some".to_owned(),
-    })
-    .unwrap();
+    });
 
     let output = template.render(&context);
     assert!(output.is_ok());
@@ -150,7 +149,7 @@ fn dynamic_template() {
         )
         .unwrap();
 
-    let context = Context::from("tmpl2").unwrap();
+    let context = Context::from("tmpl2");
 
     let output = template.render(&context);
     assert!(output.is_ok());

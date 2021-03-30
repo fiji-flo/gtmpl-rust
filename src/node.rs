@@ -1,8 +1,8 @@
-use std::fmt::{Display, Error, Formatter};
+use std::fmt::{Display, Formatter};
 
+use crate::error::NodeError;
 use crate::lexer::ItemType;
 use crate::utils::unquote_char;
-use itertools::Itertools;
 
 use gtmpl_value::Value;
 
@@ -22,7 +22,7 @@ macro_rules! nodes {
         }
 
         impl Display for Nodes {
-            fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+            fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
                 match *self {
                     $(Nodes::$name(ref t) => t.fmt(f),)*
                 }
@@ -129,7 +129,7 @@ macro_rules! node {
 }
 
 impl Nodes {
-    pub fn is_empty_tree(&self) -> Result<bool, String> {
+    pub fn is_empty_tree(&self) -> Result<bool, NodeError> {
         match *self {
             Nodes::List(ref n) => n.is_empty_tree(),
             Nodes::Text(ref n) => Ok(n.text.is_empty()),
@@ -138,7 +138,7 @@ impl Nodes {
             | Nodes::Range(_)
             | Nodes::Template(_)
             | Nodes::With(_) => Ok(false),
-            _ => Err(format!("unknown node: {}", self)),
+            _ => Err(NodeError::NaTN),
         }
     }
 }
@@ -161,7 +161,7 @@ impl ListNode {
             nodes: vec![],
         }
     }
-    pub fn is_empty_tree(&self) -> Result<bool, String> {
+    pub fn is_empty_tree(&self) -> Result<bool, NodeError> {
         for n in &self.nodes {
             match n.is_empty_tree() {
                 Ok(true) => {}
@@ -174,7 +174,7 @@ impl ListNode {
 }
 
 impl Display for ListNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         for n in &self.nodes {
             if let Err(e) = n.fmt(f) {
                 return Err(e);
@@ -198,7 +198,7 @@ impl TextNode {
 }
 
 impl Display for TextNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{}", self.text)
     }
 }
@@ -227,13 +227,31 @@ impl PipeNode {
 }
 
 impl Display for PipeNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let decl = if self.decl.is_empty() {
             Ok(())
         } else {
-            write!(f, "{} := ", self.decl.iter().join(", "))
+            write!(
+                f,
+                "{} := ",
+                self.decl
+                    .iter()
+                    .map(|n| n.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
         };
-        decl.and_then(|_| write!(f, "{}", self.cmds.iter().join(" | ")))
+        decl.and_then(|_| {
+            write!(
+                f,
+                "{}",
+                self.cmds
+                    .iter()
+                    .map(|cmd| cmd.to_string())
+                    .collect::<Vec<String>>()
+                    .join(" | ")
+            )
+        })
     }
 }
 
@@ -251,7 +269,7 @@ impl ActionNode {
 }
 
 impl Display for ActionNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{{{{{}}}}}", self.pipe)
     }
 }
@@ -278,13 +296,14 @@ impl CommandNode {
 }
 
 impl Display for CommandNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let s = self
             .args
             .iter()
             .map(|n|
                 // Handle PipeNode.
                 n.to_string())
+            .collect::<Vec<String>>()
             .join(" ");
         write!(f, "{}", s)
     }
@@ -314,7 +333,7 @@ impl IdentifierNode {
 }
 
 impl Display for IdentifierNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{}", self.ident)
     }
 }
@@ -337,7 +356,7 @@ impl VariableNode {
 }
 
 impl Display for VariableNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{}", self.ident.join("."))
     }
 }
@@ -355,7 +374,7 @@ impl DotNode {
 }
 
 impl Display for DotNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, ".")
     }
 }
@@ -363,7 +382,7 @@ impl Display for DotNode {
 node!(NilNode {});
 
 impl Display for NilNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "nil")
     }
 }
@@ -405,7 +424,7 @@ impl FieldNode {
 }
 
 impl Display for FieldNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{}", self.ident.join("."))
     }
 }
@@ -435,7 +454,7 @@ impl ChainNode {
 }
 
 impl Display for ChainNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         if let Err(e) = {
             // Handle PipeNode.
             write!(f, "{}", self.node)
@@ -465,7 +484,7 @@ impl BoolNode {
 }
 
 impl Display for BoolNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{}", self.value)
     }
 }
@@ -494,7 +513,7 @@ impl NumberNode {
         pos: Pos,
         text: String,
         item_typ: &ItemType,
-    ) -> Result<NumberNode, Error> {
+    ) -> Result<NumberNode, NodeError> {
         match *item_typ {
             ItemType::ItemCharConstant => unquote_char(&text, '\'')
                 .map(|c| NumberNode {
@@ -508,7 +527,7 @@ impl NumberNode {
                     number_typ: NumberType::Char,
                     value: Value::from(c as u64),
                 })
-                .ok_or(Error),
+                .ok_or(NodeError::UnquoteError),
             _ => {
                 let mut number_typ = NumberType::Float;
 
@@ -560,7 +579,7 @@ impl NumberNode {
                     is_u64 = true;
                 }
                 if !is_u64 && !is_i64 && !is_f64 {
-                    return Err(Error);
+                    return Err(NodeError::NaN);
                 }
 
                 let value = if is_u64 {
@@ -588,7 +607,7 @@ impl NumberNode {
 }
 
 impl Display for NumberNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{}", self.text)
     }
 }
@@ -611,7 +630,7 @@ impl StringNode {
 }
 
 impl Display for StringNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{}", self.quoted)
     }
 }
@@ -629,7 +648,7 @@ impl EndNode {
 }
 
 impl Display for EndNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{{{{end}}}}")
     }
 }
@@ -647,7 +666,7 @@ impl ElseNode {
 }
 
 impl Display for ElseNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{{{{else}}}}")
     }
 }
@@ -718,13 +737,13 @@ impl BranchNode {
 }
 
 impl Display for BranchNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let name = match self.typ {
             NodeType::If => "if",
             NodeType::Range => "range",
             NodeType::With => "with",
             _ => {
-                return Err(Error);
+                return Err(std::fmt::Error);
             }
         };
         if let Some(ref else_list) = self.else_list {
@@ -758,7 +777,7 @@ impl TemplateNode {
 }
 
 impl Display for TemplateNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self.pipe {
             Some(ref pipe) => write!(f, "{{{{template {} {}}}}}", self.name, pipe),
             None => write!(f, "{{{{template {}}}}}", self.name),
@@ -773,7 +792,7 @@ pub enum PipeOrString {
 }
 
 impl Display for PipeOrString {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match *self {
             PipeOrString::Pipe(ref pipe_node) => write!(f, "{}", pipe_node),
             PipeOrString::String(ref s) => write!(f, "{}", s),

@@ -1,5 +1,8 @@
 # Changes
-## 0.4.0
-* Rust 2018
-* Stop casting between float and int
-* Update dependencies
+
+## [0.6.0] - 2021-06-07
+### Added
+- Maximum template depth
+### Changed
+- Move from `String` to `thiserror` for errors
+- `Context::from` returns `Context` instead of `Result`

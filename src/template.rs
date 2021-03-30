@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
+use crate::error::{ParseError, TemplateError};
 use crate::funcs::BUILTINS;
 use crate::parse::{parse, Tree};
+
 use gtmpl_value::Func;
 
 /// The main template structure.
@@ -37,9 +39,9 @@ impl Template {
     /// ## Example
     ///
     /// ```rust
-    /// use gtmpl::{Context, Func, Value};
+    /// use gtmpl::{Context, Func, FuncError, Value};
     ///
-    /// fn hello_world(_args: &[Value]) -> Result<Value, String> {
+    /// fn hello_world(_args: &[Value]) -> Result<Value, FuncError> {
     ///   Ok(Value::from("Hello World!"))
     /// }
     ///
@@ -60,9 +62,9 @@ impl Template {
     /// ```rust
     /// use std::collections::HashMap;
     ///
-    /// use gtmpl::{Context, Func, Value};
+    /// use gtmpl::{Context, Func, FuncError, Value};
     ///
-    /// fn hello_world(_args: &[Value]) -> Result<Value, String> {
+    /// fn hello_world(_args: &[Value]) -> Result<Value, FuncError> {
     ///   Ok(Value::from("Hello World!"))
     /// }
     ///
@@ -86,7 +88,7 @@ impl Template {
     /// let mut tmpl = gtmpl::Template::default();
     /// tmpl.parse("Hello World!").unwrap();
     /// ```
-    pub fn parse<T: Into<String>>(&mut self, text: T) -> Result<(), String> {
+    pub fn parse<T: Into<String>>(&mut self, text: T) -> Result<(), ParseError> {
         let tree_set = parse(
             self.name.clone(),
             text.into(),
@@ -106,14 +108,14 @@ impl Template {
     /// let mut tmpl = gtmpl::Template::default();
     /// tmpl.add_template("fancy", "{{ . }}");
     /// tmpl.parse(r#"{{ template "fancy" . }}!"#).unwrap();
-    /// let output = tmpl.render(&Context::from("Hello World").unwrap());
+    /// let output = tmpl.render(&Context::from("Hello World"));
     /// assert_eq!(&output.unwrap(), "Hello World!");
     /// ```
     pub fn add_template<N: Into<String>, T: Into<String>>(
         &mut self,
         name: N,
         text: T,
-    ) -> Result<(), String> {
+    ) -> Result<(), TemplateError> {
         let tree_set = parse(
             name.into(),
             text.into(),
