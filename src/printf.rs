@@ -224,6 +224,8 @@ pub fn params_to_chars(params: &FormatParams) -> (char, char, char, char, char) 
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     use super::*;
 
     #[test]
@@ -305,6 +307,41 @@ mod test {
         assert!(s.is_ok());
         let s = s.unwrap();
         assert_eq!(s, r"+101");
+    }
+
+    #[test]
+    fn test_sprintf_array() {
+        let values: Vec<Value> = vec!["hello".into(), "world".into()];
+        let s = sprintf("foo %v", &[Value::Array(values)]);
+        assert!(s.is_ok());
+        let s = s.unwrap();
+        assert_eq!(s, r"foo [hello world]");
+
+        let values: Vec<Value> = vec![42.into(), 100.into()];
+        let s = sprintf("foo %v", &[Value::Array(values)]);
+        assert!(s.is_ok());
+        let s = s.unwrap();
+        assert_eq!(s, r"foo [42 100]");
+    }
+
+    #[test]
+    fn test_sprintf_map() {
+        let mut values: HashMap<String, Value> = HashMap::new();
+        values.insert("hello".into(), "world".into());
+        values.insert("number".into(), 42.into());
+        let s = sprintf("foo %v", &[Value::Map(values)]);
+        assert!(s.is_ok());
+        let s = s.unwrap();
+        // The print order is unpredictable, we can't write
+        // a straight comparison
+        assert!(s == "foo map[number:42 hello:world]" || s == "foo map[hello:world number:42]");
+
+        let mut values: HashMap<String, Value> = HashMap::new();
+        values.insert("float".into(), 4.2.into());
+        let s = sprintf("%v", &[Value::Map(values)]);
+        assert!(s.is_ok());
+        let s = s.unwrap();
+        assert_eq!(s, r"map[float:4.2]");
     }
 
     #[test]
