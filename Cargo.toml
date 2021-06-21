@@ -27,3 +27,4 @@ thiserror = "1"
 
 [dev-dependencies]
 gtmpl_derive = "0.5"
+regex = "1.5"
