@@ -75,6 +75,28 @@ pub fn print(p: &FormatParams, typ: char, val: &Value) -> Result<String, PrintEr
             }
             _ => return Err(PrintError::UnableToFormat(val.clone(), typ)),
         }),
+        Value::Array(ref a) => Ok(match typ {
+            'v' => {
+                let values: Vec<String> = a.iter().map(|v| printf_generic(p, v)).collect();
+                let res = format!("[{}]", values.join(" "));
+                printf_generic(p, res)
+            }
+            _ => return Err(PrintError::UnableToFormat(val.clone(), typ)),
+        }),
+        Value::Map(ref m) => Ok(match typ {
+            'v' => {
+                let values: Vec<String> = m
+                    .iter()
+                    .map(|(k, v)| {
+                        let v_str = printf_generic(p, v);
+                        format!("{}:{}", k, v_str)
+                    })
+                    .collect();
+                let res = format!("map[{}]", values.join(" "));
+                printf_generic(p, res)
+            }
+            _ => return Err(PrintError::UnableToFormat(val.clone(), typ)),
+        }),
         _ => Err(PrintError::UnableToFormat(val.clone(), typ)),
     }
 }
