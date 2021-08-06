@@ -179,8 +179,8 @@ mod tests {
     #[test]
     fn test_is_true() {
         let t = Value::from(1i8);
-        assert_eq!(is_true(&t), true);
+        assert!(is_true(&t));
         let t = Value::from(0u32);
-        assert_eq!(is_true(&t), false);
+        assert!(is_true(&t));
     }
 }

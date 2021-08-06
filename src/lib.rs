@@ -9,7 +9,6 @@
 //! ```
 pub mod error;
 mod exec;
-#[doc(inline)]
 pub mod funcs;
 mod lexer;
 mod node;

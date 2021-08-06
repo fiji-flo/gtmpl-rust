@@ -30,6 +30,7 @@ lazy_static! {
     };
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum ItemType {
     ItemError,        // error occurred; value is text of error
@@ -604,7 +605,7 @@ impl LexerStateMachine {
 
     fn lex_raw_quote(&mut self) -> State {
         let start_line = self.line;
-        if self.find(|c| *c == '`').is_none() {
+        if !self.any(|c| c == '`') {
             self.line = start_line;
             return self.errorf("unterminated raw quoted string");
         }
