@@ -181,6 +181,6 @@ mod tests {
         let t = Value::from(1i8);
         assert!(is_true(&t));
         let t = Value::from(0u32);
-        assert!(is_true(&t));
+        assert!(!is_true(&t));
     }
 }
